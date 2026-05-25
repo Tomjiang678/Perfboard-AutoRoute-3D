@@ -1,21 +1,12 @@
 # Dependencies
 node_modules/
 **/node_modules/
-apps/web/node_modules/
 
-# Build and cache outputs
+# Build outputs
 dist/
 **/dist/
-apps/web/dist/
 release/
 **/release/
-apps/web/release/
-.vite/
-**/.vite/
-apps/web/.vite/
-*.tsbuildinfo
-
-# Desktop packages and binaries
 Prefboard_Autoroute_3D_win/
 software-package/
 *.zip
@@ -43,3 +34,7 @@ pnpm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# TypeScript/Vite cache
+*.tsbuildinfo
+.vite/

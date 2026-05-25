@@ -1,0 +1,186 @@
+export type ImportKind = "netlist" | "bom";
+export type DragMoveModifier = "shift" | "alt" | "ctrl" | "none";
+
+export interface ImportedFile {
+  id: string;
+  kind: ImportKind;
+  name: string;
+  size: number;
+  importedAt: string;
+}
+
+export interface ParsedComponent {
+  ref: string;
+  value: string;
+  category: string;
+  packageName: string;
+  sourceFile: string;
+}
+
+export interface NetNode {
+  ref: string;
+  pin: string;
+  sourceFile?: string;
+}
+
+export interface ParsedNet {
+  name: string;
+  nodes: NetNode[];
+  sourceFile?: string;
+}
+
+export interface ImportWarning {
+  fileName: string;
+  message: string;
+}
+
+export interface ImportState {
+  components: ParsedComponent[];
+  nets: ParsedNet[];
+  warnings: ImportWarning[];
+}
+
+export interface RoutedNetEndpoint {
+  net: string;
+  ref: string;
+  pin: number;
+  grid: [number, number];
+  role: string;
+}
+
+export interface BottomTrace {
+  id: string;
+  net: string;
+  points: Array<[number, number]>;
+  layer?: "bottom";
+  edges?: Array<[[number, number], [number, number]]>;
+  locked?: boolean;
+}
+
+export interface JumperRoute {
+  id: string;
+  net: string;
+  from: [number, number];
+  to: [number, number];
+  layer?: "jumper";
+  locked?: boolean;
+}
+
+export interface RoutingState {
+  traces: BottomTrace[];
+  jumpers: JumperRoute[];
+  failedNets: string[];
+  warnings: string[];
+  diagnostics?: RoutingDiagnostics;
+  drc?: DrcReport;
+}
+
+export interface RoutingDiagnostics {
+  failedNetDetails: FailedNetDiagnostic[];
+}
+
+export interface FailedNetDiagnostic {
+  net: string;
+  endpoints: RoutedNetEndpoint[];
+  unconnectedEndpoints: RoutedNetEndpoint[];
+  connectedGroups: RoutedNetEndpoint[][];
+}
+
+export type PinRouteStatusKind =
+  | "CONNECTED"
+  | "REQUIRED_UNCONNECTED"
+  | "NET_PIN_UNROUTED"
+  | "NO_NET_UNUSED"
+  | "WRONG_NET_SHORT";
+
+export interface PinRouteStatus {
+  ref: string;
+  pin: number;
+  pinName?: string;
+  grid: [number, number];
+  expectedNet?: string;
+  actualNets: string[];
+  status: PinRouteStatusKind;
+}
+
+export type DrcSeverity = "error" | "warning";
+
+export type DrcIssueCode =
+  | "NET_PIN_UNROUTED"
+  | "REQUIRED_UNCONNECTED"
+  | "NO_NET_UNUSED"
+  | "WRONG_NET_SHORT"
+  | "SHORT_BETWEEN_NETS"
+  | "BOTTOM_ROUTE_CROSSING"
+  | "BOTTOM_ROUTE_OVERLAP"
+  | "SUSPICIOUS_ADJACENT_IC_PINS"
+  | "DIP_PIN_GEOMETRY";
+
+export interface DrcIssue {
+  code: DrcIssueCode;
+  severity: DrcSeverity;
+  message: string;
+  ref?: string;
+  pin?: number;
+  pinName?: string;
+  expectedNet?: string;
+  actualNet?: string;
+  actualNets?: string[];
+  net?: string;
+  grid?: [number, number];
+  segment?: [[number, number], [number, number]];
+}
+
+export interface DrcReport {
+  passed: boolean;
+  errors: DrcIssue[];
+  warnings: DrcIssue[];
+  pinStatuses: PinRouteStatus[];
+}
+
+export type LibraryComponentKind =
+  | "resistor"
+  | "inductor"
+  | "diode"
+  | "led"
+  | "radial_capacitor"
+  | "electrolytic_capacitor"
+  | "to92"
+  | "dip"
+  | "pin_header"
+  | "terminal_block"
+  | "tactile_switch"
+  | "potentiometer";
+
+export interface PlacedComponent {
+  id: string;
+  kind: LibraryComponentKind;
+  label: string;
+  name: string;
+  value: string;
+  pinCount?: number;
+  leadSpacing: number;
+  rowSpacing: number;
+  sameSidePitch: number;
+  pinOffsets: Array<[number, number]>;
+  position: [number, number];
+  rotation: number;
+  mounted: boolean;
+}
+
+export interface BoardSize {
+  width: number;
+  height: number;
+}
+
+export interface PerfboardProject {
+  id: string;
+  name: string;
+  board: BoardSize;
+  files: ImportedFile[];
+  importState: ImportState;
+  components: PlacedComponent[];
+  selectedNetName?: string;
+  routing: RoutingState;
+  createdAt: string;
+}
