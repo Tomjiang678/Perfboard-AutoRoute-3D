@@ -26,6 +26,33 @@ export function traceEdges(points: GridPoint[]) {
   return points.slice(1).map((point, index) => edgeKey(points[index], point));
 }
 
+export function expandOrthogonalPath(points: GridPoint[]) {
+  if (points.length <= 1) {
+    return points;
+  }
+
+  const expanded: GridPoint[] = [points[0]];
+  for (let index = 1; index < points.length; index += 1) {
+    const previous = expanded[expanded.length - 1];
+    const target = points[index];
+    const dx = Math.sign(target[0] - previous[0]);
+    const dy = Math.sign(target[1] - previous[1]);
+
+    if (dx !== 0 && dy !== 0) {
+      expanded.push(target);
+      continue;
+    }
+
+    let current = previous;
+    while (current[0] !== target[0] || current[1] !== target[1]) {
+      current = [current[0] + dx, current[1] + dy];
+      expanded.push(current);
+    }
+  }
+
+  return expanded;
+}
+
 export function adjacentCells(cell: RouterCell): RouterCell[] {
   return [
     { x: cell.x + 1, y: cell.y },

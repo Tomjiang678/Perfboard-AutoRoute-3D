@@ -638,18 +638,124 @@ button:disabled {
 }
 
 .viewport-toolbar {
+  position: relative;
+  z-index: 80;
   display: flex;
   align-items: center;
   gap: 8px;
-  overflow-x: auto;
-  overflow-y: visible;
+  overflow: visible;
   border-bottom: 1px solid #d8dee5;
   background: #ffffff;
   padding: 0 14px;
 }
 
+.toolbar-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.toolbar-menu summary {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #26323f;
+  padding: 0 9px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  list-style: none;
+  user-select: none;
+}
+
+.toolbar-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.toolbar-menu summary::after {
+  content: "";
+  width: 0;
+  height: 0;
+  margin-left: 7px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid #667085;
+}
+
+.toolbar-menu[open] summary,
+.toolbar-menu summary:hover {
+  border-color: #cfd8e3;
+  background: #f4f7fb;
+}
+
+.toolbar-menu-panel {
+  position: absolute;
+  z-index: 90;
+  top: calc(100% + 4px);
+  left: 0;
+  display: grid;
+  min-width: 190px;
+  border: 1px solid #cfd8e3;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 6px;
+  box-shadow: 0 16px 38px rgb(15 23 42 / 18%);
+}
+
+.toolbar-menu-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  color: #1f2937;
+  background: transparent;
+  padding: 7px 8px;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+}
+
+.toolbar-menu-item:hover:not(:disabled),
+.toolbar-menu-item.active {
+  background: #edf4ff;
+  color: #235bdb;
+}
+
+.toolbar-menu-item.danger {
+  color: #b42318;
+}
+
+.toolbar-menu-item:disabled {
+  color: #98a2b3;
+  cursor: not-allowed;
+}
+
+.toolbar-menu-item-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.toolbar-menu-item kbd {
+  min-width: 26px;
+  border: 1px solid #d0d5dd;
+  border-radius: 5px;
+  background: #f8fafc;
+  color: #667085;
+  padding: 1px 5px;
+  font-family: inherit;
+  font-size: 11px;
+  text-align: center;
+}
+
 .board-stage {
   position: relative;
+  z-index: 1;
   overflow: hidden;
   display: block;
   padding: 12px;

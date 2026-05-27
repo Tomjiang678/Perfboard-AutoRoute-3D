@@ -1,4 +1,5 @@
 import type { LibraryComponentKind, ParsedComponent } from "../../types/project";
+import configData from "./importConfigData.json";
 
 export interface DevicePinModel {
   match: RegExp;
@@ -22,186 +23,73 @@ export interface NormalizedComponentFields {
   value: string;
 }
 
-export const devicePinModels: DevicePinModel[] = [
-  {
-    match: /^(TL062|TL072|TL082|LM358|LM2904)/i,
-    units: {
-      A: {
-        "1OUT": 1,
-        OUT: 1,
-        "1IN-": 2,
-        "IN-": 2,
-        "1IN+": 3,
-        "IN+": 3
-      },
-      B: {
-        "2OUT": 7,
-        OUT: 7,
-        "2IN-": 6,
-        "IN-": 6,
-        "2IN+": 5,
-        "IN+": 5
-      }
-    },
-    powerPins: {
-      "VS+": 8,
-      "V+": 8,
-      VCC: 8,
-      "VS-": 4,
-      "V-": 4,
-      GND: 4,
-      VEE: 4
-    }
-  },
-  {
-    match: /^(LM393|LM2903)/i,
-    units: {
-      A: {
-        "1OUT": 1,
-        OUT: 1,
-        "1IN-": 2,
-        "IN-": 2,
-        "1IN+": 3,
-        "IN+": 3
-      },
-      B: {
-        "2OUT": 7,
-        OUT: 7,
-        "2IN-": 6,
-        "IN-": 6,
-        "2IN+": 5,
-        "IN+": 5
-      }
-    },
-    powerPins: {
-      "VS+": 8,
-      "V+": 8,
-      VCC: 8,
-      "VS-": 4,
-      "V-": 4,
-      GND: 4,
-      VEE: 4
-    }
-  },
-  {
-    match: /^(NE555|LM555|TLC555)/i,
-    units: {
-      "": {
-        GND: 1,
-        "0": 1,
-        TRIG: 2,
-        TRI: 2,
-        OUT: 3,
-        RESET: 4,
-        RST: 4,
-        CTRL: 5,
-        CONT: 5,
-        CON: 5,
-        THRESH: 6,
-        THR: 6,
-        DISCH: 7,
-        DIS: 7,
-        VCC: 8
-      }
-    },
-    powerPins: {
-      GND: 1,
-      VCC: 8,
-      "V+": 8
-    }
-  }
-];
+interface RawDevicePinModel {
+  match: string;
+  flags?: string;
+  units: Record<string, Record<string, number>>;
+  powerPins: Record<string, number>;
+}
+
+interface RawComponentMappingRule {
+  kind: LibraryComponentKind;
+  label: string;
+  match: MatchExpression[];
+  matchMode?: "any" | "all";
+  pinCountStrategy?: "dipPackage" | "dipSwitch" | "moduleFallback";
+  leadSpacing?: number;
+  rowSpacing?: number;
+}
+
+type MatchExpression =
+  | { field: keyof NormalizedComponentFields; equals?: string; includes?: string }
+  | { any: MatchExpression[] }
+  | { all: MatchExpression[] };
+
+const rawConfig = configData as unknown as {
+  devicePinModels: RawDevicePinModel[];
+  simplePinMaps: {
+    passiveCategories: string;
+    diodeCategories: string;
+    diodeValuePatterns: string;
+    diodePins: Record<string, number>;
+    bjtCategories: string;
+    bjtPins: Record<string, number>;
+    switchCategories: string;
+  };
+  componentMappingRules: RawComponentMappingRule[];
+  fallbackComponentMapping: {
+    kind: LibraryComponentKind;
+    label: string;
+    pinCount: number;
+  };
+};
+
+export const devicePinModels: DevicePinModel[] = rawConfig.devicePinModels.map((model) => ({
+  match: new RegExp(model.match, model.flags),
+  units: model.units,
+  powerPins: model.powerPins
+}));
 
 export const simplePinMaps = {
-  passiveCategories: /RESISTOR|CAP|INDUCTOR/,
-  diodeCategories: /DIODE|LED/,
-  diodeValuePatterns: /PHOTO_DIODE/,
-  diodePins: {
-    A: 1,
-    K: 2
-  } as Record<string, number>,
-  bjtCategories: /BJT/,
-  bjtPins: {
-    C: 1,
-    B: 2,
-    E: 3
-  } as Record<string, number>,
-  switchCategories: /SWITCH/
+  passiveCategories: new RegExp(rawConfig.simplePinMaps.passiveCategories),
+  diodeCategories: new RegExp(rawConfig.simplePinMaps.diodeCategories),
+  diodeValuePatterns: new RegExp(rawConfig.simplePinMaps.diodeValuePatterns),
+  diodePins: rawConfig.simplePinMaps.diodePins,
+  bjtCategories: new RegExp(rawConfig.simplePinMaps.bjtCategories),
+  bjtPins: rawConfig.simplePinMaps.bjtPins,
+  switchCategories: new RegExp(rawConfig.simplePinMaps.switchCategories)
 };
 
-export const componentMappingRules: ComponentMappingRule[] = [
-  {
-    kind: "led",
-    label: "LED",
-    leadSpacing: 1,
-    match: ({ refPrefix, category }) => refPrefix === "LED" || category.includes("LED")
-  },
-  {
-    kind: "resistor",
-    label: "R",
-    leadSpacing: 3,
-    match: ({ refPrefix, category }) => refPrefix === "R" || category.includes("RESISTOR")
-  },
-  {
-    kind: "inductor",
-    label: "L",
-    leadSpacing: 3,
-    match: ({ refPrefix, category }) => refPrefix === "L" || category.includes("INDUCTOR")
-  },
-  {
-    kind: "diode",
-    label: "D",
-    leadSpacing: 3,
-    match: ({ refPrefix, category, value }) => refPrefix === "D" || category.includes("DIODE") || value.includes("PHOTO_DIODE")
-  },
-  {
-    kind: "to92",
-    label: "Q",
-    match: ({ refPrefix, category }) => refPrefix === "Q" || category.includes("BJT") || category.includes("TRANSISTOR")
-  },
-  {
-    kind: "electrolytic_capacitor",
-    label: "C",
-    leadSpacing: 1,
-    match: ({ refPrefix, category, value }) => (refPrefix === "C" || category.includes("CAP")) && (category.includes("ELECT") || value.includes("UF"))
-  },
-  {
-    kind: "radial_capacitor",
-    label: "C",
-    leadSpacing: 1,
-    match: ({ refPrefix, category }) => refPrefix === "C" || category.includes("CAP")
-  },
-  {
-    kind: "dip",
-    label: "DIP",
-    rowSpacing: 3,
-    pinCount: (component) => parseDipPinCount(component.packageName) ?? 8,
-    match: ({ refPrefix, packageName }) => refPrefix === "U" || packageName.includes("DIP") || packageName.includes("PDIP") || packageName.includes("SO-")
-  },
-  {
-    kind: "pin_header",
-    label: "HDR",
-    pinCount: (component) => getFallbackPinCount(component),
-    match: ({ refPrefix }) => refPrefix === "J" || refPrefix === "P" || refPrefix === "A"
-  },
-  {
-    kind: "pin_header",
-    label: "SW",
-    pinCount: (component) => parseDipSwitchPinCount(component.value) ?? parseDipSwitchPinCount(component.packageName) ?? 4,
-    match: ({ refPrefix, category }) => refPrefix === "S" || refPrefix === "SW" || category.includes("SWITCH")
-  },
-  {
-    kind: "potentiometer",
-    label: "RV",
-    match: ({ refPrefix }) => refPrefix === "RV"
-  }
-];
+export const componentMappingRules: ComponentMappingRule[] = rawConfig.componentMappingRules.map((rule) => ({
+  kind: rule.kind,
+  label: rule.label,
+  leadSpacing: rule.leadSpacing,
+  rowSpacing: rule.rowSpacing,
+  pinCount: buildPinCountResolver(rule.pinCountStrategy),
+  match: (component) => evaluateMatchList(rule.match, component, rule.matchMode ?? "any")
+}));
 
-export const fallbackComponentMapping = {
-  kind: "pin_header" as const,
-  label: "X",
-  pinCount: 2
-};
+export const fallbackComponentMapping = rawConfig.fallbackComponentMapping;
 
 export function parseDipPinCount(packageName: string) {
   const match = packageName.match(/(?:DIP|PDIP|P)-?P?-?(\d+)/i) ?? packageName.match(/(\d+)\s*PIN/i);
@@ -223,10 +111,50 @@ export function parseDipSwitchPinCount(value: string) {
   return Number.isFinite(switchCount) ? switchCount * 2 : undefined;
 }
 
+function buildPinCountResolver(strategy: RawComponentMappingRule["pinCountStrategy"]) {
+  if (strategy === "dipPackage") {
+    return (component: ParsedComponent) => parseDipPinCount(component.packageName) ?? 8;
+  }
+  if (strategy === "dipSwitch") {
+    return (component: ParsedComponent) => parseDipSwitchPinCount(component.value) ?? parseDipSwitchPinCount(component.packageName) ?? 4;
+  }
+  if (strategy === "moduleFallback") {
+    return getFallbackPinCount;
+  }
+  return undefined;
+}
+
 function getFallbackPinCount(component: ParsedComponent) {
   if (component.value.toUpperCase().includes("BOOST_CONVERTER")) {
     return 3;
   }
 
   return 4;
+}
+
+function evaluateMatchList(expressions: MatchExpression[], component: NormalizedComponentFields, mode: "any" | "all") {
+  if (mode === "all") {
+    return expressions.every((expression) => evaluateMatch(expression, component));
+  }
+
+  return expressions.some((expression) => evaluateMatch(expression, component));
+}
+
+function evaluateMatch(expression: MatchExpression, component: NormalizedComponentFields): boolean {
+  if ("any" in expression) {
+    return expression.any.some((item) => evaluateMatch(item, component));
+  }
+  if ("all" in expression) {
+    return expression.all.every((item) => evaluateMatch(item, component));
+  }
+
+  const value = component[expression.field];
+  if (expression.equals !== undefined) {
+    return value === expression.equals;
+  }
+  if (expression.includes !== undefined) {
+    return value.includes(expression.includes);
+  }
+
+  return false;
 }

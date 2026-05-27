@@ -1,0 +1,231 @@
+{
+  "devicePinModels": [
+    {
+      "match": "^(TL062|TL072|TL082|LM358|LM2904)",
+      "flags": "i",
+      "units": {
+        "A": {
+          "1OUT": 1,
+          "OUT": 1,
+          "1IN-": 2,
+          "IN-": 2,
+          "1IN+": 3,
+          "IN+": 3
+        },
+        "B": {
+          "2OUT": 7,
+          "OUT": 7,
+          "2IN-": 6,
+          "IN-": 6,
+          "2IN+": 5,
+          "IN+": 5
+        }
+      },
+      "powerPins": {
+        "VS+": 8,
+        "V+": 8,
+        "VCC": 8,
+        "VS-": 4,
+        "V-": 4,
+        "GND": 4,
+        "VEE": 4
+      }
+    },
+    {
+      "match": "^(LM393|LM2903)",
+      "flags": "i",
+      "units": {
+        "A": {
+          "1OUT": 1,
+          "OUT": 1,
+          "1IN-": 2,
+          "IN-": 2,
+          "1IN+": 3,
+          "IN+": 3
+        },
+        "B": {
+          "2OUT": 7,
+          "OUT": 7,
+          "2IN-": 6,
+          "IN-": 6,
+          "2IN+": 5,
+          "IN+": 5
+        }
+      },
+      "powerPins": {
+        "VS+": 8,
+        "V+": 8,
+        "VCC": 8,
+        "VS-": 4,
+        "V-": 4,
+        "GND": 4,
+        "VEE": 4
+      }
+    },
+    {
+      "match": "^(NE555|LM555|TLC555)",
+      "flags": "i",
+      "units": {
+        "": {
+          "GND": 1,
+          "0": 1,
+          "TRIG": 2,
+          "TRI": 2,
+          "OUT": 3,
+          "RESET": 4,
+          "RST": 4,
+          "CTRL": 5,
+          "CONT": 5,
+          "CON": 5,
+          "THRESH": 6,
+          "THR": 6,
+          "DISCH": 7,
+          "DIS": 7,
+          "VCC": 8
+        }
+      },
+      "powerPins": {
+        "GND": 1,
+        "VCC": 8,
+        "V+": 8
+      }
+    }
+  ],
+  "simplePinMaps": {
+    "passiveCategories": "RESISTOR|CAP|INDUCTOR",
+    "diodeCategories": "DIODE|LED",
+    "diodeValuePatterns": "PHOTO_DIODE",
+    "diodePins": {
+      "A": 1,
+      "K": 2
+    },
+    "bjtCategories": "BJT",
+    "bjtPins": {
+      "C": 1,
+      "B": 2,
+      "E": 3
+    },
+    "switchCategories": "SWITCH"
+  },
+  "componentMappingRules": [
+    {
+      "kind": "led",
+      "label": "LED",
+      "leadSpacing": 1,
+      "match": [
+        { "field": "refPrefix", "equals": "LED" },
+        { "field": "category", "includes": "LED" }
+      ]
+    },
+    {
+      "kind": "resistor",
+      "label": "R",
+      "leadSpacing": 3,
+      "match": [
+        { "field": "refPrefix", "equals": "R" },
+        { "field": "category", "includes": "RESISTOR" }
+      ]
+    },
+    {
+      "kind": "inductor",
+      "label": "L",
+      "leadSpacing": 3,
+      "match": [
+        { "field": "refPrefix", "equals": "L" },
+        { "field": "category", "includes": "INDUCTOR" }
+      ]
+    },
+    {
+      "kind": "diode",
+      "label": "D",
+      "leadSpacing": 3,
+      "match": [
+        { "field": "refPrefix", "equals": "D" },
+        { "field": "category", "includes": "DIODE" },
+        { "field": "value", "includes": "PHOTO_DIODE" }
+      ]
+    },
+    {
+      "kind": "to92",
+      "label": "Q",
+      "match": [
+        { "field": "refPrefix", "equals": "Q" },
+        { "field": "category", "includes": "BJT" },
+        { "field": "category", "includes": "TRANSISTOR" }
+      ]
+    },
+    {
+      "kind": "electrolytic_capacitor",
+      "label": "C",
+      "leadSpacing": 1,
+      "matchMode": "all",
+      "match": [
+        {
+          "any": [
+            { "field": "refPrefix", "equals": "C" },
+            { "field": "category", "includes": "CAP" }
+          ]
+        },
+        {
+          "any": [
+            { "field": "category", "includes": "ELECT" },
+            { "field": "value", "includes": "UF" }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "radial_capacitor",
+      "label": "C",
+      "leadSpacing": 1,
+      "match": [
+        { "field": "refPrefix", "equals": "C" },
+        { "field": "category", "includes": "CAP" }
+      ]
+    },
+    {
+      "kind": "dip",
+      "label": "DIP",
+      "rowSpacing": 3,
+      "pinCountStrategy": "dipPackage",
+      "match": [
+        { "field": "refPrefix", "equals": "U" },
+        { "field": "packageName", "includes": "DIP" },
+        { "field": "packageName", "includes": "PDIP" },
+        { "field": "packageName", "includes": "SO-" }
+      ]
+    },
+    {
+      "kind": "pin_header",
+      "label": "HDR",
+      "pinCountStrategy": "moduleFallback",
+      "match": [
+        { "field": "refPrefix", "equals": "J" },
+        { "field": "refPrefix", "equals": "P" },
+        { "field": "refPrefix", "equals": "A" }
+      ]
+    },
+    {
+      "kind": "pin_header",
+      "label": "SW",
+      "pinCountStrategy": "dipSwitch",
+      "match": [
+        { "field": "refPrefix", "equals": "S" },
+        { "field": "refPrefix", "equals": "SW" },
+        { "field": "category", "includes": "SWITCH" }
+      ]
+    },
+    {
+      "kind": "potentiometer",
+      "label": "RV",
+      "match": [
+        { "field": "refPrefix", "equals": "RV" }
+      ]
+    }
+  ],
+  "fallbackComponentMapping": {
+    "kind": "pin_header",
+    "label": "X",
+    "pinCount": 2
+  }
+}

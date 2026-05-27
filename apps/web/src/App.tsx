@@ -13,7 +13,8 @@ import { mergeImportState, parseImportFiles } from "./features/import/multisimRe
 import { createPlacedComponentsFromParsed } from "./features/import/componentMapping";
 import { autoPlaceComponents, type PlacementRegion } from "./features/layout/autoPlacement";
 import { resolveNetEndpoints } from "./features/import/netEndpointResolver";
-import { autoRouteBoard } from "./features/routing/autoRouter";
+import { autoRouteBoard, validateRoutingResult } from "./features/routing/autoRouter";
+import { expandOrthogonalPath } from "./features/routing/routingGeometry";
 import { createProject } from "./features/project/projectFactory";
 import type { BoardSize, DragMoveModifier, ImportKind, PerfboardProject } from "./types/project";
 
@@ -321,6 +322,46 @@ export function App() {
     });
   }
 
+  function handleRunDrc() {
+    commitProject((current) => {
+      const endpoints = resolveNetEndpoints(current.importState, current.components);
+      const validation = validateRoutingResult(current.board, current.routing, endpoints, current.components);
+      const failedNets = new Set(current.routing.failedNets);
+      validation.failedNetDetails.forEach((detail) => failedNets.add(detail.net));
+      validation.drc.errors.forEach((issue) => {
+        if (issue.net) {
+          failedNets.add(issue.net);
+        }
+        if (issue.expectedNet) {
+          failedNets.add(issue.expectedNet);
+        }
+      });
+
+      return {
+        ...current,
+        routing: {
+          ...current.routing,
+          drc: validation.drc,
+          diagnostics: { failedNetDetails: validation.failedNetDetails },
+          warnings: [...current.routing.warnings.filter((warning) => !warning.startsWith("DRC:")), ...validation.warnings],
+          failedNets: [...failedNets]
+        }
+      };
+    });
+  }
+
+  function handleClearDrc() {
+    commitProject((current) => ({
+      ...current,
+      routing: {
+        ...current.routing,
+        drc: undefined,
+        diagnostics: undefined,
+        warnings: current.routing.warnings.filter((warning) => !warning.startsWith("DRC:"))
+      }
+    }));
+  }
+
   function handleAddBottomTrace(from: [number, number], to: [number, number]) {
     commitProject((current) => {
       const net = current.selectedNetName ?? "MANUAL";
@@ -368,12 +409,18 @@ export function App() {
 
   function handleRemoveRouteAt(point: [number, number]) {
     commitProject((current) => {
+      const traceRemoval = removeBottomTraceSegmentAt(current.routing.traces, point);
+      const nextJumpers = current.routing.jumpers.filter((jumper) => !samePoint(jumper.from, point) && !samePoint(jumper.to, point));
+      if (!traceRemoval.removed && nextJumpers.length === current.routing.jumpers.length) {
+        return current;
+      }
+
       return {
         ...current,
         routing: {
           ...current.routing,
-          traces: current.routing.traces.filter((trace) => !trace.points.some((item) => samePoint(item, point))),
-          jumpers: current.routing.jumpers.filter((jumper) => !samePoint(jumper.from, point) && !samePoint(jumper.to, point))
+          traces: traceRemoval.traces,
+          jumpers: nextJumpers
         }
       };
     });
@@ -503,6 +550,8 @@ export function App() {
             setIsAutoPlacing(true);
           }}
           onAutoRoute={handleAutoRoute}
+          onRunDrc={handleRunDrc}
+          onClearDrc={handleClearDrc}
           onAddBottomTrace={handleAddBottomTrace}
           onAddJumper={handleAddJumper}
           onRemoveRouteAt={handleRemoveRouteAt}
@@ -540,9 +589,85 @@ function makeDefaultComponentName(label: string, index: number) {
 
 function createManualBottomPath(from: [number, number], to: [number, number]): Array<[number, number]> {
   if (from[0] === to[0] || from[1] === to[1]) {
-    return [from, to];
+    return expandOrthogonalPath([from, to]);
   }
-  return [from, [to[0], from[1]], to];
+  return expandOrthogonalPath([from, [to[0], from[1]], to]);
+}
+
+function removeBottomTraceSegmentAt(traces: PerfboardProject["routing"]["traces"], point: [number, number]) {
+  const nextTraces: PerfboardProject["routing"]["traces"] = [];
+  let removed = false;
+
+  for (const trace of traces) {
+    if (removed) {
+      nextTraces.push(trace);
+      continue;
+    }
+
+    const removal = findStraightRunAtPoint(trace.points, point);
+    if (!removal) {
+      nextTraces.push(trace);
+      continue;
+    }
+
+    removed = true;
+    const before = trace.points.slice(0, removal.startIndex + 1);
+    const after = trace.points.slice(removal.endIndex);
+    if (before.length >= 2) {
+      nextTraces.push({ ...trace, id: crypto.randomUUID(), points: before });
+    }
+    if (after.length >= 2) {
+      nextTraces.push({ ...trace, id: crypto.randomUUID(), points: after });
+    }
+  }
+
+  return { traces: nextTraces, removed };
+}
+
+function findStraightRunAtPoint(points: Array<[number, number]>, point: [number, number]) {
+  for (let segmentIndex = 0; segmentIndex < points.length - 1; segmentIndex += 1) {
+    const from = points[segmentIndex];
+    const to = points[segmentIndex + 1];
+    if (!pointOnSegment(point, from, to)) {
+      continue;
+    }
+
+    let startIndex = segmentIndex;
+    let endIndex = segmentIndex + 1;
+    while (startIndex > 0 && isSameStraightLine(points[startIndex - 1], points[startIndex], from, to)) {
+      startIndex -= 1;
+    }
+    while (endIndex < points.length - 1 && isSameStraightLine(points[endIndex], points[endIndex + 1], from, to)) {
+      endIndex += 1;
+    }
+    return { startIndex, endIndex };
+  }
+
+  return undefined;
+}
+
+function pointOnSegment(point: [number, number], from: [number, number], to: [number, number]) {
+  if (from[0] === to[0]) {
+    return point[0] === from[0] && point[1] >= Math.min(from[1], to[1]) && point[1] <= Math.max(from[1], to[1]);
+  }
+  if (from[1] === to[1]) {
+    return point[1] === from[1] && point[0] >= Math.min(from[0], to[0]) && point[0] <= Math.max(from[0], to[0]);
+  }
+
+  return false;
+}
+
+function isSameStraightLine(a: [number, number], b: [number, number], from: [number, number], to: [number, number]) {
+  const horizontal = from[1] === to[1];
+  const vertical = from[0] === to[0];
+  if (horizontal) {
+    return a[1] === from[1] && b[1] === from[1];
+  }
+  if (vertical) {
+    return a[0] === from[0] && b[0] === from[0];
+  }
+
+  return false;
 }
 
 function samePoint(a: [number, number], b: [number, number]) {

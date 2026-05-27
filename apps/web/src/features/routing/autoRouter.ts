@@ -13,6 +13,7 @@ import type {
 import {
   adjacentCells,
   edgeKey,
+  expandOrthogonalPath,
   formatSegment,
   inBounds,
   key,
@@ -129,7 +130,7 @@ interface ConnectivityCheckResult {
   failedNetDetails: FailedNetDiagnostic[];
 }
 
-interface RoutingValidationResult extends ConnectivityCheckResult {
+export interface RoutingValidationResult extends ConnectivityCheckResult {
   drc: DrcReport;
 }
 
@@ -619,7 +620,7 @@ function scoreRoutingResult(
   };
 }
 
-function validateRoutingResult(
+export function validateRoutingResult(
   board: BoardSize,
   result: RoutingState,
   endpoints: RoutedNetEndpoint[],
@@ -645,53 +646,56 @@ function validateRoutingResult(
   });
 
   result.traces.forEach((trace) => {
-    for (let index = 0; index < trace.points.length; index += 1) {
-      const point = trace.points[index];
+    const points = expandOrthogonalPath(trace.points);
+    const net = resolveManualRouteNet(trace.net, points, expectedNetByCell, routeNetsByCell);
+    for (let index = 0; index < points.length; index += 1) {
+      const point = points[index];
       const cell = key(point[0], point[1]);
-      addRouteNet(routeNetsByCell, cell, trace.net);
-      dsu.add(graphKey(trace.net, cell));
+      addRouteNet(routeNetsByCell, cell, net);
+      dsu.add(graphKey(net, cell));
 
       if (index === 0) {
         continue;
       }
 
-      const previous = trace.points[index - 1];
+      const previous = points[index - 1];
       const segment: [[number, number], [number, number]] = [previous, point];
       if (manhattan(previous, point) !== 1) {
         issues.push({
           code: "BOTTOM_ROUTE_CROSSING",
           severity: "error",
-          message: `Bottom route ${trace.net} has non-grid segment ${formatSegment(previous, point)}`,
-          net: trace.net,
+          message: `Bottom route ${net} has non-grid segment ${formatSegment(previous, point)}`,
+          net,
           segment
         });
       }
 
       const edge = edgeKey(previous, point);
       const existing = edgeNetByKey.get(edge);
-      if (existing && existing.net !== trace.net) {
+      if (existing && existing.net !== net) {
         issues.push({
           code: "BOTTOM_ROUTE_OVERLAP",
           severity: "error",
-          message: `Bottom edge ${edge} is shared by ${existing.net} and ${trace.net}`,
-          net: trace.net,
-          actualNets: [existing.net, trace.net],
+          message: `Bottom edge ${edge} is shared by ${existing.net} and ${net}`,
+          net,
+          actualNets: [existing.net, net],
           segment
         });
       }
-      edgeNetByKey.set(edge, { net: trace.net, segment });
-      dsu.union(graphKey(trace.net, key(previous[0], previous[1])), graphKey(trace.net, cell));
+      edgeNetByKey.set(edge, { net, segment });
+      dsu.union(graphKey(net, key(previous[0], previous[1])), graphKey(net, cell));
     }
   });
 
   result.jumpers.forEach((jumper) => {
     const fromCell = key(jumper.from[0], jumper.from[1]);
     const toCell = key(jumper.to[0], jumper.to[1]);
-    addRouteNet(routeNetsByCell, fromCell, jumper.net);
-    addRouteNet(routeNetsByCell, toCell, jumper.net);
-    dsu.add(graphKey(jumper.net, fromCell));
-    dsu.add(graphKey(jumper.net, toCell));
-    dsu.union(graphKey(jumper.net, fromCell), graphKey(jumper.net, toCell));
+    const net = resolveManualRouteNet(jumper.net, [jumper.from, jumper.to], expectedNetByCell, routeNetsByCell);
+    addRouteNet(routeNetsByCell, fromCell, net);
+    addRouteNet(routeNetsByCell, toCell, net);
+    dsu.add(graphKey(net, fromCell));
+    dsu.add(graphKey(net, toCell));
+    dsu.union(graphKey(net, fromCell), graphKey(net, toCell));
   });
 
   routeNetsByCell.forEach((actualNets, cell) => {
@@ -865,15 +869,40 @@ function addRouteNet(routeNetsByCell: Map<string, Set<string>>, cell: string, ne
   routeNetsByCell.set(cell, nets);
 }
 
+function resolveManualRouteNet(
+  routeNet: string,
+  points: GridPoint[],
+  expectedNetByCell: Map<string, Set<string>>,
+  routeNetsByCell: Map<string, Set<string>>
+) {
+  if (routeNet !== "MANUAL") {
+    return routeNet;
+  }
+
+  const candidates = new Set<string>();
+  points.forEach((point) => {
+    const cell = key(point[0], point[1]);
+    expectedNetByCell.get(cell)?.forEach((net) => candidates.add(net));
+    routeNetsByCell.get(cell)?.forEach((net) => {
+      if (net !== "MANUAL") {
+        candidates.add(net);
+      }
+    });
+  });
+
+  return candidates.size === 1 ? [...candidates][0] : routeNet;
+}
+
 function detectBottomRouteCrossingIssues(traces: BottomTrace[]): DrcIssue[] {
   const issues: DrcIssue[] = [];
-  const segments = traces.flatMap((trace) =>
-    trace.points.slice(1).map((point, index) => ({
+  const segments = traces.flatMap((trace) => {
+    const points = expandOrthogonalPath(trace.points);
+    return points.slice(1).map((point, index) => ({
       net: trace.net,
-      from: trace.points[index],
+      from: points[index],
       to: point
-    }))
-  );
+    }));
+  });
 
   for (let a = 0; a < segments.length; a += 1) {
     for (let b = a + 1; b < segments.length; b += 1) {

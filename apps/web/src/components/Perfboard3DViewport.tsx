@@ -218,6 +218,10 @@ export function Perfboard3DViewport({
           draggingGridRef.current = canDrag
             ? components.find((component) => component.id === hit)?.position
             : undefined;
+          if (canDrag) {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setOrbitEnabled(false);
+          }
           onSelectComponent(hit);
         } else {
           draggingComponentIdRef.current = undefined;
@@ -259,11 +263,16 @@ export function Perfboard3DViewport({
         pointerDownRef.current = undefined;
         draggingComponentIdRef.current = undefined;
         draggingGridRef.current = undefined;
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        setOrbitEnabled(true);
       }}
       onPointerLeave={() => {
         pointerDownRef.current = undefined;
         draggingComponentIdRef.current = undefined;
         draggingGridRef.current = undefined;
+        setOrbitEnabled(true);
       }}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -409,6 +418,13 @@ export function Perfboard3DViewport({
 
   function isSelectedMounted() {
     return Boolean(components.find((component) => component.id === selectedComponentId)?.mounted);
+  }
+
+  function setOrbitEnabled(enabled: boolean) {
+    const controls = controlsRef.current;
+    if (controls) {
+      controls.enabled = enabled;
+    }
   }
 
   function moveComponentObject(component: PlacedComponent, position: [number, number]) {
