@@ -44,7 +44,6 @@ interface RouteOwner {
   net: string;
   routeId: string;
   priority: number;
-  locked?: boolean;
 }
 
 interface RouteRecord {
@@ -53,9 +52,6 @@ interface RouteRecord {
   traces: BottomTrace[];
   jumpers: JumperRoute[];
   priority: number;
-  locked: boolean;
-  failedConnections: number;
-  blockedRouteIds: Set<string>;
 }
 
 interface EscapeCandidate {
@@ -77,10 +73,16 @@ interface SearchResult {
   blockedRouteIds: Set<string>;
 }
 
+interface EscapedSearchResult extends SearchResult {
+  path: Array<[number, number]>;
+  escapeTraces: BottomTrace[];
+}
+
+type RouteSearchMode = "strict" | "relaxed";
+
 interface RouteAttempt {
   traces: BottomTrace[];
   jumpers: JumperRoute[];
-  failedConnections: number;
   blockedRouteIds: Set<string>;
 }
 
@@ -105,6 +107,7 @@ interface RoutingScore {
   routedNetCount: number;
   failedNetCount: number;
   totalBottomLength: number;
+  bendCount: number;
   jumperCount: number;
   totalJumperLength: number;
   viaOrLayerSwitchCount: number;
@@ -125,12 +128,9 @@ interface RoutingResultWithScore extends RoutingState {
   };
 }
 
-interface ConnectivityCheckResult {
+export interface RoutingValidationResult {
   warnings: string[];
   failedNetDetails: FailedNetDiagnostic[];
-}
-
-export interface RoutingValidationResult extends ConnectivityCheckResult {
   drc: DrcReport;
 }
 
@@ -153,7 +153,6 @@ export function autoRouteBoard(
   let bestResult: RoutingResultWithScore | undefined;
   let ripUpBudget = MAX_TOTAL_RIP_UPS;
   const congestionBias = createEmptyCongestionBias(board);
-  const warnings: string[] = [];
 
   for (let round = 0; round < MAX_ROUTING_ROUNDS; round += 1) {
     const records = new Map<string, RouteRecord>();
@@ -178,7 +177,7 @@ export function autoRouteBoard(
         escapeCandidates
       );
 
-      if (attempt.failedConnections > 0 || attempt.jumpers.length > Math.max(1, Math.ceil(plan.endpoints.length / 2))) {
+      if (attempt.jumpers.length > Math.max(1, Math.ceil(plan.endpoints.length / 2))) {
         const ripped = ripUpBlockingRoutes(records, routeOwner, edgeOwner, attempt.blockedRouteIds, plan, ripUpBudget);
         if (ripped.length > 0) {
           ripUpBudget -= ripped.length;
@@ -188,13 +187,10 @@ export function autoRouteBoard(
         }
       }
 
-      const record = commitRouteAttempt(plan, attempt, records, routeOwner, edgeOwner);
-      if (record.failedConnections > 0) {
-        failedNets.add(plan.net);
-      }
+      commitRouteAttempt(plan, attempt, records, routeOwner, edgeOwner);
     }
 
-    const result = buildRoutingStateFromRecords(records, plans, failedNets, warnings);
+    const result = buildRoutingStateFromRecords(records, plans, failedNets);
     const validation = validateRoutingResult(board, result, endpoints, components);
     result.drc = validation.drc;
     result.warnings = [...result.warnings, ...validation.warnings];
@@ -271,7 +267,7 @@ function generatePinEscapeCandidates(
           endpoint,
           path,
           terminal,
-          cost: length + directionIndex * 2 + edgePenalty(terminal, board)
+          cost: length + directionIndex * 2
         });
       }
     });
@@ -344,33 +340,27 @@ function routeMultiPinNet(
   escapeCandidates: Map<string, EscapeCandidate[]>
 ): RouteAttempt {
   const blockedRouteIds = new Set<string>();
-  const escape = applyEscapeRoutes(board, plan, routeOwner, edgeOwner, endpointOwner, padOwner, pinAccessKeepout, congestionMap, escapeCandidates);
-  const terminals = dedupePoints(plan.endpoints.map((endpoint) => escape.terminalByEndpoint.get(endpointKey(endpoint)) ?? endpoint.grid));
-  const traces = [...escape.traces];
+  const endpointByCell = new Map(plan.endpoints.map((endpoint) => [key(endpoint.grid[0], endpoint.grid[1]), endpoint]));
+  const terminals = dedupePoints(plan.endpoints.map((endpoint) => endpoint.grid));
+  const traces: BottomTrace[] = [];
   const jumpers: JumperRoute[] = [];
-  let failedConnections = 0;
 
   if (terminals.length < 2) {
-    return { traces, jumpers, failedConnections, blockedRouteIds };
+    return { traces, jumpers, blockedRouteIds };
   }
 
-  const connectionOrder = createMultiPinConnectionOrder(plan, terminals);
+  const connectionOrder = createMultiPinConnectionOrder(terminals);
   const connected: Array<[number, number]> = [connectionOrder[0]];
   const remaining = connectionOrder.slice(1);
   const connectedEndpointCells = new Set<string>();
-  const firstEndpointCell = escape.endpointCellByTerminal.get(key(connectionOrder[0][0], connectionOrder[0][1]));
-  if (firstEndpointCell) {
-    connectedEndpointCells.add(firstEndpointCell);
-  }
+  connectedEndpointCells.add(key(connectionOrder[0][0], connectionOrder[0][1]));
 
   while (remaining.length > 0) {
     const pair = findBestPair(connected, remaining, congestionMap);
-    const targetEndpointCell = escape.endpointCellByTerminal.get(key(pair.to[0], pair.to[1]));
+    const targetEndpointCell = key(pair.to[0], pair.to[1]);
     const allowedSameNetEndpointCells = new Set(connectedEndpointCells);
-    if (targetEndpointCell) {
-      allowedSameNetEndpointCells.add(targetEndpointCell);
-    }
-    const routed = routeNetWithAStar(
+    allowedSameNetEndpointCells.add(targetEndpointCell);
+    const strictRoute = routeNetWithAStar(
       board,
       pair.from,
       pair.to,
@@ -381,11 +371,46 @@ function routeMultiPinNet(
       allowedSameNetEndpointCells,
       routeOwner,
       edgeOwner,
-      congestionMap
+      congestionMap,
+      "strict"
     );
+    mergeSet(blockedRouteIds, strictRoute.blockedRouteIds);
+    const relaxedRoute = strictRoute.path ? strictRoute : routeNetWithAStar(
+      board,
+      pair.from,
+      pair.to,
+      plan,
+      endpointOwner,
+      padOwner,
+      pinAccessKeepout,
+      allowedSameNetEndpointCells,
+      routeOwner,
+      edgeOwner,
+      congestionMap,
+      "relaxed"
+    );
+    mergeSet(blockedRouteIds, relaxedRoute.blockedRouteIds);
+    const escapedRoute = relaxedRoute.path ? undefined : routePairWithEscapes(
+      board,
+      pair.from,
+      pair.to,
+      plan,
+      endpointByCell,
+      endpointOwner,
+      padOwner,
+      pinAccessKeepout,
+      allowedSameNetEndpointCells,
+      routeOwner,
+      edgeOwner,
+      congestionMap,
+      escapeCandidates
+    );
+    if (escapedRoute) {
+      mergeSet(blockedRouteIds, escapedRoute.blockedRouteIds);
+    }
+    const routed = escapedRoute ?? relaxedRoute;
     mergeSet(blockedRouteIds, routed.blockedRouteIds);
-    const jumperCost = estimateJumperCost(pair.from, pair.to, jumpers.length);
-    const shouldUseJumper = !routed.path || jumperCost + 8 < routed.cost;
+    const shouldUseJumper = !routed.path;
 
     if (shouldUseJumper) {
       jumpers.push({
@@ -395,6 +420,10 @@ function routeMultiPinNet(
         to: pair.to
       });
     } else if (routed.path) {
+      if (escapedRoute) {
+        traces.push(...escapedRoute.escapeTraces);
+        escapedRoute.escapeTraces.forEach((trace) => trace.points.forEach(([x, y]) => addSoftCongestion(congestionMap, x, y, 1)));
+      }
       traces.push({
         id: makeId(),
         net: plan.net,
@@ -404,13 +433,11 @@ function routeMultiPinNet(
     }
 
     connected.push(pair.to);
-    if (targetEndpointCell) {
-      connectedEndpointCells.add(targetEndpointCell);
-    }
+    connectedEndpointCells.add(targetEndpointCell);
     remaining.splice(pair.remainingIndex, 1);
   }
 
-  return { traces, jumpers, failedConnections, blockedRouteIds };
+  return { traces, jumpers, blockedRouteIds };
 }
 
 function routeNetWithAStar(
@@ -424,7 +451,8 @@ function routeNetWithAStar(
   allowedSameNetEndpointCells: Set<string>,
   routeOwner: Map<string, RouteOwner>,
   edgeOwner: Map<string, RouteOwner>,
-  congestionMap: CongestionMap
+  congestionMap: CongestionMap,
+  mode: RouteSearchMode = "strict"
 ): SearchResult {
   const startId = key(from[0], from[1]);
   const targetId = key(to[0], to[1]);
@@ -447,7 +475,7 @@ function routeNetWithAStar(
       if (owner && owner.net !== plan.net) {
         blockedRouteIds.add(owner.routeId);
       }
-      if (!isCellPassable(id, plan.net, endpointOwner, padOwner, pinAccessKeepout, allowedSameNetEndpointCells, routeOwner, startId, targetId)) {
+      if (!isCellPassable(id, plan.net, endpointOwner, padOwner, pinAccessKeepout, allowedSameNetEndpointCells, routeOwner, startId, targetId, mode)) {
         continue;
       }
       const edge = edgeKey([current.x, current.y], [next.x, next.y]);
@@ -460,14 +488,16 @@ function routeNetWithAStar(
       }
 
       const direction = directionKey(current, next);
-      const turnPenalty = current.direction && current.direction !== direction ? 4 : 0;
+      const turnPenalty = current.direction && current.direction !== direction ? 14 : 0;
       const routeReuseBonus = owner?.net === plan.net ? -1.5 : 0;
+      const congestionCost = mode === "relaxed" ? congestionAt(congestionMap, next.x, next.y) * 0.25 : congestionAt(congestionMap, next.x, next.y);
+      const adjacencyCost = mode === "relaxed" ? 0 : endpointAdjacencyPenalty(next, plan.net, endpointOwner);
       const nextCost =
         current.cost +
         1 +
         turnPenalty +
-        congestionAt(congestionMap, next.x, next.y) +
-        endpointAdjacencyPenalty(next, plan.net, endpointOwner) +
+        congestionCost +
+        adjacencyCost +
         routeReuseBonus;
 
       const previousBest = bestCost.get(id);
@@ -489,6 +519,101 @@ function routeNetWithAStar(
   return { cost: Number.POSITIVE_INFINITY, blockedRouteIds };
 }
 
+function routePairWithEscapes(
+  board: BoardSize,
+  from: [number, number],
+  to: [number, number],
+  plan: NetPlan,
+  endpointByCell: Map<string, RoutedNetEndpoint>,
+  endpointOwner: Map<string, string>,
+  padOwner: Map<string, PadOwner>,
+  pinAccessKeepout: PinAccessKeepout,
+  allowedSameNetEndpointCells: Set<string>,
+  routeOwner: Map<string, RouteOwner>,
+  edgeOwner: Map<string, RouteOwner>,
+  congestionMap: CongestionMap,
+  escapeCandidates: Map<string, EscapeCandidate[]>
+): EscapedSearchResult | undefined {
+  const fromEndpoint = endpointByCell.get(key(from[0], from[1]));
+  const toEndpoint = endpointByCell.get(key(to[0], to[1]));
+  if (!fromEndpoint || !toEndpoint) {
+    return undefined;
+  }
+
+  const fromCandidates = passableEscapeCandidates(fromEndpoint, plan.net, endpointOwner, padOwner, pinAccessKeepout, routeOwner, edgeOwner, escapeCandidates);
+  const toCandidates = passableEscapeCandidates(toEndpoint, plan.net, endpointOwner, padOwner, pinAccessKeepout, routeOwner, edgeOwner, escapeCandidates);
+  let best: EscapedSearchResult | undefined;
+
+  fromCandidates.slice(0, 3).forEach((fromCandidate) => {
+    toCandidates.slice(0, 3).forEach((toCandidate) => {
+      const escapedAllowedCells = new Set(allowedSameNetEndpointCells);
+      escapedAllowedCells.add(key(fromEndpoint.grid[0], fromEndpoint.grid[1]));
+      escapedAllowedCells.add(key(toEndpoint.grid[0], toEndpoint.grid[1]));
+      const routed = routeNetWithAStar(
+        board,
+        fromCandidate.terminal,
+        toCandidate.terminal,
+        plan,
+        endpointOwner,
+        padOwner,
+        pinAccessKeepout,
+        escapedAllowedCells,
+        routeOwner,
+        edgeOwner,
+        congestionMap,
+        "relaxed"
+      );
+      if (!routed.path) {
+        return;
+      }
+
+      const escapeTraces = [fromCandidate, toCandidate]
+        .filter((candidate) => candidate.path.length > 1)
+        .map((candidate) => ({
+          id: makeId(),
+          net: plan.net,
+          points: candidate.path
+        }));
+      const cost = routed.cost + fromCandidate.cost + toCandidate.cost + escapeTraces.length * 12;
+      if (!best || cost < best.cost) {
+        best = {
+          path: routed.path,
+          cost,
+          blockedRouteIds: routed.blockedRouteIds,
+          escapeTraces
+        };
+      }
+    });
+  });
+
+  return best;
+}
+
+function passableEscapeCandidates(
+  endpoint: RoutedNetEndpoint,
+  net: string,
+  endpointOwner: Map<string, string>,
+  padOwner: Map<string, PadOwner>,
+  pinAccessKeepout: PinAccessKeepout,
+  routeOwner: Map<string, RouteOwner>,
+  edgeOwner: Map<string, RouteOwner>,
+  escapeCandidates: Map<string, EscapeCandidate[]>
+) {
+  const endpointCell = key(endpoint.grid[0], endpoint.grid[1]);
+  const candidates = escapeCandidates.get(endpointKey(endpoint)) ?? [{ endpoint, path: [endpoint.grid], terminal: endpoint.grid, cost: 0 }];
+  return candidates.filter((candidate) =>
+    candidate.path.every(([x, y], index) => {
+      if (index === 0) {
+        return true;
+      }
+      const id = key(x, y);
+      const previous = candidate.path[index - 1];
+      return isCellPassable(id, net, endpointOwner, padOwner, pinAccessKeepout, new Set([endpointCell]), routeOwner, undefined, undefined, "relaxed")
+        && isEdgePassable(edgeKey(previous, [x, y]), net, edgeOwner);
+    })
+  );
+}
+
 function buildCongestionMap(
   board: BoardSize,
   endpoints: RoutedNetEndpoint[],
@@ -499,8 +624,6 @@ function buildCongestionMap(
 
   for (let y = 0; y < board.height; y += 1) {
     for (let x = 0; x < board.width; x += 1) {
-      const edgeDistance = Math.min(x, y, board.width - 1 - x, board.height - 1 - y);
-      addSoftCongestion(map, x, y, edgeDistance <= 1 ? 1.6 : edgeDistance <= 2 ? 0.6 : 0);
       addSoftCongestion(map, x, y, congestionAt(congestionBias, x, y));
     }
   }
@@ -512,7 +635,7 @@ function buildCongestionMap(
 
   routeOwner.forEach((owner, id) => {
     const [x, y] = parseKey(id);
-    addSoftCongestion(map, x, y, owner.locked ? 12 : 5);
+    addSoftCongestion(map, x, y, 5);
     neighbors({ x, y }, board).forEach((cell) => addSoftCongestion(map, cell.x, cell.y, 1.4));
   });
 
@@ -553,7 +676,7 @@ function ripUpBlockingRoutes(
 
   const candidates = [...blockedRouteIds]
     .map((id) => records.get(id))
-    .filter((record): record is RouteRecord => record !== undefined && !record.locked && record.net !== currentPlan.net)
+    .filter((record): record is RouteRecord => record !== undefined && record.net !== currentPlan.net)
     .sort((a, b) => a.priority - b.priority)
     .slice(0, Math.min(MAX_RIP_UPS_PER_FAILURE, remainingBudget));
 
@@ -575,11 +698,6 @@ function ripUpBlockingRoutes(
   return candidates;
 }
 
-function rerouteQueue(plans: NetPlan[], records: RouteRecord[]) {
-  const byNet = new Map(plans.map((plan) => [plan.net, plan]));
-  return sortNetPlans(records.map((record) => byNet.get(record.net)).filter((plan): plan is NetPlan => Boolean(plan)));
-}
-
 function scoreRoutingResult(
   board: BoardSize,
   result: RoutingState,
@@ -589,6 +707,7 @@ function scoreRoutingResult(
   const routedNetCount = new Set([...result.traces.map((trace) => trace.net), ...result.jumpers.map((jumper) => jumper.net)]).size;
   const failedNetCount = result.failedNets.length;
   const totalBottomLength = result.traces.reduce((sum, trace) => sum + pathLength(trace.points), 0);
+  const bendCount = result.traces.reduce((sum, trace) => sum + countRouteBends(trace.points), 0);
   const jumperCount = result.jumpers.length;
   const totalTopLength = totalJumperLength(result.jumpers);
   const viaOrLayerSwitchCount = jumperCount * 2;
@@ -603,6 +722,7 @@ function scoreRoutingResult(
     totalTopLength * 28 +
     viaOrLayerSwitchCount * 90 +
     totalBottomLength * 3 +
+    bendCount * 55 +
     congestionPenalty * 12 +
     pinAccessPenalty * 120 -
     routedNetCount * 500;
@@ -611,6 +731,7 @@ function scoreRoutingResult(
     routedNetCount,
     failedNetCount,
     totalBottomLength,
+    bendCount,
     jumperCount,
     totalJumperLength: totalTopLength,
     viaOrLayerSwitchCount,
@@ -632,7 +753,8 @@ export function validateRoutingResult(
   const expectedNetByCell = new Map<string, Set<string>>();
   const routeNetsByCell = new Map<string, Set<string>>();
   const edgeNetByKey = new Map<string, { net: string; segment: [[number, number], [number, number]] }>();
-  const dsu = new DisjointSet();
+  const physicalDsu = new DisjointSet();
+  const conductiveCells = new Set<string>();
 
   endpoints.forEach((endpoint) => {
     const list = requiredByNet.get(endpoint.net) ?? [];
@@ -642,7 +764,6 @@ export function validateRoutingResult(
     const expected = expectedNetByCell.get(cell) ?? new Set<string>();
     expected.add(endpoint.net);
     expectedNetByCell.set(cell, expected);
-    dsu.add(graphKey(endpoint.net, cell));
   });
 
   result.traces.forEach((trace) => {
@@ -652,13 +773,15 @@ export function validateRoutingResult(
       const point = points[index];
       const cell = key(point[0], point[1]);
       addRouteNet(routeNetsByCell, cell, net);
-      dsu.add(graphKey(net, cell));
+      conductiveCells.add(cell);
+      physicalDsu.add(cell);
 
       if (index === 0) {
         continue;
       }
 
       const previous = points[index - 1];
+      const previousCell = key(previous[0], previous[1]);
       const segment: [[number, number], [number, number]] = [previous, point];
       if (manhattan(previous, point) !== 1) {
         issues.push({
@@ -683,7 +806,7 @@ export function validateRoutingResult(
         });
       }
       edgeNetByKey.set(edge, { net, segment });
-      dsu.union(graphKey(net, key(previous[0], previous[1])), graphKey(net, cell));
+      physicalDsu.union(previousCell, cell);
     }
   });
 
@@ -693,9 +816,11 @@ export function validateRoutingResult(
     const net = resolveManualRouteNet(jumper.net, [jumper.from, jumper.to], expectedNetByCell, routeNetsByCell);
     addRouteNet(routeNetsByCell, fromCell, net);
     addRouteNet(routeNetsByCell, toCell, net);
-    dsu.add(graphKey(net, fromCell));
-    dsu.add(graphKey(net, toCell));
-    dsu.union(graphKey(net, fromCell), graphKey(net, toCell));
+    conductiveCells.add(fromCell);
+    conductiveCells.add(toCell);
+    physicalDsu.add(fromCell);
+    physicalDsu.add(toCell);
+    physicalDsu.union(fromCell, toCell);
   });
 
   routeNetsByCell.forEach((actualNets, cell) => {
@@ -726,9 +851,10 @@ export function validateRoutingResult(
     }
   });
 
+  issues.push(...detectPhysicalNetShortIssues(endpoints, conductiveCells, physicalDsu));
   issues.push(...detectBottomRouteCrossingIssues(result.traces));
 
-  const pinStatuses = buildPinStatuses(components, endpointByRefPin, routeNetsByCell, dsu);
+  const pinStatuses = buildPinStatuses(components, endpointByRefPin, routeNetsByCell, physicalDsu, conductiveCells);
   pinStatuses.forEach((status) => {
     if (status.status === "CONNECTED") {
       return;
@@ -750,7 +876,7 @@ export function validateRoutingResult(
   issues.push(...detectSuspiciousAdjacentPinIssues(endpoints, components));
   issues.push(...detectDipGeometryIssues(components));
 
-  const failedNetDetails = buildFailedNetDetails(requiredByNet, dsu);
+  const failedNetDetails = buildFailedNetDetails(requiredByNet, physicalDsu, conductiveCells);
   const errors = dedupeIssues(issues.filter((issue) => issue.severity === "error"));
   const warnings = dedupeIssues(issues.filter((issue) => issue.severity === "warning"));
 
@@ -770,7 +896,8 @@ function buildPinStatuses(
   components: PlacedComponent[],
   endpointByRefPin: Map<string, RoutedNetEndpoint>,
   routeNetsByCell: Map<string, Set<string>>,
-  dsu: DisjointSet
+  physicalDsu: DisjointSet,
+  conductiveCells: Set<string>
 ): PinRouteStatus[] {
   return components.flatMap((component) => {
     const anchor = component.pinOffsets[0] ?? [0, 0];
@@ -818,9 +945,9 @@ function buildPinStatuses(
         } satisfies PinRouteStatus;
       }
 
-      const requiredRoot = dsu.find(graphKey(expectedNet, cell));
+      const requiredRoot = physicalRootForCell(cell, physicalDsu, conductiveCells);
       const sameNetPins = [...endpointByRefPin.values()].filter((candidate) => candidate.net === expectedNet);
-      const connectedToAll = sameNetPins.every((candidate) => dsu.find(graphKey(expectedNet, key(candidate.grid[0], candidate.grid[1]))) === requiredRoot);
+      const connectedToAll = sameNetPins.every((candidate) => physicalRootForCell(key(candidate.grid[0], candidate.grid[1]), physicalDsu, conductiveCells) === requiredRoot);
 
       return {
         ref: endpoint.ref,
@@ -835,7 +962,11 @@ function buildPinStatuses(
   });
 }
 
-function buildFailedNetDetails(requiredByNet: Map<string, RoutedNetEndpoint[]>, dsu: DisjointSet) {
+function buildFailedNetDetails(
+  requiredByNet: Map<string, RoutedNetEndpoint[]>,
+  physicalDsu: DisjointSet,
+  conductiveCells: Set<string>
+) {
   const failed: FailedNetDiagnostic[] = [];
   requiredByNet.forEach((netEndpoints, net) => {
     if (netEndpoints.length < 2) {
@@ -844,7 +975,7 @@ function buildFailedNetDetails(requiredByNet: Map<string, RoutedNetEndpoint[]>, 
 
     const groupsByRoot = new Map<string, RoutedNetEndpoint[]>();
     netEndpoints.forEach((endpoint) => {
-      const root = dsu.find(graphKey(net, key(endpoint.grid[0], endpoint.grid[1])));
+      const root = physicalRootForCell(key(endpoint.grid[0], endpoint.grid[1]), physicalDsu, conductiveCells);
       const group = groupsByRoot.get(root) ?? [];
       group.push(endpoint);
       groupsByRoot.set(root, group);
@@ -861,6 +992,56 @@ function buildFailedNetDetails(requiredByNet: Map<string, RoutedNetEndpoint[]>, 
     }
   });
   return failed;
+}
+
+function detectPhysicalNetShortIssues(
+  endpoints: RoutedNetEndpoint[],
+  conductiveCells: Set<string>,
+  physicalDsu: DisjointSet
+): DrcIssue[] {
+  const touchedNetsByRoot = new Map<string, Map<string, RoutedNetEndpoint[]>>();
+
+  endpoints.forEach((endpoint) => {
+    const cell = key(endpoint.grid[0], endpoint.grid[1]);
+    if (!conductiveCells.has(cell)) {
+      return;
+    }
+
+    const root = physicalDsu.find(cell);
+    const nets = touchedNetsByRoot.get(root) ?? new Map<string, RoutedNetEndpoint[]>();
+    const netEndpoints = nets.get(endpoint.net) ?? [];
+    netEndpoints.push(endpoint);
+    nets.set(endpoint.net, netEndpoints);
+    touchedNetsByRoot.set(root, nets);
+  });
+
+  const issues: DrcIssue[] = [];
+  touchedNetsByRoot.forEach((endpointsByNet) => {
+    if (endpointsByNet.size < 2) {
+      return;
+    }
+
+    const actualNets = [...endpointsByNet.keys()];
+    const touchedEndpoints = [...endpointsByNet.values()].flat();
+    const first = touchedEndpoints[0];
+    issues.push({
+      code: "SHORT_BETWEEN_NETS",
+      severity: "error",
+      message: `Physical copper connects different expected nets: ${actualNets.join(", ")} (${formatEndpointList(touchedEndpoints)})`,
+      actualNets,
+      grid: first?.grid
+    });
+  });
+
+  return issues;
+}
+
+function physicalRootForCell(cell: string, physicalDsu: DisjointSet, conductiveCells: Set<string>) {
+  return conductiveCells.has(cell) ? physicalDsu.find(cell) : `open:${cell}`;
+}
+
+function formatEndpointList(endpoints: RoutedNetEndpoint[]) {
+  return endpoints.map((endpoint) => `${endpoint.ref}.${endpoint.pin}@${endpoint.grid[0]},${endpoint.grid[1]}`).join(", ");
 }
 
 function addRouteNet(routeNetsByCell: Map<string, Set<string>>, cell: string, net: string) {
@@ -1025,15 +1206,7 @@ function checkDipPinGeometry(components: PlacedComponent[]) {
   return warnings;
 }
 
-function createMultiPinConnectionOrder(plan: NetPlan, terminals: Array<[number, number]>) {
-  if (isPowerNet(plan.net)) {
-    const xs = terminals.map(([x]) => x);
-    const ys = terminals.map(([, y]) => y);
-    const xSpan = Math.max(...xs) - Math.min(...xs);
-    const ySpan = Math.max(...ys) - Math.min(...ys);
-    return [...terminals].sort((a, b) => (xSpan >= ySpan ? a[0] - b[0] : a[1] - b[1]));
-  }
-
+function createMultiPinConnectionOrder(terminals: Array<[number, number]>) {
   const center = boundingCenter(terminals);
   return [...terminals].sort((a, b) => manhattan(a, center) - manhattan(b, center));
 }
@@ -1046,7 +1219,7 @@ function buildNetPlans(endpoints: RoutedNetEndpoint[]): NetPlan[] {
       return {
         ...plan,
         span: boundingSpan(points),
-        priority: priorityNet(plan.net, plan.endpoints.length, boundingSpan(points))
+        priority: priorityNet(plan.endpoints.length, boundingSpan(points))
       };
     });
 }
@@ -1076,17 +1249,14 @@ function commitRouteAttempt(
       locked: false
     })),
     jumpers: attempt.jumpers.map((jumper) => ({ ...jumper, layer: "jumper" as const, locked: false })),
-    priority: plan.priority,
-    locked: isPowerNet(plan.net),
-    failedConnections: attempt.failedConnections,
-    blockedRouteIds: attempt.blockedRouteIds
+    priority: plan.priority
   };
   records.set(record.id, record);
   record.traces.forEach((trace) =>
-    trace.points.forEach(([x, y]) => routeOwner.set(key(x, y), { net: plan.net, routeId: record.id, priority: plan.priority, locked: record.locked }))
+    trace.points.forEach(([x, y]) => routeOwner.set(key(x, y), { net: plan.net, routeId: record.id, priority: plan.priority }))
   );
   record.traces.forEach((trace) =>
-    traceEdges(trace.points).forEach((edge) => edgeOwner.set(edge, { net: plan.net, routeId: record.id, priority: plan.priority, locked: record.locked }))
+    traceEdges(trace.points).forEach((edge) => edgeOwner.set(edge, { net: plan.net, routeId: record.id, priority: plan.priority }))
   );
   return record;
 }
@@ -1094,8 +1264,7 @@ function commitRouteAttempt(
 function buildRoutingStateFromRecords(
   records: Map<string, RouteRecord>,
   plans: NetPlan[],
-  failedNets: Set<string>,
-  extraWarnings: string[]
+  failedNets: Set<string>
 ): RoutingResultWithScore {
   const traces = [...records.values()].flatMap((record) => record.traces);
   const jumpers = [...records.values()].flatMap((record) => record.jumpers);
@@ -1106,7 +1275,7 @@ function buildRoutingStateFromRecords(
     traces,
     jumpers,
     failedNets: [...new Set(failed)],
-    warnings: extraWarnings
+    warnings: []
   };
 }
 
@@ -1171,7 +1340,8 @@ function isCellPassable(
   allowedSameNetEndpointCells: Set<string>,
   routeOwner: Map<string, RouteOwner>,
   startId: string | undefined,
-  targetId: string | undefined
+  targetId: string | undefined,
+  mode: RouteSearchMode = "strict"
 ) {
   if (id !== startId && id !== targetId) {
     const endpointNet = endpointOwner.get(id);
@@ -1198,7 +1368,7 @@ function isCellPassable(
     }
   }
 
-  if (id !== startId && id !== targetId) {
+  if (mode === "strict" && id !== startId && id !== targetId) {
     const reservedFor = pinAccessKeepout.reservedByCell.get(id);
     if (reservedFor && !reservedFor.has(net)) {
       return false;
@@ -1232,15 +1402,6 @@ function findBestPair(connected: Array<[number, number]>, remaining: Array<[numb
   });
 
   return best;
-}
-
-function estimateJumperCost(from: [number, number], to: [number, number], existingJumpersForNet: number) {
-  const enterJumper = 38;
-  const topStep = 1.7;
-  const exitJumper = 38;
-  const jumperLengthPenalty = manhattan(from, to) * topStep;
-  const jumperCountPenalty = existingJumpersForNet * 55;
-  return enterJumper + exitJumper + jumperLengthPenalty + jumperCountPenalty;
 }
 
 function calculatePinAccessPenalty(board: BoardSize, endpoints: RoutedNetEndpoint[], traces: BottomTrace[]) {
@@ -1348,9 +1509,8 @@ function groupEndpointsByNet(endpoints: RoutedNetEndpoint[]): Array<Omit<NetPlan
   return [...map.entries()].map(([net, netEndpoints]) => ({ net, endpoints: netEndpoints }));
 }
 
-function priorityNet(net: string, endpointCount: number, span: number) {
-  const powerPriority = isPowerNet(net) ? 10000 : 0;
-  return powerPriority + endpointCount * 180 + span * 22;
+function priorityNet(endpointCount: number, span: number) {
+  return endpointCount * 180 + span * 22;
 }
 
 function isPowerNet(net: string) {
@@ -1468,13 +1628,22 @@ function pathLength(points: Array<[number, number]>) {
   return length;
 }
 
-function totalJumperLength(jumpers: JumperRoute[]) {
-  return jumpers.reduce((sum, jumper) => sum + manhattan(jumper.from, jumper.to), 0);
+function countRouteBends(points: Array<[number, number]>) {
+  const expanded = expandOrthogonalPath(points);
+  let bends = 0;
+  let previousDirection: string | undefined;
+  for (let index = 1; index < expanded.length; index += 1) {
+    const direction = directionKey({ x: expanded[index - 1][0], y: expanded[index - 1][1] }, { x: expanded[index][0], y: expanded[index][1] });
+    if (previousDirection && previousDirection !== direction) {
+      bends += 1;
+    }
+    previousDirection = direction;
+  }
+  return bends;
 }
 
-function edgePenalty(point: [number, number], board: BoardSize) {
-  const distance = Math.min(point[0], point[1], board.width - 1 - point[0], board.height - 1 - point[1]);
-  return distance <= 0 ? 5 : distance <= 1 ? 1.5 : 0;
+function totalJumperLength(jumpers: JumperRoute[]) {
+  return jumpers.reduce((sum, jumper) => sum + manhattan(jumper.from, jumper.to), 0);
 }
 
 function mergeSet<T>(target: Set<T>, source: Set<T>) {
@@ -1514,10 +1683,6 @@ function endpointKey(endpoint: RoutedNetEndpoint) {
   return `${endpoint.ref}:${endpoint.pin}:${endpoint.net}`;
 }
 
-function graphKey(net: string, cell: string) {
-  return `${net}@${cell}`;
-}
-
 function makeId() {
   return crypto.randomUUID();
 }
@@ -1529,7 +1694,6 @@ export const __autorouterDebug = {
   routeNetWithAStar,
   routeMultiPinNet,
   ripUpBlockingRoutes,
-  rerouteQueue,
   scoreRoutingResult,
   validateRoutingResult
 };

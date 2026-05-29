@@ -57,11 +57,25 @@ export function runDrcDebugFixtures() {
     base.endpoints,
     base.components
   );
+  const wrongPhysicalNet = __autorouterDebug.validateRoutingResult(
+    base.board,
+    {
+      traces: [
+        { id: "wrong", net: "OUTA", points: [[9, 6], [9, 7]] }
+      ],
+      jumpers: [],
+      failedNets: [],
+      warnings: []
+    },
+    base.endpoints,
+    base.components
+  );
 
   return [
     { name: "bottom crossing", errors: crossing.drc.errors.map((issue) => issue.code), warnings: crossing.drc.warnings.map((issue) => issue.code) },
     { name: "unrouted required pins", errors: unrouted.drc.errors.map((issue) => issue.code), warnings: unrouted.drc.warnings.map((issue) => issue.code) },
-    { name: "short between nets", errors: shorted.drc.errors.map((issue) => issue.code), warnings: shorted.drc.warnings.map((issue) => issue.code) }
+    { name: "short between nets", errors: shorted.drc.errors.map((issue) => issue.code), warnings: shorted.drc.warnings.map((issue) => issue.code) },
+    { name: "wrong physical net", errors: wrongPhysicalNet.drc.errors.map((issue) => issue.code), warnings: wrongPhysicalNet.drc.warnings.map((issue) => issue.code) }
   ];
 }
 

@@ -279,7 +279,8 @@ export function App() {
 
   function handleAutoPlace(region: PlacementRegion) {
     commitProject((current) => {
-      const result = autoPlaceComponents(current.components, region, current.board.width, current.board.height);
+      const endpoints = resolveNetEndpoints(current.importState, current.components);
+      const result = autoPlaceComponents(current.components, region, current.board.width, current.board.height, endpoints);
       setAutoPlacementWarnings(result.warnings);
       if (result.warnings.length > 0 && result.placedCount === 0) {
         return current;

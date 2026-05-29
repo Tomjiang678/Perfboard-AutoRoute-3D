@@ -14,7 +14,7 @@ export function NewProjectDialog({ onCancel, onCreate }: NewProjectDialogProps) 
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    onCreate(name, {
+    onCreate(name.trim() || "Untitled Perfboard", {
       width: clampGrid(width),
       height: clampGrid(height)
     });
@@ -24,36 +24,36 @@ export function NewProjectDialog({ onCancel, onCreate }: NewProjectDialogProps) 
     <div className="dialog-backdrop" role="presentation">
       <section className="dialog" role="dialog" aria-modal="true" aria-labelledby="new-project-title">
         <div className="dialog-header">
-          <h2 id="new-project-title">新建工程</h2>
-          <button className="icon-button" type="button" onClick={onCancel} title="关闭">
+          <h2 id="new-project-title">New project</h2>
+          <button className="icon-button" type="button" onClick={onCancel} title="Close">
             <X size={18} />
           </button>
         </div>
 
         <form className="dialog-form" onSubmit={handleSubmit}>
           <label>
-            <span>工程名称</span>
+            <span>Project name</span>
             <input value={name} onChange={(event) => setName(event.target.value)} />
           </label>
 
           <div className="field-grid">
             <label>
-              <span>板宽 / 孔</span>
+              <span>Board width / holes</span>
               <input
                 type="number"
                 min={5}
                 max={150}
-                value={width}
+                value={Number.isNaN(width) ? "" : width}
                 onChange={(event) => setWidth(Number(event.target.value))}
               />
             </label>
             <label>
-              <span>板高 / 孔</span>
+              <span>Board height / holes</span>
               <input
                 type="number"
                 min={5}
                 max={150}
-                value={height}
+                value={Number.isNaN(height) ? "" : height}
                 onChange={(event) => setHeight(Number(event.target.value))}
               />
             </label>
@@ -61,10 +61,10 @@ export function NewProjectDialog({ onCancel, onCreate }: NewProjectDialogProps) 
 
           <footer className="dialog-actions">
             <button className="tool-button" type="button" onClick={onCancel}>
-              取消
+              Cancel
             </button>
             <button className="tool-button primary" type="submit">
-              创建
+              Create
             </button>
           </footer>
         </form>
