@@ -1,3 +1,7 @@
+/*
+现在对非常多种类的芯片不支持，之后的version待改进。
+例如74系列
+*/
 import type { LibraryComponentKind, ParsedComponent } from "../../types/project";
 import configData from "./importConfigData.json";
 
