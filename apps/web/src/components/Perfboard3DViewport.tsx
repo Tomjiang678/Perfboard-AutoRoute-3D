@@ -566,6 +566,8 @@ function createBacksidePins(component: PlacedComponent, board: BoardSize) {
 function createNetEndpointHighlights(endpoints: RoutedNetEndpoint[], board: BoardSize) {
   const group = new THREE.Group();
   endpoints.forEach((endpoint) => {
+    const x = endpoint.grid[0] - board.width / 2 + 0.5;
+    const z = endpoint.grid[1] - board.height / 2 + 0.5;
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(0.42, 0.64, 36),
       new THREE.MeshBasicMaterial({
@@ -576,15 +578,23 @@ function createNetEndpointHighlights(endpoints: RoutedNetEndpoint[], board: Boar
       })
     );
     ring.rotation.x = -Math.PI / 2;
-    ring.position.set(endpoint.grid[0] - board.width / 2 + 0.5, 0.36, endpoint.grid[1] - board.height / 2 + 0.5);
+    ring.position.set(x, 0.36, z);
     group.add(ring);
 
     const post = new THREE.Mesh(
       new THREE.CylinderGeometry(0.1, 0.1, 0.75, 16),
       new THREE.MeshBasicMaterial({ color: 0x00ff8a, transparent: true, opacity: 0.55 })
     );
-    post.position.set(endpoint.grid[0] - board.width / 2 + 0.5, 0.62, endpoint.grid[1] - board.height / 2 + 0.5);
+    post.position.set(x, 0.62, z);
     group.add(post);
+
+    const bottomRing = ring.clone();
+    bottomRing.position.set(x, -0.78, z);
+    group.add(bottomRing);
+
+    const bottomPost = post.clone();
+    bottomPost.position.set(x, -0.88, z);
+    group.add(bottomPost);
   });
   return group;
 }
