@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Check, Eye, Layers3, MousePointer2, RefreshCw, RotateCw, ShieldCheck, Trash2, Undo2, XCircle } from "lucide-react";
 import type { LibraryComponentDefinition } from "../features/project/componentLibrary";
-import type { DragMoveModifier, PerfboardProject } from "../types/project";
+import type { DragMoveModifier, KeyboardShortcuts, PerfboardProject, RoutedNetEndpoint } from "../types/project";
 import { Perfboard3DViewport } from "./Perfboard3DViewport";
+import type { SelectedPin } from "./Perfboard3DViewport";
 import { resolveNetEndpoints } from "../features/import/netEndpointResolver";
 import { ComponentLibrary } from "./ComponentLibrary";
 
@@ -30,6 +31,7 @@ interface WorkspaceProps {
   onAddJumper: (from: [number, number], to: [number, number]) => void;
   onRemoveRouteAt: (point: [number, number]) => void;
   dragMoveModifier: DragMoveModifier;
+  shortcuts: KeyboardShortcuts;
 }
 
 export function Workspace({
@@ -53,7 +55,8 @@ export function Workspace({
   onAddBottomTrace,
   onAddJumper,
   onRemoveRouteAt,
-  dragMoveModifier
+  dragMoveModifier,
+  shortcuts
 }: WorkspaceProps) {
   if (!project) {
     return (
@@ -76,11 +79,14 @@ export function Workspace({
   const [routeDraftStart, setRouteDraftStart] = useState<[number, number] | undefined>();
   const [pendingComponent, setPendingComponent] = useState<LibraryComponentDefinition | undefined>();
   const [openMenu, setOpenMenu] = useState<string | undefined>();
+  const [selectedPin, setSelectedPin] = useState<SelectedPin | undefined>();
+  const resolvedEndpoints = useMemo(
+    () => resolveNetEndpoints(project.importState, project.components),
+    [project.importState, project.components]
+  );
   const highlightedEndpoints = useMemo(
-    () => resolveNetEndpoints(project.importState, project.components).filter(
-      (endpoint) => endpoint.net === project.selectedNetName
-    ),
-    [project.importState, project.components, project.selectedNetName]
+    () => getHighlightedEndpoints(resolvedEndpoints, project.components, project.selectedNetName, selectedPin),
+    [resolvedEndpoints, project.components, project.selectedNetName, selectedPin]
   );
   const canEditSelected = Boolean(selectedComponent && !selectedComponent.mounted);
   const canUnmountSelected = Boolean(selectedComponent?.mounted);
@@ -95,40 +101,39 @@ export function Workspace({
         return;
       }
 
-      const key = event.key.toLowerCase();
       if (event.key === "Escape") {
         setOpenMenu(undefined);
-      } else if (event.key === "F5") {
+      } else if (isShortcut(event, shortcuts.refresh)) {
         event.preventDefault();
         handleRefreshWorkspaceState();
-      } else if (key === "v") {
+      } else if (isShortcut(event, shortcuts.select)) {
         setRouteEditMode("select");
         setRouteDraftStart(undefined);
-      } else if (key === "t") {
+      } else if (isShortcut(event, shortcuts.transparent)) {
         setIsTransparentBoard((current) => !current);
-      } else if (key === "r" && canEditSelected) {
+      } else if (isShortcut(event, shortcuts.rotate) && canEditSelected) {
         onRotateSelected();
-      } else if (key === "m" && canEditSelected) {
+      } else if (isShortcut(event, shortcuts.mount) && canEditSelected) {
         onMountSelected();
-      } else if (key === "u" && canUnmountSelected) {
+      } else if (isShortcut(event, shortcuts.unmount) && canUnmountSelected) {
         onUnmountSelected();
-      } else if ((event.key === "Delete" || event.key === "Backspace") && selectedComponent) {
+      } else if (isShortcut(event, shortcuts.delete) && selectedComponent) {
         onDeleteSelected();
-      } else if (key === "g" && hasImportedComponents) {
+      } else if (isShortcut(event, shortcuts.generateComponents) && hasImportedComponents) {
         onCreateComponentsFromImport();
-      } else if (key === "p" && hasUnmountedComponents) {
+      } else if (isShortcut(event, shortcuts.autoPlace) && hasUnmountedComponents) {
         onOpenAutoPlacement();
-      } else if (key === "a" && hasComponents) {
+      } else if (isShortcut(event, shortcuts.autoRoute) && hasComponents) {
         onAutoRoute();
-      } else if (key === "d" && hasComponents) {
+      } else if (isShortcut(event, shortcuts.runDrc) && hasComponents) {
         onRunDrc();
-      } else if (key === "c" && hasDrc) {
+      } else if (isShortcut(event, shortcuts.clearDrc) && hasDrc) {
         onClearDrc();
-      } else if (key === "s") {
+      } else if (isShortcut(event, shortcuts.solder)) {
         toggleRouteEditMode("solder");
-      } else if (key === "j") {
+      } else if (isShortcut(event, shortcuts.jumper)) {
         toggleRouteEditMode("jumper");
-      } else if (key === "e") {
+      } else if (isShortcut(event, shortcuts.erase)) {
         toggleRouteEditMode("erase");
       }
     }
@@ -180,6 +185,7 @@ export function Workspace({
     setRouteDraftStart(undefined);
     setPendingComponent(undefined);
     setOpenMenu(undefined);
+    setSelectedPin(undefined);
     onSelectComponent(undefined);
     onClearDrc();
   }
@@ -188,61 +194,61 @@ export function Workspace({
     <main className="workspace">
       <div className="viewport-toolbar">
         <ToolbarMenu label="查看" openMenu={openMenu} onOpenMenu={setOpenMenu}>
-          <MenuButton icon={<RefreshCw size={16} />} shortcut="F5" onClick={handleRefreshWorkspaceState}>
+          <MenuButton icon={<RefreshCw size={16} />} shortcut={shortcutLabel(shortcuts.refresh)} onClick={handleRefreshWorkspaceState}>
             刷新
           </MenuButton>
-          <MenuButton active={routeEditMode === "select"} icon={<MousePointer2 size={16} />} shortcut="V" onClick={() => { setRouteEditMode("select"); setRouteDraftStart(undefined); }}>
+          <MenuButton active={routeEditMode === "select"} icon={<MousePointer2 size={16} />} shortcut={shortcutLabel(shortcuts.select)} onClick={() => { setRouteEditMode("select"); setRouteDraftStart(undefined); }}>
             选择
           </MenuButton>
-          <MenuButton active={isTransparentBoard} icon={<Eye size={16} />} shortcut="T" onClick={() => setIsTransparentBoard((current) => !current)}>
+          <MenuButton active={isTransparentBoard} icon={<Eye size={16} />} shortcut={shortcutLabel(shortcuts.transparent)} onClick={() => setIsTransparentBoard((current) => !current)}>
             透视
           </MenuButton>
         </ToolbarMenu>
 
         <ToolbarMenu label="元件" openMenu={openMenu} onOpenMenu={setOpenMenu}>
-          <MenuButton disabled={!canEditSelected} icon={<RotateCw size={16} />} shortcut="R" onClick={onRotateSelected}>
+          <MenuButton disabled={!canEditSelected} icon={<RotateCw size={16} />} shortcut={shortcutLabel(shortcuts.rotate)} onClick={onRotateSelected}>
             旋转
           </MenuButton>
-          <MenuButton disabled={!canEditSelected} icon={<Check size={16} />} shortcut="M" onClick={onMountSelected}>
+          <MenuButton disabled={!canEditSelected} icon={<Check size={16} />} shortcut={shortcutLabel(shortcuts.mount)} onClick={onMountSelected}>
             放置
           </MenuButton>
-          <MenuButton disabled={!canUnmountSelected} icon={<Undo2 size={16} />} shortcut="U" onClick={onUnmountSelected}>
+          <MenuButton disabled={!canUnmountSelected} icon={<Undo2 size={16} />} shortcut={shortcutLabel(shortcuts.unmount)} onClick={onUnmountSelected}>
             移除
           </MenuButton>
-          <MenuButton danger disabled={!selectedComponent} icon={<Trash2 size={16} />} shortcut="Del" onClick={onDeleteSelected}>
+          <MenuButton danger disabled={!selectedComponent} icon={<Trash2 size={16} />} shortcut={shortcutLabel(shortcuts.delete)} onClick={onDeleteSelected}>
             删除
           </MenuButton>
         </ToolbarMenu>
 
         <ToolbarMenu label="自动" openMenu={openMenu} onOpenMenu={setOpenMenu}>
-          <MenuButton disabled={!hasImportedComponents} shortcut="G" onClick={onCreateComponentsFromImport}>
+          <MenuButton disabled={!hasImportedComponents} shortcut={shortcutLabel(shortcuts.generateComponents)} onClick={onCreateComponentsFromImport}>
             生成元件
           </MenuButton>
-          <MenuButton disabled={!hasUnmountedComponents} shortcut="P" onClick={onOpenAutoPlacement}>
+          <MenuButton disabled={!hasUnmountedComponents} shortcut={shortcutLabel(shortcuts.autoPlace)} onClick={onOpenAutoPlacement}>
             自动放置
           </MenuButton>
-          <MenuButton disabled={!hasComponents} shortcut="A" onClick={onAutoRoute}>
+          <MenuButton disabled={!hasComponents} shortcut={shortcutLabel(shortcuts.autoRoute)} onClick={onAutoRoute}>
             自动布线
           </MenuButton>
         </ToolbarMenu>
 
         <ToolbarMenu label="布线" openMenu={openMenu} onOpenMenu={setOpenMenu}>
-          <MenuButton active={routeEditMode === "solder"} shortcut="S" onClick={() => toggleRouteEditMode("solder")}>
+          <MenuButton active={routeEditMode === "solder"} shortcut={shortcutLabel(shortcuts.solder)} onClick={() => toggleRouteEditMode("solder")}>
             走锡
           </MenuButton>
-          <MenuButton active={routeEditMode === "jumper"} shortcut="J" onClick={() => toggleRouteEditMode("jumper")}>
+          <MenuButton active={routeEditMode === "jumper"} shortcut={shortcutLabel(shortcuts.jumper)} onClick={() => toggleRouteEditMode("jumper")}>
             跳线
           </MenuButton>
-          <MenuButton danger active={routeEditMode === "erase"} shortcut="E" onClick={() => toggleRouteEditMode("erase")}>
+          <MenuButton danger active={routeEditMode === "erase"} shortcut={shortcutLabel(shortcuts.erase)} onClick={() => toggleRouteEditMode("erase")}>
             删线
           </MenuButton>
         </ToolbarMenu>
 
         <ToolbarMenu label="检查" openMenu={openMenu} onOpenMenu={setOpenMenu}>
-          <MenuButton disabled={!hasComponents} icon={<ShieldCheck size={16} />} shortcut="D" onClick={onRunDrc}>
+          <MenuButton disabled={!hasComponents} icon={<ShieldCheck size={16} />} shortcut={shortcutLabel(shortcuts.runDrc)} onClick={onRunDrc}>
             DRC检查
           </MenuButton>
-          <MenuButton disabled={!hasDrc} icon={<XCircle size={16} />} shortcut="C" onClick={onClearDrc}>
+          <MenuButton disabled={!hasDrc} icon={<XCircle size={16} />} shortcut={shortcutLabel(shortcuts.clearDrc)} onClick={onClearDrc}>
             清除DRC标记
           </MenuButton>
         </ToolbarMenu>
@@ -262,7 +268,13 @@ export function Workspace({
           components={project.components}
           selectedComponentId={selectedComponentId}
           onPlaceComponent={onPlaceComponent}
-          onSelectComponent={onSelectComponent}
+          onSelectComponent={(componentId) => {
+            onSelectComponent(componentId);
+            if (componentId !== selectedPin?.componentId) {
+              setSelectedPin(undefined);
+            }
+          }}
+          onSelectPin={setSelectedPin}
           onMoveComponent={onMoveComponent}
           onRotateSelected={onRotateSelected}
           onDeleteSelected={onDeleteSelected}
@@ -416,6 +428,76 @@ function MenuButton({
       {shortcut && <kbd>{shortcut}</kbd>}
     </button>
   );
+}
+
+function getHighlightedEndpoints(
+  endpoints: RoutedNetEndpoint[],
+  components: PerfboardProject["components"],
+  selectedNetName: string | undefined,
+  selectedPin: SelectedPin | undefined
+) {
+  if (selectedPin) {
+    const component = components.find((item) => item.id === selectedPin.componentId);
+    const selectedEndpoint = component
+      ? endpoints.find((endpoint) => endpoint.ref === component.name && endpoint.pin === selectedPin.pin)
+      : undefined;
+    if (!selectedEndpoint) {
+      return [];
+    }
+
+    return endpoints.filter((endpoint) => endpoint.net === selectedEndpoint.net);
+  }
+
+  const highlighted = new Map<string, RoutedNetEndpoint>();
+
+  endpoints.forEach((endpoint) => {
+    if (endpoint.net !== selectedNetName) {
+      return;
+    }
+    highlighted.set(`${endpoint.net}:${endpoint.ref}:${endpoint.pin}:${endpoint.grid[0]},${endpoint.grid[1]}`, endpoint);
+  });
+
+  return [...highlighted.values()];
+}
+
+function isShortcut(event: KeyboardEvent, shortcut: string | undefined) {
+  if (!shortcut || shortcut === "None") {
+    return false;
+  }
+
+  const parts = shortcut.split("+");
+  const expectedKey = parts.at(-1);
+  const expectsCtrl = parts.includes("Ctrl");
+  const expectsAlt = parts.includes("Alt");
+  const expectsShift = parts.includes("Shift");
+  const expectsMeta = parts.includes("Meta");
+  if (
+    event.ctrlKey !== expectsCtrl ||
+    event.altKey !== expectsAlt ||
+    event.shiftKey !== expectsShift ||
+    event.metaKey !== expectsMeta
+  ) {
+    return false;
+  }
+
+  if (!expectedKey) {
+    return false;
+  }
+  if (expectedKey.length === 1) {
+    return event.key.toLowerCase() === expectedKey.toLowerCase();
+  }
+  return normalizeEventKey(event.key) === expectedKey;
+}
+
+function shortcutLabel(shortcut: string | undefined) {
+  if (!shortcut || shortcut === "None") {
+    return undefined;
+  }
+  return shortcut === "Delete" ? "Del" : shortcut;
+}
+
+function normalizeEventKey(key: string) {
+  return key === " " ? "Space" : key;
 }
 
 function isTypingTarget(target: EventTarget | null) {

@@ -1,5 +1,23 @@
 export type ImportKind = "netlist" | "bom";
 export type DragMoveModifier = "shift" | "alt" | "ctrl" | "none";
+export type ShortcutAction =
+  | "refresh"
+  | "select"
+  | "transparent"
+  | "rotate"
+  | "mount"
+  | "unmount"
+  | "delete"
+  | "generateComponents"
+  | "autoPlace"
+  | "autoRoute"
+  | "runDrc"
+  | "clearDrc"
+  | "solder"
+  | "jumper"
+  | "erase";
+
+export type KeyboardShortcuts = Record<ShortcutAction, string>;
 
 export interface ImportedFile {
   id: string;

@@ -16,7 +16,7 @@ import { resolveNetEndpoints } from "./features/import/netEndpointResolver";
 import { autoRouteBoard, validateRoutingResult } from "./features/routing/autoRouter";
 import { expandOrthogonalPath } from "./features/routing/routingGeometry";
 import { createProject } from "./features/project/projectFactory";
-import type { BoardSize, DragMoveModifier, ImportKind, PerfboardProject } from "./types/project";
+import type { BoardSize, DragMoveModifier, ImportKind, KeyboardShortcuts, PerfboardProject } from "./types/project";
 
 const STORAGE_KEY = "perfboard-autoroute-project";
 const SETTINGS_KEY = "perfboard-autoroute-settings";
@@ -24,10 +24,30 @@ const MAX_UNDO_HISTORY = 50;
 
 interface AppSettings {
   dragMoveModifier: DragMoveModifier;
+  shortcuts: KeyboardShortcuts;
 }
 
+const defaultShortcuts: KeyboardShortcuts = {
+  refresh: "F5",
+  select: "V",
+  transparent: "T",
+  rotate: "R",
+  mount: "M",
+  unmount: "U",
+  delete: "Delete",
+  generateComponents: "G",
+  autoPlace: "P",
+  autoRoute: "A",
+  runDrc: "D",
+  clearDrc: "C",
+  solder: "S",
+  jumper: "J",
+  erase: "E"
+};
+
 const defaultSettings: AppSettings = {
-  dragMoveModifier: "shift"
+  dragMoveModifier: "shift",
+  shortcuts: defaultShortcuts
 };
 
 export function App() {
@@ -56,7 +76,12 @@ export function App() {
     const savedSettings = window.localStorage.getItem(SETTINGS_KEY);
     if (savedSettings) {
       try {
-        setSettings({ ...defaultSettings, ...JSON.parse(savedSettings) });
+        const parsed = JSON.parse(savedSettings) as Partial<AppSettings>;
+        setSettings({
+          ...defaultSettings,
+          ...parsed,
+          shortcuts: { ...defaultShortcuts, ...parsed.shortcuts }
+        });
       } catch {
         window.localStorage.removeItem(SETTINGS_KEY);
       }
@@ -557,6 +582,7 @@ export function App() {
           onAddJumper={handleAddJumper}
           onRemoveRouteAt={handleRemoveRouteAt}
           dragMoveModifier={settings.dragMoveModifier}
+          shortcuts={settings.shortcuts}
         />
       </div>
 
@@ -575,7 +601,12 @@ export function App() {
       {isSettingsOpen && project && (
         <SettingsDialog
           dragMoveModifier={settings.dragMoveModifier}
+          shortcuts={settings.shortcuts}
           onUpdate={(dragMoveModifier) => setSettings((current) => ({ ...current, dragMoveModifier }))}
+          onUpdateShortcut={(action, shortcut) => setSettings((current) => ({
+            ...current,
+            shortcuts: { ...current.shortcuts, [action]: shortcut }
+          }))}
           onClose={() => setIsSettingsOpen(false)}
         />
       )}

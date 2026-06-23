@@ -63,7 +63,9 @@ function ImportSummary({
   const endpointCountByNet = new Map<string, number>();
   endpoints.forEach((endpoint) => endpointCountByNet.set(endpoint.net, (endpointCountByNet.get(endpoint.net) ?? 0) + 1));
   const pinNetRows = buildPinNetRows(project.components, endpoints);
+  const [showComponents, setShowComponents] = useState(true);
   const [showAllNets, setShowAllNets] = useState(false);
+  const [showPinNets, setShowPinNets] = useState(true);
   const sortedNets = [...nets].sort((a, b) => netSortScore(b.name) - netSortScore(a.name) || a.name.localeCompare(b.name, undefined, { numeric: true }));
   const visibleNets = showAllNets ? sortedNets : sortedNets.slice(0, 12);
 
@@ -80,14 +82,23 @@ function ImportSummary({
 
       {components.length > 0 && (
         <div className="parsed-list">
-          <h3>Components</h3>
-          {components.slice(0, 8).map((component) => (
-            <div className="parsed-row" key={component.ref}>
-              <span>{component.ref}</span>
-              <small>{component.value} / {component.packageName}</small>
-            </div>
-          ))}
-          {components.length > 8 && <p>More components: {components.length - 8}</p>}
+          <div className="parsed-list-header">
+            <h3>Components</h3>
+            <button className="text-button" type="button" onClick={() => setShowComponents((current) => !current)}>
+              {showComponents ? "Collapse" : `Show (${components.length})`}
+            </button>
+          </div>
+          {showComponents && (
+            <>
+              {components.slice(0, 8).map((component) => (
+                <div className="parsed-row" key={component.ref}>
+                  <span>{component.ref}</span>
+                  <small>{component.value} / {component.packageName}</small>
+                </div>
+              ))}
+              {components.length > 8 && <p>More components: {components.length - 8}</p>}
+            </>
+          )}
         </div>
       )}
 
@@ -117,14 +128,23 @@ function ImportSummary({
 
       {pinNetRows.length > 0 && (
         <div className="parsed-list">
-          <h3>Pin nets</h3>
-          {pinNetRows.slice(0, 24).map((row) => (
-            <div className="parsed-row" key={`${row.ref}-${row.pin}`}>
-              <span>{row.ref}.{row.pin}</span>
-              <small>{row.net} @ {row.grid}</small>
-            </div>
-          ))}
-          {pinNetRows.length > 24 && <p>More pins: {pinNetRows.length - 24}</p>}
+          <div className="parsed-list-header">
+            <h3>Pin nets</h3>
+            <button className="text-button" type="button" onClick={() => setShowPinNets((current) => !current)}>
+              {showPinNets ? "Collapse" : `Show (${pinNetRows.length})`}
+            </button>
+          </div>
+          {showPinNets && (
+            <>
+              {pinNetRows.slice(0, 24).map((row) => (
+                <div className="parsed-row" key={`${row.ref}-${row.pin}`}>
+                  <span>{row.ref}.{row.pin}</span>
+                  <small>{row.net} @ {row.grid}</small>
+                </div>
+              ))}
+              {pinNetRows.length > 24 && <p>More pins: {pinNetRows.length - 24}</p>}
+            </>
+          )}
         </div>
       )}
 

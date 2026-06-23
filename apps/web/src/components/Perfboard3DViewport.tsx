@@ -18,6 +18,7 @@ interface Perfboard3DViewportProps {
   selectedComponentId?: string;
   onPlaceComponent: (component: LibraryComponentDefinition, position: [number, number]) => void;
   onSelectComponent: (componentId: string | undefined) => void;
+  onSelectPin: (pin: SelectedPin | undefined) => void;
   onMoveComponent: (componentId: string, position: [number, number]) => void;
   onRotateSelected: () => void;
   onDeleteSelected: () => void;
@@ -33,12 +34,18 @@ interface Perfboard3DViewportProps {
   onRouteEditPoint?: (point: [number, number]) => void;
 }
 
+export interface SelectedPin {
+  componentId: string;
+  pin: number;
+}
+
 export function Perfboard3DViewport({
   board,
   components,
   selectedComponentId,
   onPlaceComponent,
   onSelectComponent,
+  onSelectPin,
   onMoveComponent,
   onRotateSelected,
   onDeleteSelected,
@@ -62,6 +69,8 @@ export function Perfboard3DViewport({
     camera: THREE.PerspectiveCamera;
     componentsGroup: THREE.Group;
   } | null>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const netHighlightsRef = useRef<THREE.Group | null>(null);
   const viewStateRef = useRef<{
     position: THREE.Vector3;
     target: THREE.Vector3;
@@ -77,6 +86,7 @@ export function Perfboard3DViewport({
     }
 
     const scene = new THREE.Scene();
+    sceneRef.current = scene;
     scene.background = new THREE.Color(0xeef2f6);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -100,7 +110,8 @@ export function Perfboard3DViewport({
     scene.add(boardObject);
     const componentsGroup = createPlacedComponents(components, board, selectedComponentId);
     scene.add(componentsGroup);
-    const netHighlights = createNetEndpointHighlights(highlightedEndpoints, board);
+    const netHighlights = createNetEndpointHighlights([], board);
+    netHighlightsRef.current = netHighlights;
     scene.add(netHighlights);
     const routeObject = createRouteObjects(routing, board);
     scene.add(routeObject);
@@ -155,10 +166,26 @@ export function Perfboard3DViewport({
       disposeObject(netHighlights);
       disposeObject(routeObject);
       disposeObject(routingIssueHighlights);
+      sceneRef.current = null;
+      netHighlightsRef.current = null;
       sceneObjectsRef.current = null;
       host.removeChild(renderer.domElement);
     };
-  }, [board, components, selectedComponentId, highlightedEndpoints, routing, transparentBoard]);
+  }, [board, components, selectedComponentId, routing, transparentBoard]);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    const current = netHighlightsRef.current;
+    if (!scene || !current) {
+      return;
+    }
+
+    const next = createNetEndpointHighlights(highlightedEndpoints, board);
+    scene.remove(current);
+    disposeObject(current);
+    scene.add(next);
+    netHighlightsRef.current = next;
+  }, [board, highlightedEndpoints]);
 
   function setView(view: "top" | "bottom" | "iso") {
     const camera = cameraRef.current;
@@ -211,6 +238,15 @@ export function Perfboard3DViewport({
           editing: routeEditMode !== "select" || isPlacingComponent
         };
         setContextMenu(undefined);
+        const pinHit = routeEditMode === "select" && !isPlacingComponent ? pickPin(event) : undefined;
+        if (pinHit) {
+          draggingComponentIdRef.current = undefined;
+          draggingGridRef.current = undefined;
+          onSelectComponent(pinHit.componentId);
+          onSelectPin(pinHit);
+          return;
+        }
+
         const hit = pickComponent(event);
         if (hit) {
           const canDrag = isMoveShortcutPressed(event, dragMoveModifier);
@@ -223,10 +259,12 @@ export function Perfboard3DViewport({
             setOrbitEnabled(false);
           }
           onSelectComponent(hit);
+          onSelectPin(undefined);
         } else {
           draggingComponentIdRef.current = undefined;
           draggingGridRef.current = undefined;
           onSelectComponent(undefined);
+          onSelectPin(undefined);
         }
       }}
       onPointerMove={(event) => {
@@ -279,10 +317,12 @@ export function Perfboard3DViewport({
         const hit = pickComponentFromClient(event.clientX, event.clientY);
         if (hit) {
           onSelectComponent(hit);
+          onSelectPin(undefined);
           setContextMenu({ x: event.clientX, y: event.clientY });
         } else {
           setContextMenu(undefined);
           onSelectComponent(undefined);
+          onSelectPin(undefined);
         }
       }}
       onKeyDown={(event) => {
@@ -395,11 +435,54 @@ export function Perfboard3DViewport({
     return pickComponentFromClient(event.clientX, event.clientY);
   }
 
+  function pickPin(event: React.PointerEvent<HTMLDivElement>) {
+    return pickPinFromClient(event.clientX, event.clientY) ?? pickPinNearGrid(event.clientX, event.clientY);
+  }
+
+  function pickPinFromClient(clientX: number, clientY: number): SelectedPin | undefined {
+    const intersections = intersectComponentObjects(clientX, clientY);
+    for (const intersection of intersections) {
+      const pinObject = findPinObject(intersection.object);
+      const componentId = pinObject?.userData.componentId;
+      const pinIndex = pinObject?.userData.pinIndex;
+      if (typeof componentId === "string" && typeof pinIndex === "number") {
+        return { componentId, pin: pinIndex + 1 };
+      }
+    }
+    return undefined;
+  }
+
+  function pickPinNearGrid(clientX: number, clientY: number): SelectedPin | undefined {
+    if (!selectedComponentId) {
+      return undefined;
+    }
+    const gridPosition = getGridPosition(clientX, clientY);
+    const component = components.find((item) => item.id === selectedComponentId);
+    if (!gridPosition || !component) {
+      return undefined;
+    }
+
+    const anchor = getPinAnchor(component.pinOffsets);
+    const matchedPinIndex = component.pinOffsets.findIndex((offset) => {
+      const [rx, ry] = rotateOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
+      return component.position[0] + rx === gridPosition[0] && component.position[1] + ry === gridPosition[1];
+    });
+    return matchedPinIndex >= 0 ? { componentId: component.id, pin: matchedPinIndex + 1 } : undefined;
+  }
+
   function pickComponentFromClient(clientX: number, clientY: number) {
+    const intersections = intersectComponentObjects(clientX, clientY);
+    const picked = intersections
+      .map((intersection) => findComponentRoot(intersection.object))
+      .find((object): object is THREE.Object3D => Boolean(object?.userData.componentId));
+    return picked?.userData.componentId as string | undefined;
+  }
+
+  function intersectComponentObjects(clientX: number, clientY: number) {
     const host = hostRef.current;
     const sceneObjects = sceneObjectsRef.current;
     if (!host || !sceneObjects) {
-      return undefined;
+      return [];
     }
 
     const rect = host.getBoundingClientRect();
@@ -409,11 +492,7 @@ export function Perfboard3DViewport({
     );
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(pointer, sceneObjects.camera);
-    const intersections = raycaster.intersectObjects(sceneObjects.componentsGroup.children, true);
-    const picked = intersections
-      .map((intersection) => findComponentRoot(intersection.object))
-      .find((object): object is THREE.Object3D => Boolean(object?.userData.componentId));
-    return picked?.userData.componentId as string | undefined;
+    return raycaster.intersectObjects(sceneObjects.componentsGroup.children, true);
   }
 
   function isSelectedMounted() {
@@ -549,7 +628,7 @@ function createPinHighlights(component: PlacedComponent, board: BoardSize) {
 
 function createBacksidePins(component: PlacedComponent, board: BoardSize) {
   const anchor = getPinAnchor(component.pinOffsets);
-  return component.pinOffsets.map((offset) => {
+  return component.pinOffsets.map((offset, index) => {
     const [rx, ry] = rotateOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
     const gridX = component.position[0] + rx;
     const gridY = component.position[1] + ry;
@@ -559,6 +638,7 @@ function createBacksidePins(component: PlacedComponent, board: BoardSize) {
     );
     pin.position.set(gridX - board.width / 2 + 0.5, -0.5, gridY - board.height / 2 + 0.5);
     pin.userData.componentId = component.id;
+    pin.userData.pinIndex = index;
     return pin;
   });
 }
@@ -753,6 +833,17 @@ function findComponentRoot(object: THREE.Object3D): THREE.Object3D | undefined {
       return current.userData.componentRoot as THREE.Object3D;
     }
     if (current.userData.componentId) {
+      return current;
+    }
+    current = current.parent;
+  }
+  return undefined;
+}
+
+function findPinObject(object: THREE.Object3D): THREE.Object3D | undefined {
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    if (typeof current.userData.pinIndex === "number" && current.userData.componentId) {
       return current;
     }
     current = current.parent;
