@@ -1,0 +1,387 @@
+{
+  "pinModelTemplates": {
+    "dual_opamp_8": {
+      "units": {
+        "A": {
+          "1OUT": 1,
+          "OUT": 1,
+          "1IN-": 2,
+          "IN-": 2,
+          "1IN+": 3,
+          "IN+": 3
+        },
+        "B": {
+          "2OUT": 7,
+          "OUT": 7,
+          "2IN-": 6,
+          "IN-": 6,
+          "2IN+": 5,
+          "IN+": 5
+        }
+      },
+      "powerPins": {
+        "VS+": 8,
+        "V+": 8,
+        "VCC": 8,
+        "VS-": 4,
+        "V-": 4,
+        "GND": 4,
+        "VEE": 4
+      }
+    },
+    "quad_opamp_14": {
+      "units": {
+        "A": {
+          "1OUT": 1,
+          "OUT": 1,
+          "1IN-": 2,
+          "IN-": 2,
+          "1IN+": 3,
+          "IN+": 3
+        },
+        "B": {
+          "2OUT": 7,
+          "OUT": 7,
+          "2IN-": 6,
+          "IN-": 6,
+          "2IN+": 5,
+          "IN+": 5
+        },
+        "C": {
+          "3OUT": 8,
+          "OUT": 8,
+          "3IN-": 9,
+          "IN-": 9,
+          "3IN+": 10,
+          "IN+": 10
+        },
+        "D": {
+          "4OUT": 14,
+          "OUT": 14,
+          "4IN-": 13,
+          "IN-": 13,
+          "4IN+": 12,
+          "IN+": 12
+        }
+      },
+      "powerPins": {
+        "VS+": 4,
+        "V+": 4,
+        "VCC": 4,
+        "VS-": 11,
+        "V-": 11,
+        "GND": 11,
+        "VEE": 11
+      }
+    },
+    "quad_comparator_14": {
+      "units": {
+        "A": {
+          "1OUT": 2,
+          "OUT": 2,
+          "1IN-": 4,
+          "IN-": 4,
+          "1IN+": 5,
+          "IN+": 5
+        },
+        "B": {
+          "2OUT": 1,
+          "OUT": 1,
+          "2IN-": 6,
+          "IN-": 6,
+          "2IN+": 7,
+          "IN+": 7
+        },
+        "C": {
+          "3OUT": 14,
+          "OUT": 14,
+          "3IN-": 8,
+          "IN-": 8,
+          "3IN+": 9,
+          "IN+": 9
+        },
+        "D": {
+          "4OUT": 13,
+          "OUT": 13,
+          "4IN-": 10,
+          "IN-": 10,
+          "4IN+": 11,
+          "IN+": 11
+        }
+      },
+      "powerPins": {
+        "VS+": 3,
+        "V+": 3,
+        "VCC": 3,
+        "VS-": 12,
+        "V-": 12,
+        "GND": 12,
+        "VEE": 12
+      }
+    },
+    "quad_2input_gate_14": {
+      "units": {
+        "A": {
+          "1A": 1,
+          "A": 1,
+          "1B": 2,
+          "B": 2,
+          "1Y": 3,
+          "Y": 3
+        },
+        "B": {
+          "2A": 4,
+          "A": 4,
+          "2B": 5,
+          "B": 5,
+          "2Y": 6,
+          "Y": 6
+        },
+        "C": {
+          "3Y": 8,
+          "Y": 8,
+          "3B": 9,
+          "B": 9,
+          "3A": 10,
+          "A": 10
+        },
+        "D": {
+          "4Y": 11,
+          "Y": 11,
+          "4B": 12,
+          "B": 12,
+          "4A": 13,
+          "A": 13
+        }
+      },
+      "powerPins": {
+        "GND": 7,
+        "VCC": 14,
+        "VDD": 14
+      }
+    },
+    "hex_inverter_14": {
+      "units": {
+        "A": {
+          "1A": 1,
+          "A": 1,
+          "1Y": 2,
+          "Y": 2
+        },
+        "B": {
+          "2A": 3,
+          "A": 3,
+          "2Y": 4,
+          "Y": 4
+        },
+        "C": {
+          "3A": 5,
+          "A": 5,
+          "3Y": 6,
+          "Y": 6
+        },
+        "D": {
+          "4Y": 8,
+          "Y": 8,
+          "4A": 9,
+          "A": 9
+        },
+        "E": {
+          "5Y": 10,
+          "Y": 10,
+          "5A": 11,
+          "A": 11
+        },
+        "F": {
+          "6Y": 12,
+          "Y": 12,
+          "6A": 13,
+          "A": 13
+        }
+      },
+      "powerPins": {
+        "GND": 7,
+        "VCC": 14,
+        "VDD": 14
+      }
+    }
+  },
+  "devicePinModels": [
+    {
+      "match": "^(TL062|TL072|TL082|LM358|LM2904)",
+      "flags": "i",
+      "template": "dual_opamp_8"
+    },
+    {
+      "match": "^(LM393|LM2903)",
+      "flags": "i",
+      "template": "dual_opamp_8"
+    },
+    {
+      "match": "^(LM324|LM2902)",
+      "flags": "i",
+      "template": "quad_opamp_14"
+    },
+    {
+      "match": "^(LM339|LM2901)",
+      "flags": "i",
+      "template": "quad_comparator_14"
+    },
+    {
+      "match": "^(NE555|LM555|TLC555|555)",
+      "flags": "i",
+      "units": {
+        "": {
+          "0": 1,
+          "GND": 1,
+          "TRIG": 2,
+          "TRI": 2,
+          "OUT": 3,
+          "RESET": 4,
+          "RST": 4,
+          "CTRL": 5,
+          "CONT": 5,
+          "CON": 5,
+          "THRESH": 6,
+          "THR": 6,
+          "DISCH": 7,
+          "DIS": 7,
+          "VCC": 8
+        }
+      },
+      "powerPins": {
+        "GND": 1,
+        "VCC": 8,
+        "V+": 8
+      }
+    },
+    {
+      "match": "^74(?:HC|HCT|LS|ALS|F)?00",
+      "flags": "i",
+      "template": "quad_2input_gate_14"
+    },
+    {
+      "match": "^74(?:HC|HCT|LS|ALS|F)?04",
+      "flags": "i",
+      "template": "hex_inverter_14"
+    },
+    {
+      "match": "^74(?:HC|HCT|LS|ALS|F)?74",
+      "flags": "i",
+      "units": {
+        "": {
+          "~1CLR": 1,
+          "1CLR": 1,
+          "1D": 2,
+          "1CLK": 3,
+          "~1PR": 4,
+          "~1PRE": 4,
+          "1PRE": 4,
+          "1Q": 5,
+          "~1Q": 6,
+          "1Q*": 6,
+          "~2Q": 8,
+          "2Q*": 8,
+          "2Q": 9,
+          "~2PR": 10,
+          "~2PRE": 10,
+          "2PRE": 10,
+          "2CLK": 11,
+          "2D": 12,
+          "~2CLR": 13,
+          "2CLR": 13
+        }
+      },
+      "powerPins": {
+        "GND": 7,
+        "VCC": 14,
+        "VDD": 14
+      }
+    },
+    {
+      "match": "^LM317",
+      "flags": "i",
+      "units": {
+        "": {
+          "IN": 1,
+          "OUT": 2,
+          "ADJ": 3
+        }
+      },
+      "powerPins": {}
+    },
+    {
+      "match": "^IRF540",
+      "flags": "i",
+      "units": {
+        "": {
+          "D": 1,
+          "G": 2,
+          "S": 3
+        }
+      },
+      "powerPins": {}
+    },
+    {
+      "match": "^SEVEN_SEG_COM_[KA]",
+      "flags": "i",
+      "units": {
+        "": {
+          "A": 1,
+          "B": 2,
+          "C": 3,
+          "D": 4,
+          "E": 5,
+          "F": 6,
+          "G": 7,
+          "COM": 8
+        }
+      },
+      "powerPins": {
+        "COM": 8
+      }
+    },
+    {
+      "match": "^74(?:HC|HCT|LS|ALS|F)?138",
+      "flags": "i",
+      "units": {
+        "A": {
+          "G1": 1,
+          "~G2A": 2,
+          "~G2B": 3,
+          "C": 4,
+          "B": 5,
+          "A": 6,
+          "Y0": 7,
+          "Y1": 9,
+          "Y2": 10,
+          "Y3": 11,
+          "Y4": 12,
+          "Y5": 13,
+          "Y6": 14,
+          "Y7": 15
+        }
+      },
+      "powerPins": {
+        "GND": 8,
+        "VCC": 16
+      }
+    }
+  ],
+  "simplePinMaps": {
+    "passiveCategories": "RESISTOR|CAP|INDUCTOR",
+    "diodeCategories": "DIODE|LED",
+    "diodeValuePatterns": "PHOTO_DIODE",
+    "diodePins": {
+      "A": 1,
+      "K": 2
+    },
+    "bjtCategories": "BJT",
+    "bjtPins": {
+      "C": 1,
+      "B": 2,
+      "E": 3
+    },
+    "switchCategories": "SWITCH"
+  }
+}

@@ -164,9 +164,16 @@ export type LibraryComponentKind =
   | "radial_capacitor"
   | "electrolytic_capacitor"
   | "to92"
+  | "to39"
+  | "to220"
   | "dip"
+  | "dip_switch"
+  | "seven_segment_display"
+  | "alphanumeric_display"
   | "pin_header"
   | "terminal_block"
+  | "slide_switch"
+  | "buzzer"
   | "tactile_switch"
   | "potentiometer";
 

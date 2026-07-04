@@ -11,11 +11,24 @@
   box-sizing: border-box;
 }
 
+html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}
+
 body {
   margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
   min-width: 320px;
-  min-height: 100vh;
   overflow: hidden;
+}
+
+#root {
+  height: 100%;
 }
 
 button,
@@ -31,7 +44,7 @@ button {
 .app-shell {
   display: grid;
   grid-template-rows: 56px 1fr;
-  min-height: 100vh;
+  height: 100%;
 }
 
 .header-bar {
@@ -1066,6 +1079,46 @@ button:disabled {
     flex-direction: column;
     height: auto;
     padding: 8px 14px;
+  }
+}
+
+.auto-placement-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 0 4px;
+}
+
+.auto-placement-progress p {
+  margin: 0;
+  color: var(--ui-muted, #667085);
+  font-size: 12px;
+  text-align: center;
+}
+
+.auto-placement-progress-bar {
+  width: 100%;
+  height: 5px;
+  border-radius: 3px;
+  background: #e2e6ec;
+  overflow: hidden;
+}
+
+.auto-placement-progress-bar span {
+  display: block;
+  width: 36%;
+  height: 100%;
+  border-radius: 3px;
+  background: #2c63bd;
+  animation: auto-placement-progress-slide 1.3s ease-in-out infinite;
+}
+
+@keyframes auto-placement-progress-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(380%);
   }
 }
 

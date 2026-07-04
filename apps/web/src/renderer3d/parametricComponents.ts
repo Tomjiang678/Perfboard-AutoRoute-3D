@@ -8,9 +8,16 @@ export type ParametricComponentKind =
   | "radial_capacitor"
   | "electrolytic_capacitor"
   | "to92"
+  | "to39"
+  | "to220"
   | "dip"
+  | "dip_switch"
+  | "seven_segment_display"
+  | "alphanumeric_display"
   | "pin_header"
   | "terminal_block"
+  | "slide_switch"
+  | "buzzer"
   | "tactile_switch"
   | "potentiometer";
 
@@ -63,12 +70,26 @@ export function createParametricComponent(spec: ParametricComponentSpec) {
       return createRadialCapacitor(spec.label ?? "C", true, spec.pinOffsets);
     case "to92":
       return createTo92(spec.label ?? "Q", spec.pinOffsets);
+    case "to39":
+      return createTo39(spec.label ?? "Q", spec.pinOffsets);
+    case "to220":
+      return createTo220(spec.label ?? "Q", spec.pinOffsets);
     case "dip":
       return createDip(spec.pinCount ?? 8, spec.label ?? `DIP-${spec.pinCount ?? 8}`, spec.pinOffsets);
+    case "dip_switch":
+      return createDipSwitch(spec.pinCount ?? 16, spec.label ?? `DIPSW${Math.floor((spec.pinCount ?? 16) / 2)}`, spec.pinOffsets);
+    case "seven_segment_display":
+      return createSevenSegmentDisplay(spec.label ?? "7SEG", spec.pinOffsets);
+    case "alphanumeric_display":
+      return createAlphanumericDisplay(spec.label ?? "ALNUM", spec.pinOffsets);
     case "pin_header":
       return createPinHeader(spec.pinCount ?? 4, spec.pinOffsets);
     case "terminal_block":
       return createTerminalBlock(spec.pinCount ?? 2, spec.pinOffsets);
+    case "slide_switch":
+      return createSlideSwitch(spec.pinOffsets);
+    case "buzzer":
+      return createBuzzer(spec.label ?? "BZ", spec.pinOffsets);
     case "tactile_switch":
       return createTactileSwitch(spec.pinOffsets);
     case "potentiometer":
@@ -89,14 +110,18 @@ function createAxialPart(
   const centerX = (leftPin[0] + rightPin[0]) / 2;
   const centerZ = (leftPin[1] + rightPin[1]) / 2;
   const span = Math.max(1, distance2d(leftPin, rightPin));
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, length, 24), bodyMaterial);
+  const bodyLength = Math.min(span * 0.72, Math.max(length, span - 1.1));
+  const angle = Math.atan2(rightPin[1] - leftPin[1], rightPin[0] - leftPin[0]);
+  const axisX = Math.cos(angle);
+  const axisZ = Math.sin(angle);
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, bodyLength, 24), bodyMaterial);
   body.rotation.z = Math.PI / 2;
+  body.rotation.y = -angle;
   body.position.set(centerX, 1.55, centerZ);
-  body.scale.x = Math.min(1.4, Math.max(0.75, span / 6));
   group.add(body);
 
-  addLeadBetween(group, [centerX - length / 2, centerZ], leftPin, 1.55);
-  addLeadBetween(group, [centerX + length / 2, centerZ], rightPin, 1.55);
+  addLeadBetween(group, [centerX - axisX * bodyLength / 2, centerZ - axisZ * bodyLength / 2], leftPin, 1.55);
+  addLeadBetween(group, [centerX + axisX * bodyLength / 2, centerZ + axisZ * bodyLength / 2], rightPin, 1.55);
   addBentPin(group, leftPin[0], 1.55, leftPin[1]);
   addBentPin(group, rightPin[0], 1.55, rightPin[1]);
 
@@ -107,12 +132,14 @@ function createAxialPart(
         new THREE.MeshStandardMaterial({ color: [0x7c3aed, 0xb91c1c, 0xd97706][index], roughness: 0.4 })
       );
       band.rotation.z = Math.PI / 2;
-      band.position.set(centerX + x, 1.55, centerZ);
+      band.rotation.y = -angle;
+      band.position.set(centerX + axisX * x, 1.55, centerZ + axisZ * x);
       group.add(band);
     });
   } else {
     const coil = new THREE.Mesh(new THREE.TorusGeometry(0.56, 0.035, 8, 24), materials.lead);
     coil.scale.set(1, 1, 0.22);
+    coil.rotation.y = -angle;
     coil.position.set(centerX, 1.55, centerZ);
     group.add(coil);
   }
@@ -123,9 +150,14 @@ function createAxialPart(
 
 function createDiode(label: string, pinOffsets?: Array<[number, number]>) {
   const group = createAxialPart(label, materials.diodeBody, 0.42, 1.85, false, pinOffsets);
+  const [leftPin, rightPin] = normalizeTwoPins(pinOffsets ?? [[-3, 0], [3, 0]]);
+  const centerX = (leftPin[0] + rightPin[0]) / 2;
+  const centerZ = (leftPin[1] + rightPin[1]) / 2;
+  const angle = Math.atan2(rightPin[1] - leftPin[1], rightPin[0] - leftPin[0]);
   const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.435, 0.435, 0.12, 24), materials.lead);
   ring.rotation.z = Math.PI / 2;
-  ring.position.set(0.58, 1.55, 0);
+  ring.rotation.y = -angle;
+  ring.position.set(centerX + Math.cos(angle) * 0.58, 1.55, centerZ + Math.sin(angle) * 0.58);
   group.add(ring);
   return group;
 }
@@ -205,6 +237,51 @@ function createTo92(label: string, pinOffsets: Array<[number, number]> = [[-1, 0
   return group;
 }
 
+function createTo220(label: string, pinOffsets: Array<[number, number]> = [[-1, 0], [0, 0], [1, 0]]) {
+  const group = new THREE.Group();
+  const box = getPinBox(pinOffsets);
+  const centerX = box.centerX;
+  const centerZ = box.centerZ;
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.25, 2.2, 0.55), materials.blackPlastic);
+  body.position.set(centerX, 1.72, centerZ + 0.36);
+  group.add(body);
+
+  const tab = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.12, 0.7), materials.lead);
+  tab.position.set(centerX, 2.88, centerZ + 0.36);
+  group.add(tab);
+
+  const hole = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.135, 24), new THREE.MeshStandardMaterial({ color: 0x0b0f14, roughness: 0.35 }));
+  hole.rotation.x = Math.PI / 2;
+  hole.position.set(centerX, 2.92, centerZ + 0.36);
+  group.add(hole);
+
+  pinOffsets.forEach(([x, z]) => addStraightPin(group, x, z, 1.05));
+  addTextLabel(group, label, centerX, 2.12, centerZ + 0.72, 0x3fffd2, 1.7);
+  return group;
+}
+
+function createTo39(label: string, pinOffsets: Array<[number, number]> = [[-1, 0], [1, 0], [0, 1]]) {
+  const group = new THREE.Group();
+  const center = getPinCenter(pinOffsets);
+
+  const can = new THREE.Mesh(new THREE.CylinderGeometry(0.88, 0.88, 0.85, 36), materials.lead);
+  can.position.set(center[0], 1.25, center[1]);
+  group.add(can);
+
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.82, 0.88, 0.18, 36), new THREE.MeshStandardMaterial({ color: 0xe5e7eb, roughness: 0.18, metalness: 0.65 }));
+  cap.position.set(center[0], 1.78, center[1]);
+  group.add(cap);
+
+  const tab = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.12, 0.45), materials.lead);
+  tab.position.set(center[0] - 0.72, 1.25, center[1]);
+  group.add(tab);
+
+  pinOffsets.forEach(([x, z]) => addStraightPin(group, x, z, 0.86));
+  addTextLabel(group, label, center[0], 1.98, center[1] + 0.48, 0x1e242b, 1.6);
+  return group;
+}
+
 function createDip(pinCount: number, label: string, pinOffsets = makeDipPinOffsets(pinCount, 3)) {
   const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
@@ -227,6 +304,104 @@ function createDip(pinCount: number, label: string, pinOffsets = makeDipPinOffse
 
   addTextLabel(group, label, box.centerX, 1.38, box.centerZ, 0x3fffd2, Math.min(2.8, bodyLength * 0.58));
   return group;
+}
+
+function createDipSwitch(pinCount: number, label: string, pinOffsets = makeDipPinOffsets(pinCount, 3)) {
+  const group = new THREE.Group();
+  const box = getPinBox(pinOffsets);
+  const bodyWidth = Math.max(2.4, box.width - 0.25);
+  const bodyLength = Math.max(2, box.height + 0.75);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(bodyWidth, 0.5, bodyLength), new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.36 }));
+  body.position.set(box.centerX, 0.96, box.centerZ);
+  group.add(body);
+
+  const switchCount = Math.max(1, Math.floor(pinCount / 2));
+  for (let index = 0; index < switchCount; index += 1) {
+    const z = box.minZ + index * ((box.height || 1) / Math.max(1, switchCount - 1));
+    const slider = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.18, 0.35), new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.28 }));
+    slider.position.set(box.centerX + (index % 2 === 0 ? -0.22 : 0.22), 1.28, z);
+    group.add(slider);
+  }
+
+  pinOffsets.forEach(([x, z]) => addDipPin(group, x, z));
+  addTextLabel(group, label, box.centerX, 1.55, box.centerZ, 0xffffff, Math.min(2.6, bodyLength * 0.45));
+  return group;
+}
+
+function createSevenSegmentDisplay(label: string, pinOffsets: Array<[number, number]> = makeDipPinOffsets(10, 3)) {
+  const group = new THREE.Group();
+  const box = getPinBox(pinOffsets);
+  const bodyWidth = Math.max(3.2, box.width + 1.0);
+  const bodyLength = Math.max(5.1, box.height + 1.0);
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(bodyWidth, 0.72, bodyLength),
+    new THREE.MeshStandardMaterial({ color: 0x1b2230, roughness: 0.3 })
+  );
+  body.position.set(box.centerX, 1.05, box.centerZ);
+  group.add(body);
+
+  const face = new THREE.Mesh(
+    new THREE.BoxGeometry(bodyWidth - 0.42, 0.08, bodyLength - 0.5),
+    new THREE.MeshStandardMaterial({ color: 0x7f1d1d, roughness: 0.2, transparent: true, opacity: 0.78 })
+  );
+  face.position.set(box.centerX, 1.45, box.centerZ);
+  group.add(face);
+
+  addSevenSegmentBars(group, box.centerX, 1.52, box.centerZ, 0xff3b30, 1.0);
+  pinOffsets.forEach(([x, z]) => addStraightPin(group, x, z, 0.78));
+  addTextLabel(group, label, box.centerX, 1.86, box.centerZ + bodyLength * 0.36, 0xffffff, 1.35);
+  return group;
+}
+
+function createAlphanumericDisplay(label: string, pinOffsets: Array<[number, number]> = makeDipPinOffsets(14, 3)) {
+  const group = new THREE.Group();
+  const box = getPinBox(pinOffsets);
+  const bodyWidth = Math.max(3.4, box.width + 1.0);
+  const bodyLength = Math.max(6.2, box.height + 1.0);
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(bodyWidth, 0.76, bodyLength),
+    new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.32 })
+  );
+  body.position.set(box.centerX, 1.06, box.centerZ);
+  group.add(body);
+
+  const face = new THREE.Mesh(
+    new THREE.BoxGeometry(bodyWidth - 0.45, 0.08, bodyLength - 0.55),
+    new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.2, transparent: true, opacity: 0.76 })
+  );
+  face.position.set(box.centerX, 1.47, box.centerZ);
+  group.add(face);
+
+  addSevenSegmentBars(group, box.centerX, 1.54, box.centerZ - 0.25, 0x60a5fa, 0.9);
+  const middle = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.05, 2.7), new THREE.MeshStandardMaterial({ color: 0x93c5fd, emissive: 0x1d4ed8, emissiveIntensity: 0.35 }));
+  middle.position.set(box.centerX, 1.58, box.centerZ);
+  group.add(middle);
+
+  pinOffsets.forEach(([x, z]) => addStraightPin(group, x, z, 0.78));
+  addTextLabel(group, label, box.centerX, 1.9, box.centerZ + bodyLength * 0.38, 0xffffff, 1.5);
+  return group;
+}
+
+function addSevenSegmentBars(group: THREE.Group, x: number, y: number, z: number, color: number, scale: number) {
+  const material = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.45, roughness: 0.18 });
+  const horizontal = (dz: number) => {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(1.2 * scale, 0.05, 0.16 * scale), material);
+    bar.position.set(x, y, z + dz * scale);
+    group.add(bar);
+  };
+  const vertical = (dx: number, dz: number) => {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.16 * scale, 0.05, 1.0 * scale), material);
+    bar.position.set(x + dx * scale, y, z + dz * scale);
+    group.add(bar);
+  };
+
+  horizontal(-1.15);
+  horizontal(0);
+  horizontal(1.15);
+  vertical(-0.72, -0.58);
+  vertical(0.72, -0.58);
+  vertical(-0.72, 0.58);
+  vertical(0.72, 0.58);
 }
 
 function createPinHeader(pinCount: number, pinOffsets = makeLinearPinOffsets(pinCount)) {
@@ -258,6 +433,40 @@ function createTerminalBlock(pinCount: number, pinOffsets = makeLinearPinOffsets
     group.add(screw);
     addStraightPin(group, x, z, 0.72);
   });
+  return group;
+}
+
+function createSlideSwitch(pinOffsets: Array<[number, number]> = [[-1, 0], [0, 0], [1, 0]]) {
+  const group = new THREE.Group();
+  const box = getPinBox(pinOffsets);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(Math.max(2.3, box.width + 0.8), 0.65, 1.1), materials.blackPlastic);
+  body.position.set(box.centerX, 0.96, box.centerZ);
+  group.add(body);
+
+  const actuator = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.5, 0.45), materials.brass);
+  actuator.position.set(box.centerX - 0.35, 1.45, box.centerZ);
+  group.add(actuator);
+
+  pinOffsets.forEach(([x, z]) => addStraightPin(group, x, z, 0.78));
+  return group;
+}
+
+function createBuzzer(label: string, pinOffsets: Array<[number, number]> = [[0, 0], [2, 0]]) {
+  const group = new THREE.Group();
+  const [leftPin, rightPin] = normalizeTwoPins(pinOffsets);
+  const centerX = (leftPin[0] + rightPin[0]) / 2;
+  const centerZ = (leftPin[1] + rightPin[1]) / 2;
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.85, 36), materials.blackPlastic);
+  body.position.set(centerX, 1.15, centerZ);
+  group.add(body);
+
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.04, 24), new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.42 }));
+  top.position.set(centerX, 1.6, centerZ);
+  group.add(top);
+
+  addStraightPin(group, leftPin[0], leftPin[1], 0.75);
+  addStraightPin(group, rightPin[0], rightPin[1], 0.75);
+  addTextLabel(group, label, centerX, 1.68, centerZ + 0.52, 0x3fffd2, 1.35);
   return group;
 }
 

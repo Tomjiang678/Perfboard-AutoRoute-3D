@@ -1,0 +1,72 @@
+lm317  x%p %tIN %tOUT %tADJ %m
+
+2N3906 q%p %tC %tB %tE %m
+
+74LS74 a%p [%t1D?%t:d%t;1D
++      %t~1PR?%t:d%t;~1PR
++      %t~1CLR?%t:d%t;~1CLR
++      %t1CLK?%t:d%t;1CLK
++      %t2D?%t:d%t;2D
++      %t~2PR?%t:d%t;~2PR
++      %t~2CLR?%t:d%t;~2CLR
++      %t2CLK?%t:d%t;2CLK]
++     [%t1Q?%t:d%t;1Q
++      %t~1Q?%t:d%t;~1Q
++      %t2Q?%t:d%t;2Q
++      %t~2Q?%t:d%t;~2Q
++      %tVCC?%t:d%t;VCC
++      %tGND?%t:d%t;GND] %m
+
+2N3904 q%p %tC %tB %tE %m
+
+IRF540 x%p %tD %tG %tS %m
+
+74LS04 
+A:a%p_a  %t1A?%t:d%t;1A %t1Y?%t:d%t;1Y %m
+B:a%p_b  %t2A?%t:d%t;2A %t2Y?%t:d%t;2Y %m
+C:a%p_c  %t3A?%t:d%t;3A %t3Y?%t:d%t;3Y %m
+D:a%p_d  %t4A?%t:d%t;4A %t4Y?%t:d%t;4Y %m
+E:a%p_e  %t5A?%t:d%t;5A %t5Y?%t:d%t;5Y %m
+F:a%p_f   %t6A?%t:d%t;6A %t6Y?%t:d%t;6Y %m
+
+74HC00 
+A:a%p_a  [%t1A?%t:d%t;1A %t1B?%t:d%t;1B] %t1Y?%t:d%t;1Y %m
+B:a%p_b  [%t2A?%t:d%t;2A %t2B?%t:d%t;2B] %t2Y?%t:d%t;2Y %m
+C:a%p_c  [%t3A?%t:d%t;3A %t3B?%t:d%t;3B] %t3Y?%t:d%t;3Y %m
+D:a%p_d  [%t4A?%t:d%t;4A %t4B?%t:d%t;4B] %t4Y?%t:d%t;4Y %m
+
+1N4733 d%p %tA %tK %m
+
+lm358 
+A:x%p_a %t1IN+ %t1IN- %tVS+ %tVS- %t1OUT %m
+B:x%p_b %t2IN+ %t2IN- %tVS+ %tVS- %t2OUT %m
+
+555     符号管脚	封装管脚	类型
+        GND	3	GND
+        DIS	2	INPUT
+        OUT	4	OUTPUT
+        RST	5	INPUT
+        VCC	8	PWR
+        THR	6	INPUT
+        CON	1	INPUT
+        TRI	7	INPUT
+
+lm393 
+A:x%p_a %t1IN+ %t1IN- %tVS+ %tVS- %t1OUT %m
+B:x%p_b %t2IN+ %t2IN- %tVS+ %tVS- %t2OUT %m
+
+variable resistor 符号管脚	封装管脚	类型
+1	1	PASSIVE
+2	2	PASSIVE
+
+lm324 
+A:x%p_a %t1IN+ %t1IN- %tVS+ %tVS- %t1OUT %m
+B:x%p_b %t2IN+ %t2IN- %tVS+ %tVS- %t2OUT %m
+C:x%p_c %t3IN+ %t3IN- %tVS+ %tVS- %t3OUT %m
+D:x%p_d %t4IN+ %t4IN- %tVS+ %tVS- %t4OUT %m
+
+lm339 
+A:x%p_a %t1IN+ %t1IN- %tVS+ %tVS- %t1OUT %m
+B:x%p_b %t2IN+ %t2IN- %tVS+ %tVS- %t2OUT %m
+C:x%p_c %t3IN+ %t3IN- %tVS+ %tVS- %t3OUT %m
+D:x%p_d %t4IN+ %t4IN- %tVS+ %tVS- %t4OUT %m

@@ -1,5 +1,5 @@
 import type { ImportState, NetNode, ParsedComponent, ParsedNet } from "../../types/project";
-import { devicePinModels, simplePinMaps } from "./importConfig";
+import { devicePinModels, parseDipSwitchPinCount, simplePinMaps } from "./importConfig";
 
 export interface ResolvedPinNode extends NetNode {
   physicalRef: string;
@@ -121,6 +121,25 @@ function resolveSimpleTwoPinNode(node: NetNode): ResolvedPinNode | undefined {
 function resolveSimpleComponentNode(node: NetNode, component: ParsedComponent): ResolvedPinNode | undefined {
   const category = component.category.toUpperCase();
   const pin = normalizePinName(node.pin);
+  const numericPin = parseNumericPinName(pin);
+
+  if (category.includes("VARIABLE_RESISTOR") && /^[123]$/.test(pin)) {
+    return {
+      ...node,
+      physicalRef: component.ref,
+      physicalPin: numericPin ?? Number(pin),
+      pinRole: pin
+    };
+  }
+
+  if ((category.includes("BUZZER") || category.includes("HEADERS")) && numericPin) {
+    return {
+      ...node,
+      physicalRef: component.ref,
+      physicalPin: numericPin,
+      pinRole: pin
+    };
+  }
 
   if (/^[12]$/.test(pin) && simplePinMaps.passiveCategories.test(category)) {
     return {
@@ -157,7 +176,7 @@ function resolveSimpleComponentNode(node: NetNode, component: ParsedComponent): 
 
   if (simplePinMaps.switchCategories.test(category)) {
     const switchPin = pin.match(/^(\d+)P(\d+)$/);
-    const physicalPin = switchPin ? (Number(switchPin[1]) - 1) * 2 + Number(switchPin[2]) : Number(pin);
+    const physicalPin = switchPin ? resolveDipSwitchPhysicalPin(component, Number(switchPin[1]), Number(switchPin[2])) : Number(pin);
     if (Number.isFinite(physicalPin) && physicalPin > 0) {
       return {
         ...node,
@@ -169,6 +188,33 @@ function resolveSimpleComponentNode(node: NetNode, component: ParsedComponent): 
   }
 
   return undefined;
+}
+
+function parseNumericPinName(pin: string) {
+  const match = pin.match(/^P?(\d+)$/);
+  if (!match) {
+    return undefined;
+  }
+
+  const value = Number(match[1]);
+  return Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function resolveDipSwitchPhysicalPin(component: ParsedComponent, switchIndex: number, side: number) {
+  if (side !== 1 && side !== 2) {
+    return Number.NaN;
+  }
+
+  const switchCount = parseDipSwitchPinCount(component.value) ?? parseDipSwitchPinCount(component.packageName);
+  if (!switchCount || switchIndex < 1 || switchIndex > switchCount / 2) {
+    return Number.NaN;
+  }
+
+  if (side === 1) {
+    return switchIndex;
+  }
+
+  return switchCount - switchIndex + 1;
 }
 
 function splitLogicalRef(ref: string) {

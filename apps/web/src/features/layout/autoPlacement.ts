@@ -26,6 +26,7 @@ interface FootprintBox {
 interface PlacementCandidate {
   position: [number, number];
   rotation: number;
+  component: PlacedComponent;
   airwireScore: number;
 }
 
@@ -42,6 +43,8 @@ interface RouteQuality {
   bottomLength: number;
   bendCount: number;
   airwireCrossings: number;
+  diagonalPlacementCount: number;
+  leadStretchPenalty: number;
 }
 
 type EndpointMap = Map<string, RoutedNetEndpoint[]>;
@@ -52,6 +55,8 @@ const ROUTE_VERIFIED_CANDIDATES = 6;
 const OPTIMIZATION_ROUNDS = 2;
 const OPTIMIZATION_MOVE_CANDIDATES = 5;
 const MAX_OPTIMIZATION_COMPONENTS = 24;
+const DIAGONAL_SEARCH_RADIUS = 4;
+const DIAGONAL_LOCAL_CANDIDATES = 10;
 
 export function autoPlaceComponents(
   components: PlacedComponent[],
@@ -122,7 +127,7 @@ function createInitialPlacement(
       continue;
     }
 
-    const placedComponent = { ...component, position: candidate.position, rotation: candidate.rotation };
+    const placedComponent = { ...candidate.component, mounted: true };
     placedPositions.set(component.id, candidate);
     placedByName.set(component.name, placedComponent);
     placedAnchors.push(candidate.position);
@@ -132,7 +137,7 @@ function createInitialPlacement(
   return {
     components: components.map((component) => {
       const candidate = placedPositions.get(component.id);
-      return candidate ? { ...component, position: candidate.position, rotation: candidate.rotation, mounted: true } : component;
+      return candidate ? { ...candidate.component, mounted: true } : component;
     }),
     placedCount: placedPositions.size
   };
@@ -152,14 +157,15 @@ function findPlacement(
   endpoints: RoutedNetEndpoint[]
 ): PlacementCandidate | undefined {
   const placedAirwires = buildPlacedAirwires(placedByName, endpointMap);
-  const candidates = ROTATIONS.flatMap((rotation) => {
-    const rotated = { ...component, rotation };
+  const candidates = generatePlacementPoseCandidates(component, false).flatMap((posed) => {
+    const rotated = posed;
     const box = getFootprintBox(rotated);
     return createSpreadCandidates(region, box)
       .filter((position) => canPlaceAt(rotated, position, region, boardWidth, boardHeight, occupied))
       .map((position) => ({
         position,
-        rotation,
+        rotation: rotated.rotation,
+        component: { ...rotated, position },
         airwireScore: scorePlacement(position, rotated, placedAnchors, region, placedByName, endpointMap, netGraph, placedAirwires)
       }));
   }).sort((a, b) => a.airwireScore - b.airwireScore);
@@ -177,13 +183,13 @@ function findPlacement(
 
   let best = shortlist[0];
   let bestQuality = routeQualityForComponents(
-    replaceComponent(partialComponents, { ...component, position: best.position, rotation: best.rotation, mounted: true }),
+    replaceComponent(partialComponents, { ...best.component, mounted: true }),
     partialEndpoints,
     { width: boardWidth, height: boardHeight }
   );
 
   shortlist.slice(1).forEach((candidate) => {
-    const trial = replaceComponent(partialComponents, { ...component, position: candidate.position, rotation: candidate.rotation, mounted: true });
+    const trial = replaceComponent(partialComponents, { ...candidate.component, mounted: true });
     const quality = routeQualityForComponents(trial, partialEndpoints, { width: boardWidth, height: boardHeight });
     if (compareQuality(quality, bestQuality) < 0 || (compareQuality(quality, bestQuality) === 0 && candidate.airwireScore < best.airwireScore)) {
       best = candidate;
@@ -295,12 +301,11 @@ function generateLocalCandidates(
   const placedByName = new Map(components.filter((candidate) => candidate.id !== component.id).map((candidate) => [candidate.name, candidate]));
   const placedAnchors = components.filter((candidate) => candidate.id !== component.id).map((candidate) => candidate.position);
   const placedAirwires = buildPlacedAirwires(placedByName, endpointMap);
-  const rotationTrials = ROTATIONS
-    .map((rotation) => ({ ...component, rotation }))
+  const rotationTrials = generatePlacementPoseCandidates(component, false)
     .filter((trial) => canPlaceAt(trial, trial.position, region, board.width, board.height, occupiedWithoutSelf))
     .map((trial) => replaceComponent(components, trial));
-  const moveTrials = ROTATIONS.flatMap((rotation) => {
-    const rotated = { ...component, rotation };
+  const moveTrials = generatePlacementPoseCandidates(component, false).flatMap((posed) => {
+    const rotated = posed;
     const box = getFootprintBox(rotated);
     return createSpreadCandidates(region, box)
       .filter((position) => canPlaceAt(rotated, position, region, board.width, board.height, occupiedWithoutSelf))
@@ -312,8 +317,10 @@ function generateLocalCandidates(
     .sort((a, b) => a.score - b.score)
     .slice(0, OPTIMIZATION_MOVE_CANDIDATES)
     .map((trial) => replaceComponent(components, trial.component));
+  const diagonalTrials = generateDiagonalCandidates(component, region, board, occupiedWithoutSelf, placedByName, endpointMap, netGraph, placedAirwires, placedAnchors)
+    .map((trial) => replaceComponent(components, trial.component));
 
-  return [...rotationTrials, ...moveTrials].filter((trial) => isValidPlacement(trial, movableIds, region, board));
+  return [...rotationTrials, ...moveTrials, ...diagonalTrials].filter((trial) => isValidPlacement(trial, movableIds, region, board));
 }
 
 function findImprovingSwap(
@@ -363,7 +370,9 @@ function qualityFromRouting(routing: RoutingState, components: PlacedComponent[]
     jumperLength: routing.jumpers.reduce((sum, jumper) => sum + manhattan(jumper.from, jumper.to), 0),
     bottomLength: routing.traces.reduce((sum, trace) => sum + pathLength(trace.points), 0),
     bendCount: routing.traces.reduce((sum, trace) => sum + countBends(trace.points), 0),
-    airwireCrossings: countAirwireCrossings(components, endpoints)
+    airwireCrossings: countAirwireCrossings(components, endpoints),
+    diagonalPlacementCount: components.filter(isDiagonalPlacement).length,
+    leadStretchPenalty: components.reduce((sum, component) => sum + leadStretchPenalty(component), 0)
   };
 }
 
@@ -374,8 +383,56 @@ function compareQuality(a: RouteQuality, b: RouteQuality) {
     a.jumperLength - b.jumperLength ||
     a.bottomLength - b.bottomLength ||
     a.bendCount - b.bendCount ||
+    a.diagonalPlacementCount - b.diagonalPlacementCount ||
+    a.leadStretchPenalty - b.leadStretchPenalty ||
     a.airwireCrossings - b.airwireCrossings
   );
+}
+
+function generatePlacementPoseCandidates(component: PlacedComponent, includeDiagonal: boolean): PlacedComponent[] {
+  const baseCandidates = isStretchableTwoPin(component)
+    ? leadSpacingRange(component).flatMap((spacing) => {
+      const stretched = withTwoPinVector(component, spacing, 0);
+      return ROTATIONS.map((rotation) => ({ ...stretched, rotation }));
+    })
+    : ROTATIONS.map((rotation) => ({ ...component, rotation }));
+
+  if (!includeDiagonal || !isStretchableTwoPin(component)) {
+    return baseCandidates;
+  }
+
+  const diagonal = diagonalVectors(component).map(([dx, dy]) => withTwoPinVector(component, dx, dy));
+  return [...baseCandidates, ...diagonal];
+}
+
+function generateDiagonalCandidates(
+  component: PlacedComponent,
+  region: PlacementRegion,
+  board: BoardSize,
+  occupiedWithoutSelf: Set<string>,
+  placedByName: Map<string, PlacedComponent>,
+  endpointMap: EndpointMap,
+  netGraph: NetGraph,
+  placedAirwires: Airwire[],
+  placedAnchors: Array<[number, number]>
+) {
+  if (!isStretchableTwoPin(component)) {
+    return [];
+  }
+
+  return generatePlacementPoseCandidates(component, true)
+    .filter((candidate) => isDiagonalPlacement(candidate))
+    .flatMap((candidate) => {
+      const positions = nearbyPositions(component.position, DIAGONAL_SEARCH_RADIUS);
+      return positions
+        .filter((position) => canPlaceAt(candidate, position, region, board.width, board.height, occupiedWithoutSelf))
+        .map((position) => ({
+          component: { ...candidate, position },
+          score: scorePlacement(position, candidate, placedAnchors, region, placedByName, endpointMap, netGraph, placedAirwires)
+        }));
+    })
+    .sort((a, b) => a.score - b.score)
+    .slice(0, DIAGONAL_LOCAL_CANDIDATES);
 }
 
 function focusComponents(components: PlacedComponent[], movableIds: Set<string>, quality: RouteQuality, endpoints: RoutedNetEndpoint[]) {
@@ -393,6 +450,85 @@ function focusComponents(components: PlacedComponent[], movableIds: Set<string>,
 
 function relevantEndpointCount(component: PlacedComponent, endpoints: RoutedNetEndpoint[], nets: Set<string>) {
   return endpoints.filter((endpoint) => endpoint.ref === component.name && (nets.size === 0 || nets.has(endpoint.net))).length;
+}
+
+function isStretchableTwoPin(component: PlacedComponent) {
+  return component.pinOffsets.length === 2 && (
+    component.kind === "resistor" ||
+    component.kind === "inductor" ||
+    component.kind === "radial_capacitor" ||
+    component.kind === "diode" ||
+    component.kind === "led"
+  );
+}
+
+function leadSpacingRange(component: PlacedComponent) {
+  const max = component.kind === "diode" || component.kind === "led" ? 4 : 5;
+  const values = new Set<number>([component.leadSpacing]);
+  for (let spacing = 2; spacing <= max; spacing += 1) {
+    values.add(spacing);
+  }
+  return [...values].filter((spacing) => spacing >= 1).sort((a, b) => a - b);
+}
+
+function diagonalVectors(component: PlacedComponent): Array<[number, number]> {
+  const max = component.kind === "diode" || component.kind === "led" ? 4 : 5;
+  const vectors: Array<[number, number]> = [];
+  for (let dx = -max; dx <= max; dx += 1) {
+    for (let dy = -max; dy <= max; dy += 1) {
+      if (dx === 0 || dy === 0) {
+        continue;
+      }
+      const span = Math.hypot(dx, dy);
+      if (span >= 2 && span <= max) {
+        vectors.push([dx, dy]);
+      }
+    }
+  }
+  return vectors.sort((a, b) => Math.abs(a[0]) + Math.abs(a[1]) - Math.abs(b[0]) - Math.abs(b[1]));
+}
+
+function withTwoPinVector(component: PlacedComponent, dx: number, dy: number): PlacedComponent {
+  return {
+    ...component,
+    leadSpacing: Math.round(Math.hypot(dx, dy) * 100) / 100,
+    rowSpacing: dy,
+    rotation: 0,
+    pinOffsets: [[0, 0], [dx, dy]]
+  };
+}
+
+function isDiagonalPlacement(component: PlacedComponent) {
+  if (!isStretchableTwoPin(component)) {
+    return false;
+  }
+  const anchor = component.pinOffsets[0] ?? [0, 0];
+  const other = component.pinOffsets[1] ?? anchor;
+  const [dx, dy] = rotateOffset([other[0] - anchor[0], other[1] - anchor[1]], component.rotation);
+  return dx !== 0 && dy !== 0;
+}
+
+function leadStretchPenalty(component: PlacedComponent) {
+  if (!isStretchableTwoPin(component)) {
+    return 0;
+  }
+  const anchor = component.pinOffsets[0] ?? [0, 0];
+  const other = component.pinOffsets[1] ?? anchor;
+  const actualSpacing = Math.hypot(other[0] - anchor[0], other[1] - anchor[1]);
+  const preferred = component.kind === "led" ? 1 : component.kind === "diode" ? 3 : component.kind === "radial_capacitor" ? 1 : 3;
+  return Math.abs(actualSpacing - preferred);
+}
+
+function nearbyPositions(center: [number, number], radius: number) {
+  const positions: Array<[number, number]> = [];
+  for (let dy = -radius; dy <= radius; dy += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      if (Math.abs(dx) + Math.abs(dy) <= radius) {
+        positions.push([center[0] + dx, center[1] + dy]);
+      }
+    }
+  }
+  return positions.sort((a, b) => manhattan(a, center) - manhattan(b, center));
 }
 
 function scoreNetworkPlacement(
@@ -489,7 +625,7 @@ function getComponentOccupiedCells(component: PlacedComponent): Array<[number, n
 }
 
 function courtyardMargin(component: PlacedComponent) {
-  if (component.kind === "dip" || component.kind === "pin_header") {
+  if (component.kind === "dip" || component.kind === "dip_switch" || component.kind === "seven_segment_display" || component.kind === "alphanumeric_display" || component.kind === "pin_header") {
     return 0;
   }
   if (component.kind === "resistor" || component.kind === "inductor" || component.kind === "diode" || component.kind === "led") {

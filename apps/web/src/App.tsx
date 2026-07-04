@@ -54,6 +54,7 @@ export function App() {
   const [project, setProject] = useState<PerfboardProject | undefined>();
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [isAutoPlacing, setIsAutoPlacing] = useState(false);
+  const [isAutoPlacementRunning, setIsAutoPlacementRunning] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [autoPlacementWarnings, setAutoPlacementWarnings] = useState<string[]>([]);
   const [selectedComponentId, setSelectedComponentId] = useState<string | undefined>();
@@ -302,21 +303,42 @@ export function App() {
     });
   }
 
-  function handleAutoPlace(region: PlacementRegion) {
+  async function handleAutoPlace(region: PlacementRegion) {
+    if (!project || isAutoPlacementRunning) {
+      return;
+    }
+
+    const sourceProject = project;
+    setAutoPlacementWarnings([]);
+    setIsAutoPlacementRunning(true);
+    await waitForPaint();
+
+    const endpoints = resolveNetEndpoints(sourceProject.importState, sourceProject.components);
+    const result = autoPlaceComponents(
+      sourceProject.components,
+      region,
+      sourceProject.board.width,
+      sourceProject.board.height,
+      endpoints
+    );
+
+    setAutoPlacementWarnings(result.warnings);
+    setIsAutoPlacementRunning(false);
+    if (result.warnings.length > 0 && result.placedCount === 0) {
+      return;
+    }
+
     commitProject((current) => {
-      const endpoints = resolveNetEndpoints(current.importState, current.components);
-      const result = autoPlaceComponents(current.components, region, current.board.width, current.board.height, endpoints);
-      setAutoPlacementWarnings(result.warnings);
-      if (result.warnings.length > 0 && result.placedCount === 0) {
+      if (current.id !== sourceProject.id) {
         return current;
       }
 
-      setIsAutoPlacing(false);
       return {
         ...current,
         components: result.components
       };
     });
+    setIsAutoPlacing(false);
   }
 
   function handleCreateComponentsFromImport() {
@@ -594,7 +616,12 @@ export function App() {
           boardWidth={project.board.width}
           boardHeight={project.board.height}
           warnings={autoPlacementWarnings}
-          onCancel={() => setIsAutoPlacing(false)}
+          running={isAutoPlacementRunning}
+          onCancel={() => {
+            if (!isAutoPlacementRunning) {
+              setIsAutoPlacing(false);
+            }
+          }}
           onPlace={handleAutoPlace}
         />
       )}
@@ -617,6 +644,12 @@ export function App() {
 function makeDefaultComponentName(label: string, index: number) {
   const prefix = label.replace(/[^A-Za-z]/g, "") || "U";
   return `${prefix}${index}`;
+}
+
+function waitForPaint() {
+  return new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => window.setTimeout(resolve, 0));
+  });
 }
 
 function createManualBottomPath(from: [number, number], to: [number, number]): Array<[number, number]> {

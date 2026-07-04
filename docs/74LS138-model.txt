@@ -1,0 +1,14 @@
+a%p [%tG1?%t:d%t;G1
++      %t~G2A?%t:d%t;~G2A
++      %t~G2B?%t:d%t;~G2B
++      %tC?%t:d%t;C
++      %tB?%t:d%t;B
++      %tA?%t:d%t;A]
++     [%tY0?%t:d%t;Y0
++      %tY1?%t:d%t;Y1
++      %tY2?%t:d%t;Y2
++      %tY3?%t:d%t;Y3
++      %tY4?%t:d%t;Y4
++      %tY5?%t:d%t;Y5
++      %tY6?%t:d%t;Y6
++      %tY7?%t:d%t;Y7] %m

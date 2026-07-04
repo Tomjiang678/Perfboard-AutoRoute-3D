@@ -1,112 +1,4 @@
 {
-  "devicePinModels": [
-    {
-      "match": "^(TL062|TL072|TL082|LM358|LM2904)",
-      "flags": "i",
-      "units": {
-        "A": {
-          "1OUT": 1,
-          "OUT": 1,
-          "1IN-": 2,
-          "IN-": 2,
-          "1IN+": 3,
-          "IN+": 3
-        },
-        "B": {
-          "2OUT": 7,
-          "OUT": 7,
-          "2IN-": 6,
-          "IN-": 6,
-          "2IN+": 5,
-          "IN+": 5
-        }
-      },
-      "powerPins": {
-        "VS+": 8,
-        "V+": 8,
-        "VCC": 8,
-        "VS-": 4,
-        "V-": 4,
-        "GND": 4,
-        "VEE": 4
-      }
-    },
-    {
-      "match": "^(LM393|LM2903)",
-      "flags": "i",
-      "units": {
-        "A": {
-          "1OUT": 1,
-          "OUT": 1,
-          "1IN-": 2,
-          "IN-": 2,
-          "1IN+": 3,
-          "IN+": 3
-        },
-        "B": {
-          "2OUT": 7,
-          "OUT": 7,
-          "2IN-": 6,
-          "IN-": 6,
-          "2IN+": 5,
-          "IN+": 5
-        }
-      },
-      "powerPins": {
-        "VS+": 8,
-        "V+": 8,
-        "VCC": 8,
-        "VS-": 4,
-        "V-": 4,
-        "GND": 4,
-        "VEE": 4
-      }
-    },
-    {
-      "match": "^(NE555|LM555|TLC555)",
-      "flags": "i",
-      "units": {
-        "": {
-          "GND": 1,
-          "0": 1,
-          "TRIG": 2,
-          "TRI": 2,
-          "OUT": 3,
-          "RESET": 4,
-          "RST": 4,
-          "CTRL": 5,
-          "CONT": 5,
-          "CON": 5,
-          "THRESH": 6,
-          "THR": 6,
-          "DISCH": 7,
-          "DIS": 7,
-          "VCC": 8
-        }
-      },
-      "powerPins": {
-        "GND": 1,
-        "VCC": 8,
-        "V+": 8
-      }
-    }
-  ],
-  "simplePinMaps": {
-    "passiveCategories": "RESISTOR|CAP|INDUCTOR",
-    "diodeCategories": "DIODE|LED",
-    "diodeValuePatterns": "PHOTO_DIODE",
-    "diodePins": {
-      "A": 1,
-      "K": 2
-    },
-    "bjtCategories": "BJT",
-    "bjtPins": {
-      "C": 1,
-      "B": 2,
-      "E": 3
-    },
-    "switchCategories": "SWITCH"
-  },
   "componentMappingRules": [
     {
       "kind": "led",
@@ -115,6 +7,19 @@
       "match": [
         { "field": "refPrefix", "equals": "LED" },
         { "field": "category", "includes": "LED" }
+      ]
+    },
+    {
+      "kind": "potentiometer",
+      "label": "RV",
+      "match": [
+        { "field": "refPrefix", "equals": "RV" },
+        { "field": "value", "includes": "POT" },
+        { "field": "category", "includes": "POT" },
+        { "field": "value", "includes": "POTENTIOMETER" },
+        { "field": "category", "includes": "POTENTIOMETER" },
+        { "field": "value", "includes": "VARIABLE_RESISTOR" },
+        { "field": "category", "includes": "VARIABLE_RESISTOR" }
       ]
     },
     {
@@ -146,12 +51,74 @@
       ]
     },
     {
+      "kind": "dip_switch",
+      "label": "DIPSW",
+      "rowSpacing": 3,
+      "pinCountStrategy": "dipSwitch",
+      "match": [
+        { "field": "value", "includes": "DIPSW" },
+        { "field": "packageName", "includes": "DIPSW" }
+      ]
+    },
+    {
+      "kind": "dip",
+      "label": "DIP",
+      "rowSpacing": 3,
+      "pinCountStrategy": "dipPackage",
+      "matchMode": "all",
+      "match": [
+        { "field": "value", "matches": "(^|[^A-Z0-9])(?:NE|LM|TLC)?555[A-Z0-9_-]*(?:[^A-Z0-9]|$)" },
+        {
+          "any": [
+            { "field": "refPrefix", "equals": "U" },
+            { "field": "refPrefix", "equals": "A" },
+            { "field": "category", "includes": "TIMER" },
+            { "field": "category", "includes": "IC" },
+            { "field": "category", "includes": "MIXED_VIRTUAL" }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "to220",
+      "label": "Q",
+      "pinCountStrategy": "fixed3",
+      "match": [
+        { "field": "packageName", "includes": "TO-220" },
+        { "field": "packageName", "includes": "TO220" }
+      ]
+    },
+    {
       "kind": "to92",
       "label": "Q",
+      "pinCountStrategy": "fixed3",
+      "match": [
+        { "field": "packageName", "includes": "TO-92" },
+        { "field": "packageName", "includes": "TO92" }
+      ]
+    },
+    {
+      "kind": "to39",
+      "label": "Q",
+      "pinCountStrategy": "fixed3",
+      "match": [
+        { "field": "packageName", "includes": "TO-39" },
+        { "field": "packageName", "includes": "TO39" }
+      ]
+    },
+    {
+      "kind": "to92",
+      "label": "Q",
+      "pinCountStrategy": "fixed3",
+      "matchMode": "all",
       "match": [
         { "field": "refPrefix", "equals": "Q" },
-        { "field": "category", "includes": "BJT" },
-        { "field": "category", "includes": "TRANSISTOR" }
+        {
+          "any": [
+            { "field": "category", "includes": "BJT" },
+            { "field": "category", "includes": "TRANSISTOR" }
+          ]
+        }
       ]
     },
     {
@@ -188,11 +155,74 @@
       "label": "DIP",
       "rowSpacing": 3,
       "pinCountStrategy": "dipPackage",
+      "matchMode": "all",
       "match": [
         { "field": "refPrefix", "equals": "U" },
-        { "field": "packageName", "includes": "DIP" },
-        { "field": "packageName", "includes": "PDIP" },
-        { "field": "packageName", "includes": "SO-" }
+        { "not": { "field": "packageName", "includes": "DIPSW" } },
+        {
+          "any": [
+            { "field": "packageName", "matches": "^(?:P?DIP|SDIP)-?P?-?[0-9]+" },
+            { "field": "packageName", "includes": "SO-" },
+            { "field": "packageName", "includes": "SOIC" },
+            { "field": "packageName", "matches": "^D0?14$" },
+            { "field": "packageName", "matches": "^DO14$" },
+            { "field": "packageName", "includes": "CASE751A" }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "buzzer",
+      "label": "BZ",
+      "pinCountStrategy": "fixed2",
+      "match": [
+        { "field": "category", "includes": "BUZZER" },
+        { "field": "value", "includes": "BUZZER" }
+      ]
+    },
+    {
+      "kind": "seven_segment_display",
+      "label": "7SEG",
+      "pinCountStrategy": "fixed8",
+      "match": [
+        { "field": "value", "includes": "SEVEN_SEG" },
+        { "field": "value", "includes": "7SEG" }
+      ]
+    },
+    {
+      "kind": "alphanumeric_display",
+      "label": "ALNUM",
+      "pinCountStrategy": "fixed14",
+      "match": [
+        { "field": "value", "includes": "ALPHA_NUMERIC" },
+        { "field": "value", "includes": "ALPHANUMERIC" }
+      ]
+    },
+    {
+      "kind": "slide_switch",
+      "label": "SW",
+      "pinCountStrategy": "fixed3",
+      "match": [
+        { "field": "value", "includes": "SPDT" },
+        { "field": "packageName", "includes": "SPDT" }
+      ]
+    },
+    {
+      "kind": "pin_header",
+      "label": "HDR",
+      "pinCountStrategy": "fixed10",
+      "match": [
+        { "field": "category", "includes": "HEADERS_TEST" },
+        { "field": "packageName", "includes": "1787234" }
+      ]
+    },
+    {
+      "kind": "pin_header",
+      "label": "BOOST",
+      "pinCountStrategy": "moduleFallback",
+      "match": [
+        { "field": "value", "includes": "BOOST_CONVERTER" },
+        { "field": "category", "includes": "BOOST_CONVERTER" }
       ]
     },
     {
@@ -213,13 +243,6 @@
         { "field": "refPrefix", "equals": "S" },
         { "field": "refPrefix", "equals": "SW" },
         { "field": "category", "includes": "SWITCH" }
-      ]
-    },
-    {
-      "kind": "potentiometer",
-      "label": "RV",
-      "match": [
-        { "field": "refPrefix", "equals": "RV" }
       ]
     }
   ],

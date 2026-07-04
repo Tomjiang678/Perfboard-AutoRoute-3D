@@ -61,11 +61,14 @@ export function createPlacedComponentsFromParsed(
 }
 
 function shouldCreatePhysicalComponent(component: ParsedComponent) {
-  if (component.category === "POWER_SOURCES") {
+  const category = component.category.toUpperCase();
+  const value = component.value.toUpperCase();
+
+  if (category === "POWER_SOURCES") {
     return false;
   }
 
-  if (component.ref === "0" || component.value.toUpperCase() === "GROUND") {
+  if (component.ref === "0" || value === "GROUND") {
     return false;
   }
 
@@ -90,7 +93,7 @@ function mapParsedComponent(component: ParsedComponent): {
     const pinCount = rule.pinCount?.(component);
     return {
       kind: rule.kind,
-      label: rule.kind === "dip" && pinCount ? `DIP${pinCount}` : rule.label,
+      label: makeMappedLabel(rule.kind, rule.label, pinCount),
       pinCount,
       leadSpacing: rule.leadSpacing,
       rowSpacing: rule.rowSpacing
@@ -98,4 +101,14 @@ function mapParsedComponent(component: ParsedComponent): {
   }
 
   return fallbackComponentMapping;
+}
+
+function makeMappedLabel(kind: LibraryComponentKind, label: string, pinCount?: number) {
+  if (kind === "dip" && pinCount) {
+    return `DIP${pinCount}`;
+  }
+  if (kind === "dip_switch" && pinCount) {
+    return `DIPSW${Math.max(1, Math.floor(pinCount / 2))}`;
+  }
+  return label;
 }

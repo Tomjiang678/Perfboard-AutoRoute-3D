@@ -1,0 +1,176 @@
+
+##################  元器件详情报告  ##################
+
+组(ANSI)                组(DIN)              
+                  
+系列(ANSI)               系列(DIN)             
+                  
+
+##################  元器件  ##################
+
+数据库名称: 	主数据库
+系列组: 	Indicators
+系列: 	HEX_DISPLAY
+名称: 	SEVEN_SEG_COM_K_BLUE
+作者: 	DMN
+日期: 	July 21, 2008
+函数: 	7 SEGMENT DISPLAY, COMMON CATHODE 
+Vf = 3.45V @ 20mA
+热阻结: 	0.00
+热阻管壳: 	0.00
+功率耗散: 	0.00
+减额拐点: 	0.00
+最低工作温度: 	0.00
+最高工作温度: 	0.00
+ESD: 	0.00
+
+
+##################  符号  ##################
+
+符号(ANSI)             符号(DIN)           
+  
+
+##################  SPICE 模型  ##################
+
+模型ID: 	SEVEN_SEG_COM_K
+模型制造商: 	Generic
+模型模板: 	
+
+* !!!BEGIN-INTERACT
+*  ( External state variables )
+*  : i_on               ++++f2 ;
+*
+*  ( Internal state variables )
+*  0.0    VARIABLE   r1Cur
+*  0.0    VARIABLE   r2Cur
+*  0.0    VARIABLE   r3Cur
+*  0.0    VARIABLE   r4Cur
+*  0.0    VARIABLE   r5Cur
+*  0.0    VARIABLE   r6Cur
+*  0.0    VARIABLE   r7Cur
+*
+*  : RESET
+*     0 20 0 SET_SUBCOMP_PRP
+*     0 19 0 SET_SUBCOMP_PRP
+*     0 18 0 SET_SUBCOMP_PRP
+*     0 17 0 SET_SUBCOMP_PRP
+*     0 16 0 SET_SUBCOMP_PRP
+*     0 15 0 SET_SUBCOMP_PRP
+*     0 14 0 SET_SUBCOMP_PRP
+*     0.0 ==>_*r1Cur
+*     0.0 ==>_*r2Cur
+*     0.0 ==>_*r3Cur
+*     0.0 ==>_*r4Cur
+*     0.0 ==>_*r5Cur
+*     0.0 ==>_*r6Cur
+*     0.0 ==>_*r7Cur
+*  ;
+*
+*  :ON_USER_UPDATE
+*         RESET
+*  ;
+*
+*  :OUT_DATA
+*    GET_INSTANCE Vsource ::V V1  i  ==>_*r1Cur
+*    GET_INSTANCE Vsource ::V V2  i  ==>_*r2Cur
+*    GET_INSTANCE Vsource ::V V3  i  ==>_*r3Cur
+*    GET_INSTANCE Vsource ::V V4  i  ==>_*r4Cur 
+*    GET_INSTANCE Vsource ::V V5  i  ==>_*r5Cur
+*    GET_INSTANCE Vsource ::V V6  i  ==>_*r6Cur
+*    GET_INSTANCE Vsource ::V V7  i  ==>_*r7Cur
+*    i_on *r1Cur f.< if
+*       1 20 0 SET_SUBCOMP_PRP
+*    else
+*       0 20 0 SET_SUBCOMP_PRP
+*    endif
+*    i_on *r2Cur f.< if
+*       1 17 0 SET_SUBCOMP_PRP
+*    else
+*       0 17 0 SET_SUBCOMP_PRP
+*    endif 
+*    i_on *r3Cur f.< if
+*       1 16 0 SET_SUBCOMP_PRP
+*    else
+*       0 16 0 SET_SUBCOMP_PRP
+*    endif 
+*    i_on *r4Cur f.< if
+*       1 18 0 SET_SUBCOMP_PRP
+*    else
+*       0 18 0 SET_SUBCOMP_PRP
+*    endif 
+*    i_on *r5Cur f.< if
+*       1 14 0 SET_SUBCOMP_PRP
+*    else
+*       0 14 0 SET_SUBCOMP_PRP
+*    endif
+*    i_on *r6Cur f.< if
+*       1 15 0 SET_SUBCOMP_PRP
+*    else
+*       0 15 0 SET_SUBCOMP_PRP
+*    endif 
+*    i_on *r7Cur f.< if
+*       1 19 0 SET_SUBCOMP_PRP
+*    else
+*       0 19 0 SET_SUBCOMP_PRP
+*    endif 
+*
+*  ;
+*
+*  :BEGIN_PLOT
+*     RESET
+*  ;
+*
+*
+*!!!END-INTERACT
+
+x%p %tA %tB %tC %tD %tE %tF %tG %tCOM seven_segment%p
+
+.subckt  seven_segment%p 1 2 3 4 5 6 7 10
+V1 1 1a DC 0
+V2 2 2a DC 0
+V3 3 3a DC 0
+V4 4 4a DC 0
+V5 5 5a DC 0
+V6 6 6a DC 0
+V7 7 7a DC 0
+D1 1a 10 DLEDSEG
+D2 2a 10 DLEDSEG
+D3 3a 10 DLEDSEG
+D4 4a 10 DLEDSEG
+D5 5a 10 DLEDSEG
+D6 6a 10 DLEDSEG
+D7 7a 10 DLEDSEG
+.MODEL DLEDSEG  D (
++ IS=1.112e-021 N=3.007e+000 RS=3.513e-003
++ BV=6.100e+001 IBV=6.000e-003
++ EG=1.110e+000 XTI=3.000e+000 
++ CJO=3.238e-011, M=3.388e-001 VJ=3.250e-001
++ FC=5.000e-001 KF=0.000e+000 AF=1.000e+000 )
+.ends
+
+模型数据: 	
+模型版权: 	
+
+
+
+##################  封装  ##################
+
+印迹: 
+未在 Ultiboard 数据库中找到印迹
+
+封装类型: 	
+封装制造商: 	Generic
+管脚数量: 	8
+
+
+管脚信息: 	
+逻辑 	物理 	区段 	类型 	ERC 状态 	管脚交换组 	栅极交换组
+D 	 	GRP:A 	A:I/O 	包括 	 	
+E 	 	GRP:A 	A:I/O 	包括 	 	
+F 	 	GRP:A 	A:I/O 	包括 	 	
+G 	 	GRP:A 	A:I/O 	包括 	 	
+A 	 	GRP:A 	A:I/O 	包括 	 	
+B 	 	GRP:A 	A:I/O 	包括 	 	
+C 	 	GRP:A 	A:I/O 	包括 	 	
+COM 	 	GRP:A 	A:I/O 	包括 	 	
+

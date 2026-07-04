@@ -1156,7 +1156,7 @@ function checkSuspiciousAdjacentPins(endpoints: RoutedNetEndpoint[], components:
 
   endpointsByRef.forEach((componentEndpoints, ref) => {
     const component = componentByName.get(ref);
-    if (!component || (component.kind !== "dip" && component.kind !== "pin_header" && component.kind !== "to92")) {
+    if (!component || (component.kind !== "dip" && component.kind !== "dip_switch" && component.kind !== "seven_segment_display" && component.kind !== "alphanumeric_display" && component.kind !== "pin_header" && component.kind !== "to92" && component.kind !== "to39" && component.kind !== "to220")) {
       return;
     }
 
@@ -1188,7 +1188,7 @@ function formatAdjacentPinWarning(ref: string, endpoints: RoutedNetEndpoint[]) {
 
 function checkDipPinGeometry(components: PlacedComponent[]) {
   const warnings: string[] = [];
-  components.filter((component) => component.kind === "dip").forEach((component) => {
+  components.filter((component) => component.kind === "dip" || component.kind === "dip_switch" || component.kind === "seven_segment_display" || component.kind === "alphanumeric_display").forEach((component) => {
     const pinCount = component.pinCount ?? component.pinOffsets.length;
     const pinsPerSide = Math.ceil(pinCount / 2);
     const left = component.pinOffsets.slice(0, pinsPerSide);
@@ -1293,7 +1293,7 @@ function getEscapeDirections(endpoint: RoutedNetEndpoint, component: PlacedCompo
   const maxY = Math.max(...ys);
   const midX = (minX + maxX) / 2;
 
-  if (component.kind === "dip") {
+  if (component.kind === "dip" || component.kind === "dip_switch" || component.kind === "seven_segment_display" || component.kind === "alphanumeric_display") {
     const outward: [number, number] = pinOffset[0] <= midX ? [-1, 0] : [1, 0];
     return rotateDirections([outward], component.rotation);
   }
@@ -1308,7 +1308,7 @@ function getEscapeDirections(endpoint: RoutedNetEndpoint, component: PlacedCompo
     return rotateDirections([toCenter, ...perpendiculars], component.rotation);
   }
 
-  if (component.kind === "to92") {
+  if (component.kind === "to92" || component.kind === "to39" || component.kind === "to220") {
     const pinIndex = Math.max(0, endpoint.pin - 1);
     const base: Array<[number, number]> = pinIndex === 0 ? [[-1, 0], [0, -1], [0, 1]]
       : pinIndex === 1 ? [[0, 1], [0, -1], [1, 0]]
