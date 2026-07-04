@@ -32,7 +32,6 @@ export interface ParametricComponentSpec {
 const BOARD_TOP_Y = 0.28;
 const LEAD_RADIUS = 0.045;
 const EXPOSED_LEAD = 0.18;
-const COMPONENT_LIFT = 0.42;
 
 const materials = {
   lead: new THREE.MeshStandardMaterial({ color: 0xc7c7c7, roughness: 0.28, metalness: 0.72 }),
@@ -517,13 +516,6 @@ function addStraightPin(group: THREE.Group, x: number, z: number, topY: number) 
 
 function addBentPin(group: THREE.Group, x: number, topY: number, z: number) {
   addStraightPin(group, x, z, topY);
-}
-
-function addHorizontalLead(group: THREE.Group, x: number, y: number, z: number, length: number) {
-  const lead = new THREE.Mesh(new THREE.CylinderGeometry(LEAD_RADIUS, LEAD_RADIUS, length, 12), materials.lead);
-  lead.rotation.z = Math.PI / 2;
-  lead.position.set(x, y, z);
-  group.add(lead);
 }
 
 function addLeadBetween(group: THREE.Group, from: [number, number], to: [number, number], y: number) {

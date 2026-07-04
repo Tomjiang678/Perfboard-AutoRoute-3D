@@ -124,10 +124,6 @@ function isDivider(line: string) {
   return /^-+$/.test(line);
 }
 
-function isEncodedHeader(line: string) {
-  return line.includes("_uc");
-}
-
 function isLikelyHeaderToken(value: string) {
   return value.includes("_uc") || value.toLowerCase() === "net";
 }

@@ -19,15 +19,13 @@ async function main() {
   const rl = readline.createInterface({ input, output });
 
   try {
-    const deviceInput = args.device ?? args.row ?? await promptRequired(rl, "Device value or ref from docs: ");
+    const deviceInput = args.device ?? await promptRequired(rl, "Device value or ref from docs: ");
     const component = resolveComponent(deviceInput);
     console.log(`Component: ${component.ref} ${component.value} ${component.category} ${component.packageName}`);
 
     const netlistPins = findNetlistPinsInDocs(component.ref);
     const modelLines = args.modelClipboard
       ? splitModelInput(readClipboard())
-      : args.modelFile
-      ? readModelFile(args.modelFile)
       : args.model
         ? splitModelInput(args.model)
         : await promptModelLines(rl);
@@ -78,17 +76,11 @@ function parseArgs(args) {
   const result = {};
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
-    if (arg === "--row") {
-      result.row = args[index + 1];
-      index += 1;
-    } else if (arg === "--device") {
+    if (arg === "--device") {
       result.device = args[index + 1];
       index += 1;
     } else if (arg === "--model") {
       result.model = args[index + 1];
-      index += 1;
-    } else if (arg === "--model-file") {
-      result.modelFile = args[index + 1];
       index += 1;
     } else if (arg === "--model-clipboard") {
       result.modelClipboard = true;
@@ -107,12 +99,10 @@ function printHelp() {
   node tools/add-pin-model.mjs
   node tools/add-pin-model.mjs --device LM358AD --model "x%p_a %t1IN+ ..."
   node tools/add-pin-model.mjs --device 74LS138 --model-clipboard
-  node tools/add-pin-model.mjs --device 74LS138 --model-file docs/74LS138-model.txt
 
 The device can be a ref like U4 or a value like LM358AD.
 docs/ is scanned for the matching cross-report row and all-ground netlist report.
-Use --no-net-check only when you intentionally want to skip netlist validation.
---row is still accepted as a legacy alias.`);
+Use --no-net-check only when you intentionally want to skip netlist validation.`);
 }
 
 async function promptRequired(rl, prompt) {
@@ -124,7 +114,7 @@ async function promptRequired(rl, prompt) {
 }
 
 async function promptModelLines(rl) {
-  console.log("Paste model line(s), enter :clip to read clipboard, enter @path/to/model.txt, or submit an empty first line to infer from netlist:");
+  console.log("Paste one-line model, enter :clip to read clipboard, or submit an empty first line to infer from netlist:");
   const lines = [];
   while (true) {
     const line = await rl.question("> ");
@@ -134,36 +124,9 @@ async function promptModelLines(rl) {
     if (lines.length === 0 && line.trim() === ":clip") {
       return splitModelInput(readClipboard());
     }
-    if (lines.length === 0 && line.trim() === ":paste") {
-      return promptPasteBlock(rl);
-    }
-    if (lines.length === 0 && line.trim().startsWith("@")) {
-      return readModelFile(line.trim().slice(1));
-    }
     lines.push(line);
   }
   return lines;
-}
-
-async function promptPasteBlock(rl) {
-  console.log("Paste model text now. Enter :end on its own line when finished:");
-  const lines = [];
-  while (true) {
-    const line = await rl.question("| ");
-    if (line.trim() === ":end") {
-      break;
-    }
-    lines.push(line);
-  }
-  return splitModelInput(lines.join(" "));
-}
-
-function readModelFile(filePath) {
-  const resolved = path.isAbsolute(filePath) ? filePath : path.join(repoRoot, filePath);
-  return fs.readFileSync(resolved, "utf8")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
 }
 
 function readClipboard() {
@@ -173,7 +136,7 @@ function readClipboard() {
     });
   }
 
-  throw new Error("Clipboard input is only implemented for Windows. Use --model or --model-file on this platform.");
+  throw new Error("Clipboard input is only implemented for Windows. Use --model on this platform.");
 }
 
 function resolveComponent(inputText) {
@@ -461,7 +424,7 @@ function printNetlistCheck(check) {
     console.log(`Extra in netlist: ${check.extraPins.join(", ")}`);
   }
   if (check.expectedPins.size <= 2 && check.netPins.size > check.expectedPins.size + 4) {
-    console.log("Hint: the model text looks truncated. Put the model in a text file and run with --model-file, or enter @path/to/model.txt in interactive mode.");
+    console.log("Hint: the model text looks truncated. Copy the full model text and use :clip or --model-clipboard.");
   }
 }
 
@@ -623,10 +586,6 @@ function addDeviceModel(pinLibrary, deviceModel) {
 
   pinLibrary.devicePinModels.push(deviceModel);
   return true;
-}
-
-function isAlreadyCovered(models, devicePattern) {
-  return Boolean(findCoveringModel(models, devicePattern));
 }
 
 function findCoveringModel(models, devicePattern) {

@@ -218,15 +218,6 @@
     },
     {
       "kind": "pin_header",
-      "label": "BOOST",
-      "pinCountStrategy": "moduleFallback",
-      "match": [
-        { "field": "value", "includes": "BOOST_CONVERTER" },
-        { "field": "category", "includes": "BOOST_CONVERTER" }
-      ]
-    },
-    {
-      "kind": "pin_header",
       "label": "HDR",
       "pinCountStrategy": "moduleFallback",
       "match": [

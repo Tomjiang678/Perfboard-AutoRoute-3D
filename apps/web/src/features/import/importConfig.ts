@@ -37,7 +37,7 @@ interface RawComponentMappingRule {
   label: string;
   match: MatchExpression[];
   matchMode?: "any" | "all";
-  pinCountStrategy?: "dipPackage" | "dipSwitch" | "moduleFallback" | "fixed2" | "fixed3" | "fixed8" | "fixed10" | "fixed14" | "fixed16";
+  pinCountStrategy?: "dipPackage" | "dipSwitch" | "moduleFallback" | "fixed2" | "fixed3" | "fixed8" | "fixed10" | "fixed14";
   leadSpacing?: number;
   rowSpacing?: number;
 }
@@ -179,17 +179,10 @@ function buildPinCountResolver(strategy: RawComponentMappingRule["pinCountStrate
   if (strategy === "fixed14") {
     return () => 14;
   }
-  if (strategy === "fixed16") {
-    return () => 16;
-  }
   return undefined;
 }
 
-function getFallbackPinCount(component: ParsedComponent) {
-  if (component.value.toUpperCase().includes("BOOST_CONVERTER")) {
-    return 3;
-  }
-
+function getFallbackPinCount() {
   return 4;
 }
 

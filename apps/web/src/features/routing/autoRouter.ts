@@ -61,12 +61,6 @@ interface EscapeCandidate {
   cost: number;
 }
 
-interface AppliedEscape {
-  terminalByEndpoint: Map<string, [number, number]>;
-  endpointCellByTerminal: Map<string, string>;
-  traces: BottomTrace[];
-}
-
 interface SearchResult {
   path?: Array<[number, number]>;
   cost: number;
@@ -280,52 +274,6 @@ function generatePinEscapeCandidates(
   });
 
   return candidates;
-}
-
-function applyEscapeRoutes(
-  board: BoardSize,
-  plan: NetPlan,
-  routeOwner: Map<string, RouteOwner>,
-  edgeOwner: Map<string, RouteOwner>,
-  endpointOwner: Map<string, string>,
-  padOwner: Map<string, PadOwner>,
-  pinAccessKeepout: PinAccessKeepout,
-  congestionMap: CongestionMap,
-  escapeCandidates: Map<string, EscapeCandidate[]>
-): AppliedEscape {
-  const terminalByEndpoint = new Map<string, [number, number]>();
-  const endpointCellByTerminal = new Map<string, string>();
-  const traces: BottomTrace[] = [];
-
-  plan.endpoints.forEach((endpoint) => {
-    const candidates = escapeCandidates.get(endpointKey(endpoint)) ?? [
-      { endpoint, path: [endpoint.grid], terminal: endpoint.grid, cost: 0 }
-    ];
-    const selected = candidates.find((candidate) =>
-      candidate.path.every(([x, y], index) => {
-        const id = key(x, y);
-        if (index === 0) {
-          return true;
-        }
-        const previous = candidate.path[index - 1];
-        return isCellPassable(id, plan.net, endpointOwner, padOwner, pinAccessKeepout, new Set([key(endpoint.grid[0], endpoint.grid[1])]), routeOwner, undefined, undefined)
-          && isEdgePassable(edgeKey(previous, [x, y]), plan.net, edgeOwner);
-      })
-    ) ?? { endpoint, path: [endpoint.grid], terminal: endpoint.grid, cost: 100 };
-
-    terminalByEndpoint.set(endpointKey(endpoint), selected.terminal);
-    endpointCellByTerminal.set(key(selected.terminal[0], selected.terminal[1]), key(endpoint.grid[0], endpoint.grid[1]));
-    if (selected.path.length > 1) {
-      traces.push({
-        id: makeId(),
-        net: plan.net,
-        points: selected.path
-      });
-      selected.path.forEach(([x, y]) => addSoftCongestion(congestionMap, x, y, 1.2));
-    }
-  });
-
-  return { terminalByEndpoint, endpointCellByTerminal, traces };
 }
 
 function routeMultiPinNet(
@@ -633,7 +581,7 @@ function buildCongestionMap(
     addSoftCongestion(map, endpoint.grid[0], endpoint.grid[1], 4);
   });
 
-  routeOwner.forEach((owner, id) => {
+  routeOwner.forEach((_owner, id) => {
     const [x, y] = parseKey(id);
     addSoftCongestion(map, x, y, 5);
     neighbors({ x, y }, board).forEach((cell) => addSoftCongestion(map, cell.x, cell.y, 1.4));
@@ -742,7 +690,7 @@ function scoreRoutingResult(
 }
 
 export function validateRoutingResult(
-  board: BoardSize,
+  _board: BoardSize,
   result: RoutingState,
   endpoints: RoutedNetEndpoint[],
   components: PlacedComponent[]
@@ -1686,14 +1634,3 @@ function endpointKey(endpoint: RoutedNetEndpoint) {
 function makeId() {
   return crypto.randomUUID();
 }
-
-export const __autorouterDebug = {
-  buildCongestionMap,
-  generatePinEscapeCandidates,
-  applyEscapeRoutes,
-  routeNetWithAStar,
-  routeMultiPinNet,
-  ripUpBlockingRoutes,
-  scoreRoutingResult,
-  validateRoutingResult
-};

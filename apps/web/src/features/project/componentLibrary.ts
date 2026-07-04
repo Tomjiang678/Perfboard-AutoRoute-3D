@@ -102,18 +102,6 @@ function makeDynamicLibraryComponent(
   return undefined;
 }
 
-function makeDipPinOffsets(pinCount: number, rowSpacing: number) {
-  const pinsPerSide = Math.ceil(pinCount / 2);
-  const offsets: Array<[number, number]> = [];
-  for (let index = 0; index < pinsPerSide; index += 1) {
-    offsets.push([0, index]);
-  }
-  for (let index = pinsPerSide - 1; index >= 0; index -= 1) {
-    offsets.push([rowSpacing, index]);
-  }
-  return offsets;
-}
-
 export function buildPinOffsetsForComponent(component: {
   kind: LibraryComponentKind;
   pinCount?: number;
