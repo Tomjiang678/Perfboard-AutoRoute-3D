@@ -27,6 +27,7 @@ export interface ParametricComponentSpec {
   pinCount?: number;
   color?: number;
   pinOffsets?: Array<[number, number]>;
+  isFallback?: boolean;
 }
 
 const BOARD_TOP_Y = 0.28;
@@ -52,6 +53,9 @@ const materials = {
   terminalGreen: new THREE.MeshStandardMaterial({ color: 0x15845f, roughness: 0.32 }),
   brass: new THREE.MeshStandardMaterial({ color: 0xc7953a, roughness: 0.22, metalness: 0.55 })
 };
+Object.values(materials).forEach((material) => {
+  material.userData.shared = true;
+});
 
 export function createParametricComponent(spec: ParametricComponentSpec) {
   switch (spec.kind) {
@@ -82,7 +86,7 @@ export function createParametricComponent(spec: ParametricComponentSpec) {
     case "alphanumeric_display":
       return createAlphanumericDisplay(spec.label ?? "ALNUM", spec.pinOffsets);
     case "pin_header":
-      return createPinHeader(spec.pinCount ?? 4, spec.pinOffsets);
+      return createPinHeader(spec.pinCount ?? 4, spec.pinOffsets, spec.isFallback);
     case "terminal_block":
       return createTerminalBlock(spec.pinCount ?? 2, spec.pinOffsets);
     case "slide_switch":
@@ -403,18 +407,40 @@ function addSevenSegmentBars(group: THREE.Group, x: number, y: number, z: number
   vertical(0.72, 0.58);
 }
 
-function createPinHeader(pinCount: number, pinOffsets = makeLinearPinOffsets(pinCount)) {
+function createPinHeader(pinCount: number, pinOffsets = makeLinearPinOffsets(pinCount), isFallback = false) {
   const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
-  const base = new THREE.Mesh(new THREE.BoxGeometry(Math.max(1, box.width + 0.6), 0.36, Math.max(0.62, box.height + 0.5)), materials.blackPlastic);
+  const baseWidth = Math.max(1, box.width + 0.6);
+  const baseDepth = Math.max(0.62, box.height + 0.5);
+  const base = new THREE.Mesh(new THREE.BoxGeometry(baseWidth, 0.36, baseDepth), materials.blackPlastic);
   base.position.set(box.centerX, 0.82, box.centerZ);
   group.add(base);
+
+  if (isFallback) {
+    const stripeMaterial = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.32 });
+    const stripeCount = Math.max(2, pinCount);
+    const stripeWidth = baseWidth / stripeCount;
+    for (let index = 0; index < stripeCount; index += 1) {
+      if (index % 2 === 0) {
+        continue;
+      }
+
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(stripeWidth, 0.38, baseDepth + 0.02), stripeMaterial);
+      stripe.position.set(box.centerX - baseWidth / 2 + stripeWidth * (index + 0.5), 0.835, box.centerZ);
+      group.add(stripe);
+    }
+  }
 
   pinOffsets.forEach(([x, z]) => {
     const pin = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.1, 0.14), materials.brass);
     pin.position.set(x, 0.9, z);
     group.add(pin);
   });
+
+  if (isFallback) {
+    addTextLabel(group, "UNK", box.centerX, 1.26, box.centerZ + baseDepth * 0.28, 0xfacc15, Math.min(2.4, Math.max(1.2, baseWidth * 0.55)));
+  }
+
   return group;
 }
 

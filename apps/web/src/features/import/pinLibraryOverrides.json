@@ -204,6 +204,78 @@
         "VCC": 14,
         "VDD": 14
       }
+    },
+    "triple_3input_gate_14": {
+      "units": {
+        "A": {
+          "1A": 1,
+          "A": 1,
+          "1B": 2,
+          "B": 2,
+          "1C": 13,
+          "C": 13,
+          "1Y": 12,
+          "Y": 12
+        },
+        "B": {
+          "2A": 3,
+          "A": 3,
+          "2B": 4,
+          "B": 4,
+          "2C": 5,
+          "C": 5,
+          "2Y": 6,
+          "Y": 6
+        },
+        "C": {
+          "3A": 9,
+          "A": 9,
+          "3B": 10,
+          "B": 10,
+          "3C": 11,
+          "C": 11,
+          "3Y": 8,
+          "Y": 8
+        }
+      },
+      "powerPins": {
+        "GND": 7,
+        "VCC": 14,
+        "VDD": 14
+      }
+    },
+    "dual_4input_gate_14": {
+      "units": {
+        "A": {
+          "1A": 1,
+          "A": 1,
+          "1B": 2,
+          "B": 2,
+          "1C": 4,
+          "C": 4,
+          "1D": 5,
+          "D": 5,
+          "1Y": 6,
+          "Y": 6
+        },
+        "B": {
+          "2A": 9,
+          "A": 9,
+          "2B": 10,
+          "B": 10,
+          "2C": 12,
+          "C": 12,
+          "2D": 13,
+          "D": 13,
+          "2Y": 8,
+          "Y": 8
+        }
+      },
+      "powerPins": {
+        "GND": 7,
+        "VCC": 14,
+        "VDD": 14
+      }
     }
   },
   "devicePinModels": [
@@ -264,6 +336,21 @@
       "match": "^74(?:HC|HCT|LS|ALS|F)?04",
       "flags": "i",
       "template": "hex_inverter_14"
+    },
+    {
+      "match": "^74(?:HC|HCT|LS|ALS|F)?08",
+      "flags": "i",
+      "template": "quad_2input_gate_14"
+    },
+    {
+      "match": "^74(?:HC|HCT|LS|ALS|F)?10",
+      "flags": "i",
+      "template": "triple_3input_gate_14"
+    },
+    {
+      "match": "^74(?:HC|HCT|LS|ALS|F)?20",
+      "flags": "i",
+      "template": "dual_4input_gate_14"
     },
     {
       "match": "^74(?:HC|HCT|LS|ALS|F)?74",
@@ -342,6 +429,37 @@
       }
     },
     {
+      "match": "^ALPHA_NUMERIC_COM_[KA]",
+      "flags": "i",
+      "units": {
+        "": {
+          "J": 1,
+          "H": 2,
+          "F": 3,
+          "CA1": 4,
+          "G1": 5,
+          "E": 6,
+          "N": 7,
+          "D": 8,
+          "M": 9,
+          "L": 10,
+          "C": 11,
+          "DP": 12,
+          "CA2": 13,
+          "G2": 14,
+          "B": 15,
+          "K": 16,
+          "CA3": 17,
+          "A": 18
+        }
+      },
+      "powerPins": {
+        "CA1": 4,
+        "CA2": 13,
+        "CA3": 17
+      }
+    },
+    {
       "match": "^74(?:HC|HCT|LS|ALS|F)?138",
       "flags": "i",
       "units": {
@@ -366,22 +484,64 @@
         "GND": 8,
         "VCC": 16
       }
+    },
+    {
+      "match": "^74(?:HC|HCT|LS|ALS|F)?160",
+      "flags": "i",
+      "units": {
+        "A": {
+          "CLK": 1,
+          "~CLR": 2,
+          "ENT": 3,
+          "ENP": 4,
+          "~LOAD": 5,
+          "A": 6,
+          "B": 7,
+          "C": 9,
+          "D": 10,
+          "QA": 11,
+          "QB": 12,
+          "QC": 13,
+          "QD": 14,
+          "RCO": 15
+        }
+      },
+      "powerPins": {
+        "GND": 8,
+        "VCC": 16
+      }
+    },
+    {
+      "match": "^74(?:HC|HCT|LS|ALS|F)?85",
+      "flags": "i",
+      "units": {
+        "": {
+          "B3": 1,
+          "ALTB": 2,
+          "IA<B": 2,
+          "AEQB": 3,
+          "IA=B": 3,
+          "AGTB": 4,
+          "IA>B": 4,
+          "OAGTB": 5,
+          "OA>B": 5,
+          "OAEQB": 6,
+          "OA=B": 6,
+          "OALTB": 7,
+          "OA<B": 7,
+          "B0": 9,
+          "A0": 10,
+          "B1": 11,
+          "A1": 12,
+          "A2": 13,
+          "B2": 14,
+          "A3": 15
+        }
+      },
+      "powerPins": {
+        "GND": 8,
+        "VCC": 16
+      }
     }
-  ],
-  "simplePinMaps": {
-    "passiveCategories": "RESISTOR|CAP|INDUCTOR",
-    "diodeCategories": "DIODE|LED",
-    "diodeValuePatterns": "PHOTO_DIODE",
-    "diodePins": {
-      "A": 1,
-      "K": 2
-    },
-    "bjtCategories": "BJT",
-    "bjtPins": {
-      "C": 1,
-      "B": 2,
-      "E": 3
-    },
-    "switchCategories": "SWITCH"
-  }
+  ]
 }

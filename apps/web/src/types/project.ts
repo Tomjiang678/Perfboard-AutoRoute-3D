@@ -191,6 +191,9 @@ export interface PlacedComponent {
   position: [number, number];
   rotation: number;
   mounted: boolean;
+  isFallback?: boolean;
+  fallbackReason?: string;
+  fallbackPinMap?: Record<string, number>;
 }
 
 export interface BoardSize {

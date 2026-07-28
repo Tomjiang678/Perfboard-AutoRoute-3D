@@ -16,6 +16,7 @@ interface WorkspaceProps {
   onPlaceComponent: (component: LibraryComponentDefinition, position: [number, number]) => void;
   onSelectComponent: (componentId: string | undefined) => void;
   onMoveComponent: (componentId: string, position: [number, number]) => void;
+  onMovePin: (componentId: string, pin: number, position: [number, number]) => void;
   onUpdateBoard: (board: { width: number; height: number }) => void;
   onRotateSelected: () => void;
   onDeleteSelected: () => void;
@@ -41,6 +42,7 @@ export function Workspace({
   onPlaceComponent,
   onSelectComponent,
   onMoveComponent,
+  onMovePin,
   onUpdateBoard,
   onRotateSelected,
   onDeleteSelected,
@@ -276,6 +278,7 @@ export function Workspace({
           }}
           onSelectPin={setSelectedPin}
           onMoveComponent={onMoveComponent}
+          onMovePin={onMovePin}
           onRotateSelected={onRotateSelected}
           onDeleteSelected={onDeleteSelected}
           onMountSelected={onMountSelected}
@@ -344,6 +347,15 @@ export function Workspace({
               <span>{selectedComponent.pinCount ? `${selectedComponent.pinCount} pins` : selectedComponent.kind}</span>
               <span>{selectedComponent.mounted ? "已放置" : "未放置"}</span>
             </div>
+            {selectedComponent.isFallback && (
+              <div className="fallback-component-note">
+                <strong>库中无对应封装</strong>
+                <span>{selectedComponent.fallbackReason ?? `已将 ${selectedComponent.name} 生成为占位排针。`}</span>
+                {selectedComponent.fallbackPinMap && (
+                  <small>临时脚位：{formatFallbackPinMap(selectedComponent.fallbackPinMap)}</small>
+                )}
+              </div>
+            )}
           </aside>
         )}
       </section>
@@ -514,4 +526,11 @@ function toGridNumber(value: string) {
     return 0;
   }
   return Math.max(0, Math.round(next));
+}
+
+function formatFallbackPinMap(pinMap: Record<string, number>) {
+  return Object.entries(pinMap)
+    .sort(([, left], [, right]) => left - right)
+    .map(([logical, physical]) => `${logical}->${physical}`)
+    .join(", ");
 }

@@ -959,6 +959,28 @@ button:disabled {
   font-size: 12px;
 }
 
+.fallback-component-note {
+  display: grid;
+  gap: 5px;
+  border: 1px solid #facc15;
+  border-radius: 6px;
+  background: #fffbeb;
+  color: #3f2f00;
+  padding: 8px 9px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.fallback-component-note strong {
+  color: #111827;
+  font-size: 12px;
+}
+
+.fallback-component-note small {
+  color: #725300;
+  overflow-wrap: anywhere;
+}
+
 .status-strip {
   display: flex;
   align-items: center;
@@ -1664,6 +1686,12 @@ body {
 .inspector-meta {
   margin: 0 9px 9px;
   color: var(--ui-muted);
+  font-size: 11px;
+}
+
+.fallback-component-note {
+  margin: 0 9px 9px;
+  border-radius: 3px;
   font-size: 11px;
 }
 

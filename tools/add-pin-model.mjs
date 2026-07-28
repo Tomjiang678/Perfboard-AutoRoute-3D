@@ -7,7 +7,7 @@ import { stdin as input, stdout as output } from "node:process";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const docsDir = path.join(repoRoot, "docs");
-const pinLibraryPath = path.join(repoRoot, "apps", "web", "src", "features", "import", "pinLibraryData.json");
+const pinLibraryOverridesPath = path.join(repoRoot, "apps", "web", "src", "features", "import", "pinLibraryOverrides.json");
 
 main().catch((error) => {
   console.error(error instanceof Error ? error.message : error);
@@ -19,11 +19,11 @@ async function main() {
   const rl = readline.createInterface({ input, output });
 
   try {
-    const deviceInput = args.device ?? await promptRequired(rl, "Device value or ref from docs: ");
+    const deviceInput = args.device ?? await promptRequired(rl, "请输入 docs 中的器件型号或 RefDes：");
     const component = resolveComponent(deviceInput);
-    console.log(`Component: ${component.ref} ${component.value} ${component.category} ${component.packageName}`);
+    console.log(`找到元件：${component.ref} ${component.value} ${component.category} ${component.packageName}`);
 
-    const netlistPins = findNetlistPinsInDocs(component.ref);
+    const netlistPins = findNetlistPinsInDocs(component);
     const modelLines = args.modelClipboard
       ? splitModelInput(readClipboard())
       : args.model
@@ -34,19 +34,19 @@ async function main() {
       ? parseModelLines(modelLines)
       : parsedModelFromNetlist(netlistPins);
     if (parsedModel.units.length === 0) {
-      throw new Error("No %p/%t model units were found, and no netlist pins were available to infer them.");
+      throw new Error("没有找到 %p/%t 模型单元，也没有可用于推断的网表引脚。");
     }
 
     if (!args.noNetCheck) {
       const netCheck = checkNetlistPins(component, parsedModel, netlistPins);
       printNetlistCheck(netCheck);
       if (netCheck.status === "mismatch") {
-        throw new Error("Netlist pins do not match the model pins. Ground all pins in Multisim, export the netlist report into docs/, then rerun.");
+        throw new Error("网表引脚和模型引脚不一致。请在 Multisim 中把该元件所有脚接地，导出网表报告到 docs/，然后重新运行。");
       }
     }
 
-    const pinLibrary = readJson(pinLibraryPath);
-    const templateName = findMatchingTemplate(parsedModel, pinLibrary.pinModelTemplates);
+    const overrideLibrary = readJson(pinLibraryOverridesPath);
+    const templateName = findMatchingTemplate(parsedModel, overrideLibrary.pinModelTemplates ?? {});
     const devicePattern = buildDevicePattern(component.value, templateName);
     const deviceModel = templateName
       ? { match: devicePattern, flags: "i", template: templateName }
@@ -56,17 +56,17 @@ async function main() {
       return;
     }
 
-    const changed = addDeviceModel(pinLibrary, deviceModel);
+    const changed = addDeviceModel(overrideLibrary, deviceModel);
     if (!changed) {
-      console.log(`No change: ${devicePattern} is already covered by pinLibraryData.json.`);
+      console.log(`没有变化：${devicePattern} 已经被本地覆盖库覆盖。`);
       return;
     }
 
-    writeJson(pinLibraryPath, pinLibrary);
+    writeJson(pinLibraryOverridesPath, overrideLibrary);
     console.log(templateName
-      ? `Added ${devicePattern} -> ${templateName}`
-      : `Added ${devicePattern} -> explicit pin map`);
-    console.log(`Updated ${path.relative(repoRoot, pinLibraryPath)}`);
+      ? `已添加 ${devicePattern} -> ${templateName}`
+      : `已添加 ${devicePattern} -> 显式引脚映射`);
+    console.log(`已更新 ${path.relative(repoRoot, pinLibraryOverridesPath)}`);
   } finally {
     rl.close();
   }
@@ -95,26 +95,26 @@ function parseArgs(args) {
 }
 
 function printHelp() {
-  console.log(`Usage:
+  console.log(`用法：
   node tools/add-pin-model.mjs
   node tools/add-pin-model.mjs --device LM358AD --model "x%p_a %t1IN+ ..."
   node tools/add-pin-model.mjs --device 74LS138 --model-clipboard
 
-The device can be a ref like U4 or a value like LM358AD.
-docs/ is scanned for the matching cross-report row and all-ground netlist report.
-Use --no-net-check only when you intentionally want to skip netlist validation.`);
+器件可以输入 RefDes，例如 U4，也可以输入型号，例如 LM358AD。
+工具会扫描 docs/ 中的交叉报告行和全脚接地网表报告。
+只有在明确想跳过网表校验时，才使用 --no-net-check。`);
 }
 
 async function promptRequired(rl, prompt) {
   const value = (await rl.question(prompt)).trim();
   if (!value) {
-    throw new Error("Input is required.");
+    throw new Error("必须输入内容。");
   }
   return value;
 }
 
 async function promptModelLines(rl) {
-  console.log("Paste one-line model, enter :clip to read clipboard, or submit an empty first line to infer from netlist:");
+  console.log("粘贴单行模型，输入 :clip 读取剪贴板，或第一行直接回车表示从网表推断：");
   const lines = [];
   while (true) {
     const line = await rl.question("> ");
@@ -136,7 +136,7 @@ function readClipboard() {
     });
   }
 
-  throw new Error("Clipboard input is only implemented for Windows. Use --model on this platform.");
+  throw new Error("当前只实现了 Windows 剪贴板读取；其他平台请使用 --model。");
 }
 
 function resolveComponent(inputText) {
@@ -150,7 +150,7 @@ function resolveComponent(inputText) {
     return match;
   }
 
-  throw new Error(`Could not find a cross-report row for "${inputText}". Paste the full row or put the report in docs/.`);
+  throw new Error(`找不到 "${inputText}" 对应的交叉报告行。请粘贴完整行，或把报告放入 docs/。`);
 }
 
 function parseCrossRow(line) {
@@ -159,7 +159,7 @@ function parseCrossRow(line) {
     return undefined;
   }
 
-  const [ref, value, category, packageName] = columns;
+  const [ref, value, category, packageName, circuitId] = columns;
   if (!/^[A-Za-z]+\d+$/i.test(ref)) {
     return undefined;
   }
@@ -168,7 +168,8 @@ function parseCrossRow(line) {
     ref,
     value,
     category,
-    packageName
+    packageName,
+    circuitId
   };
 }
 
@@ -288,7 +289,7 @@ function stripLeadingUnitNumber(pin) {
   return pin.replace(/^\d+/, "");
 }
 
-function checkNetlistPins(component, parsedModel, netlistPins = findNetlistPinsInDocs(component.ref)) {
+function checkNetlistPins(component, parsedModel, netlistPins = findNetlistPinsInDocs(component)) {
   if (netlistPins.allPins.size === 0) {
     return {
       status: "missing",
@@ -316,14 +317,15 @@ function checkNetlistPins(component, parsedModel, netlistPins = findNetlistPinsI
   };
 }
 
-function findNetlistPinsInDocs(ref) {
+function findNetlistPinsInDocs(component) {
   const pinsByUnit = new Map();
   const allPins = new Set();
   if (!fs.existsSync(docsDir)) {
     return { allPins, pinsByUnit };
   }
 
-  const normalizedRef = ref.toUpperCase();
+  const normalizedRef = component.ref.toUpperCase();
+  const normalizedCircuitId = component.circuitId?.toUpperCase();
   for (const filePath of walkFiles(docsDir)) {
     if (!/\.(txt|md|csv)$/i.test(filePath)) {
       continue;
@@ -335,7 +337,10 @@ function findNetlistPinsInDocs(ref) {
         continue;
       }
 
-      const [, , nodeRef, pin] = columns;
+      const [, circuitId, nodeRef, pin] = columns;
+      if (normalizedCircuitId && circuitId.toUpperCase() !== normalizedCircuitId) {
+        continue;
+      }
       if (!isLikelyNetPin(pin)) {
         continue;
       }
@@ -396,9 +401,9 @@ function parsedModelFromNetlist(netlistPins) {
     }));
 
   if (units.length) {
-    console.log("Inferred model pins from netlist:");
+    console.log("已从网表推断模型引脚：");
     for (const unit of units) {
-      console.log(`  ${unit.unit || "(single)"}: ${unit.pins.join(", ")}`);
+      console.log(`  ${unit.unit || "单单元"}: ${unit.pins.join(", ")}`);
     }
   }
 
@@ -407,24 +412,24 @@ function parsedModelFromNetlist(netlistPins) {
 
 function printNetlistCheck(check) {
   if (check.status === "missing") {
-    console.log(`Netlist check: no pins found for ${check.ref} in docs/. Continuing without netlist validation.`);
+    console.log(`网表校验：在 docs/ 中没有找到 ${check.ref} 的引脚，继续但不做网表校验。`);
     return;
   }
 
-  console.log(`Netlist check: found ${check.netPins.size} pin(s), model expects ${check.expectedPins.size}.`);
+  console.log(`网表校验：找到 ${check.netPins.size} 个引脚，模型期望 ${check.expectedPins.size} 个。`);
   if (check.status === "ok") {
-    console.log("Netlist check: OK.");
+    console.log("网表校验：通过。");
     return;
   }
 
   if (check.missingPins.length) {
-    console.log(`Missing in netlist: ${check.missingPins.join(", ")}`);
+    console.log(`网表缺少：${check.missingPins.join(", ")}`);
   }
   if (check.extraPins.length) {
-    console.log(`Extra in netlist: ${check.extraPins.join(", ")}`);
+    console.log(`网表多出：${check.extraPins.join(", ")}`);
   }
   if (check.expectedPins.size <= 2 && check.netPins.size > check.expectedPins.size + 4) {
-    console.log("Hint: the model text looks truncated. Copy the full model text and use :clip or --model-clipboard.");
+    console.log("提示：模型文本看起来被截断了。请复制完整模型文本，并使用 :clip 或 --model-clipboard。");
   }
 }
 
@@ -440,7 +445,7 @@ function buildDevicePattern(value, templateName) {
     ?? normalized.replace(/[^A-Z0-9].*$/, "");
 
   if (!device) {
-    throw new Error(`Could not derive a device pattern from value "${value}".`);
+    throw new Error(`无法从型号 "${value}" 推导器件匹配规则。`);
   }
 
   if (templateName === "dual_opamp_8" && /^LM393|LM2903/.test(device)) {
@@ -461,7 +466,7 @@ function buildExplicitDeviceModel(component, devicePattern, parsedModel) {
   const hiddenPowerPins = inferHiddenPowerPins(component, pinCount, visiblePinNames);
   const hiddenPinCount = Object.keys(hiddenPowerPins).length;
   if (orderedPins.length + hiddenPinCount !== pinCount) {
-    throw new Error(`Model has ${orderedPins.length} unique %t pin(s), hidden power inference adds ${hiddenPinCount}, but package ${component.packageName} implies ${pinCount} pin(s). Refusing to write an uncertain explicit map.`);
+    throw new Error(`模型有 ${orderedPins.length} 个唯一 %t 引脚，隐藏电源脚推断增加 ${hiddenPinCount} 个，但封装 ${component.packageName} 表示应有 ${pinCount} 个脚。为避免写入不确定映射，已停止。`);
   }
 
   const occupiedPins = new Set(Object.values(hiddenPowerPins));
@@ -560,6 +565,8 @@ function inferPinCount(packageName) {
   const match = normalized.match(/(?:DIP|PDIP|SDIP|SO|SOP|SOIC)-?P?-?(\d+)/)
     ?? normalized.match(/\bD0?(\d+)\b/)
     ?? normalized.match(/\bDO(\d+)\b/)
+    ?? normalized.match(/\bN0?(\d+)\b/)
+    ?? normalized.match(/\bNO(\d+)\b/)
     ?? normalized.match(/(\d+)\s*PIN/);
   if (!match) {
     return undefined;
@@ -569,22 +576,22 @@ function inferPinCount(packageName) {
   return Number.isFinite(pinCount) ? pinCount : undefined;
 }
 
-function addDeviceModel(pinLibrary, deviceModel) {
-  const coveredBy = findCoveringModel(pinLibrary.devicePinModels, deviceModel.match);
+function addDeviceModel(overrideLibrary, deviceModel) {
+  const coveredBy = findCoveringModel(overrideLibrary.devicePinModels ?? [], deviceModel.match);
   if (coveredBy) {
     assertCompatibleExistingModel(coveredBy, deviceModel);
     return false;
   }
 
   const mergeTarget = deviceModel.template
-    ? pinLibrary.devicePinModels.find((model) => model.template === deviceModel.template && canMergePattern(model.match, deviceModel.match))
+    ? overrideLibrary.devicePinModels.find((model) => model.template === deviceModel.template && canMergePattern(model.match, deviceModel.match))
     : undefined;
   if (mergeTarget) {
     mergeTarget.match = mergePattern(mergeTarget.match, deviceModel.match);
     return true;
   }
 
-  pinLibrary.devicePinModels.push(deviceModel);
+  overrideLibrary.devicePinModels.push(deviceModel);
   return true;
 }
 
@@ -609,13 +616,13 @@ function assertCompatibleExistingModel(existingModel, newModel) {
     const existingPins = existingModel.units[unit] ?? {};
     for (const [pin, physicalPin] of Object.entries(pins)) {
       if (existingPins[pin] !== undefined && existingPins[pin] !== physicalPin) {
-        differences.push(`${unit || "(single)"}.${pin}: existing ${existingPins[pin]}, new ${physicalPin}`);
+        differences.push(`${unit || "单单元"}.${pin}: 已有 ${existingPins[pin]}，新增 ${physicalPin}`);
       }
     }
   }
 
   if (differences.length) {
-    throw new Error(`Existing pin model ${existingModel.match} conflicts with the generated model:\n${differences.join("\n")}`);
+    throw new Error(`已有引脚模型 ${existingModel.match} 与新模型冲突：\n${differences.join("\n")}`);
   }
 }
 
@@ -648,12 +655,12 @@ function mergePattern(existingPattern, newPattern) {
 }
 
 function printUnknownTemplateHelp(parsedModel) {
-  console.log("No existing pin template matched these model pins.");
-  console.log("Detected units:");
+  console.log("没有已有引脚模板能匹配这些模型引脚。");
+  console.log("检测到的单元：");
   for (const unit of parsedModel.units) {
-    console.log(`  ${unit.unit || "(single)"}: ${unit.pins.join(", ")}`);
+    console.log(`  ${unit.unit || "单单元"}: ${unit.pins.join(", ")}`);
   }
-  console.log("Add a template to pinModelTemplates first, or extend this tool to accept explicit physical pin numbers.");
+  console.log("请先向 pinModelTemplates 添加模板，或直接用 add-import-json.mjs 写入显式 JSON 映射。");
 }
 
 function readJson(filePath) {

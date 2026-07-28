@@ -38,3 +38,6 @@ Thumbs.db
 # TypeScript/Vite cache
 *.tsbuildinfo
 .vite/
+
+#库
+docs/kicad-symbols/

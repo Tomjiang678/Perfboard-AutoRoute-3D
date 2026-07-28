@@ -11,6 +11,7 @@ import type { PlacedComponent } from "../types/project";
 import type { RoutedNetEndpoint } from "../types/project";
 import type { RoutingState } from "../types/project";
 import { createParametricComponent } from "../renderer3d/parametricComponents";
+import { bendComponentPin, isManuallyBendable, pinGridPosition } from "../features/layout/manualPlacement";
 
 interface Perfboard3DViewportProps {
   board: BoardSize;
@@ -20,6 +21,7 @@ interface Perfboard3DViewportProps {
   onSelectComponent: (componentId: string | undefined) => void;
   onSelectPin: (pin: SelectedPin | undefined) => void;
   onMoveComponent: (componentId: string, position: [number, number]) => void;
+  onMovePin: (componentId: string, pin: number, position: [number, number]) => void;
   onRotateSelected: () => void;
   onDeleteSelected: () => void;
   onMountSelected: () => void;
@@ -47,6 +49,7 @@ export function Perfboard3DViewport({
   onSelectComponent,
   onSelectPin,
   onMoveComponent,
+  onMovePin,
   onRotateSelected,
   onDeleteSelected,
   onMountSelected,
@@ -77,6 +80,7 @@ export function Perfboard3DViewport({
   } | null>(null);
   const draggingComponentIdRef = useRef<string | undefined>(undefined);
   const draggingGridRef = useRef<[number, number] | undefined>(undefined);
+  const draggingPinRef = useRef<SelectedPin | undefined>(undefined);
   const pointerDownRef = useRef<{ x: number; y: number; editing: boolean } | undefined>(undefined);
 
   useEffect(() => {
@@ -240,8 +244,19 @@ export function Perfboard3DViewport({
         setContextMenu(undefined);
         const pinHit = routeEditMode === "select" && !isPlacingComponent ? pickPin(event) : undefined;
         if (pinHit) {
-          draggingComponentIdRef.current = undefined;
-          draggingGridRef.current = undefined;
+          const component = components.find((item) => item.id === pinHit.componentId);
+          const moveWholeComponent = isMoveShortcutPressed(event, dragMoveModifier);
+          draggingComponentIdRef.current = moveWholeComponent ? pinHit.componentId : undefined;
+          draggingPinRef.current = !moveWholeComponent && component && isManuallyBendable(component) && !component.mounted ? pinHit : undefined;
+          draggingGridRef.current = draggingPinRef.current
+            ? pinGridPosition(component!, pinHit.pin)
+            : moveWholeComponent
+              ? component?.position
+              : undefined;
+          if (draggingPinRef.current || draggingComponentIdRef.current) {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setOrbitEnabled(false);
+          }
           onSelectComponent(pinHit.componentId);
           onSelectPin(pinHit);
           return;
@@ -268,6 +283,19 @@ export function Perfboard3DViewport({
         }
       }}
       onPointerMove={(event) => {
+        if (draggingPinRef.current) {
+          const gridPosition = getGridPositionFromPointer(event);
+          const component = components.find((item) => item.id === draggingPinRef.current?.componentId);
+          if (gridPosition && component && !sameGridPosition(gridPosition, draggingGridRef.current)) {
+            const preview = bendComponentPin(component, draggingPinRef.current.pin, gridPosition);
+            if (!preview) {
+              return;
+            }
+            replaceComponentPreview(preview);
+            draggingGridRef.current = gridPosition;
+          }
+          return;
+        }
         const componentId = draggingComponentIdRef.current;
         if (!componentId) {
           return;
@@ -281,6 +309,14 @@ export function Perfboard3DViewport({
         }
       }}
       onPointerUp={(event) => {
+        const draggedPin = draggingPinRef.current;
+        const pinGrid = draggingGridRef.current;
+        if (draggedPin && pinGrid) {
+          const component = components.find((item) => item.id === draggedPin.componentId);
+          if (component && !sameGridPosition(pinGridPosition(component, draggedPin.pin), pinGrid)) {
+            onMovePin(draggedPin.componentId, draggedPin.pin, pinGrid);
+          }
+        }
         const componentId = draggingComponentIdRef.current;
         const dragGrid = draggingGridRef.current;
         const component = components.find((item) => item.id === componentId);
@@ -300,16 +336,36 @@ export function Perfboard3DViewport({
         }
         pointerDownRef.current = undefined;
         draggingComponentIdRef.current = undefined;
+        draggingPinRef.current = undefined;
         draggingGridRef.current = undefined;
         if (event.currentTarget.hasPointerCapture(event.pointerId)) {
           event.currentTarget.releasePointerCapture(event.pointerId);
         }
         setOrbitEnabled(true);
       }}
-      onPointerLeave={() => {
+      onPointerLeave={(event) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          return;
+        }
         pointerDownRef.current = undefined;
         draggingComponentIdRef.current = undefined;
+        draggingPinRef.current = undefined;
         draggingGridRef.current = undefined;
+        setOrbitEnabled(true);
+      }}
+      onPointerCancel={(event) => {
+        const draggedPin = draggingPinRef.current;
+        const component = components.find((item) => item.id === draggedPin?.componentId);
+        if (component) {
+          replaceComponentPreview(component);
+        }
+        pointerDownRef.current = undefined;
+        draggingComponentIdRef.current = undefined;
+        draggingPinRef.current = undefined;
+        draggingGridRef.current = undefined;
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
         setOrbitEnabled(true);
       }}
       onContextMenu={(event) => {
@@ -526,6 +582,24 @@ export function Perfboard3DViewport({
       }
     });
   }
+
+  function replaceComponentPreview(component: PlacedComponent) {
+    const sceneObjects = sceneObjectsRef.current;
+    if (!sceneObjects) {
+      return;
+    }
+
+    const existing = sceneObjects.componentsGroup.children.filter((child) => child.userData.componentId === component.id);
+    existing.forEach((child) => {
+      sceneObjects.componentsGroup.remove(child);
+      disposeObject(child);
+    });
+
+    const previewGroup = createPlacedComponents([component], board, selectedComponentId);
+    while (previewGroup.children.length > 0) {
+      sceneObjects.componentsGroup.add(previewGroup.children[0]);
+    }
+  }
 }
 
 function isMoveShortcutPressed(event: React.PointerEvent<HTMLDivElement>, modifier: DragMoveModifier) {
@@ -556,7 +630,8 @@ function createPlacedComponents(components: PlacedComponent[], board: BoardSize,
       kind: placed.kind,
       label: placed.label,
       pinCount: placed.pinCount,
-      pinOffsets: placed.pinOffsets
+      pinOffsets: placed.pinOffsets,
+      isFallback: placed.isFallback
     });
     component.position.copy(getComponentWorldPosition(placed, board));
     component.rotation.y = placed.rotation;
@@ -1074,6 +1149,9 @@ function disposeObject(object: THREE.Object3D) {
       const mesh = child as THREE.Mesh | THREE.LineSegments | THREE.Sprite;
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       materials.forEach((material) => {
+        if (material.userData.shared) {
+          return;
+        }
         Object.values(material).forEach((value) => {
           if (value instanceof THREE.Texture) {
             value.dispose();

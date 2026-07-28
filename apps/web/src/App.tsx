@@ -12,9 +12,11 @@ import {
 import { mergeImportState, parseImportFiles } from "./features/import/multisimReportParser";
 import { createPlacedComponentsFromParsed } from "./features/import/componentMapping";
 import { autoPlaceComponents, type PlacementRegion } from "./features/layout/autoPlacement";
+import { bendComponentPin, pinGridPosition } from "./features/layout/manualPlacement";
 import { resolveNetEndpoints } from "./features/import/netEndpointResolver";
 import { autoRouteBoard, validateRoutingResult } from "./features/routing/autoRouter";
 import { expandOrthogonalPath } from "./features/routing/routingGeometry";
+import { removeRoutesToComponent } from "./features/routing/removeComponentRoutes";
 import { createProject } from "./features/project/projectFactory";
 import type { BoardSize, DragMoveModifier, ImportKind, KeyboardShortcuts, PerfboardProject } from "./types/project";
 
@@ -341,10 +343,23 @@ export function App() {
     setIsAutoPlacing(false);
   }
 
+  function handleMovePin(componentId: string, pin: number, position: [number, number]) {
+    commitProject((current) => ({
+      ...current,
+      components: current.components.map((component) => {
+        if (component.id !== componentId) {
+          return component;
+        }
+        return bendComponentPin(component, pin, position) ?? component;
+      })
+    }));
+  }
+
   function handleCreateComponentsFromImport() {
     commitProject((current) => {
       const importedComponents = createPlacedComponentsFromParsed(
         current.importState.components,
+        current.importState.nets,
         current.components,
         current.board.width
       );
@@ -499,9 +514,18 @@ export function App() {
     }
 
     commitProject((current) => {
+      const selected = current.components.find((component) => component.id === selectedComponentId);
+      if (!selected) {
+        return current;
+      }
+      const deletedPinCells = selected.pinOffsets.map((_, index) => pinGridPosition(selected, index + 1));
+      const remainingPinCells = current.components
+        .filter((component) => component.id !== selectedComponentId)
+        .flatMap((component) => component.pinOffsets.map((_, index) => pinGridPosition(component, index + 1)));
       return {
         ...current,
-        components: current.components.filter((component) => component.id !== selectedComponentId)
+        components: current.components.filter((component) => component.id !== selectedComponentId),
+        routing: removeRoutesToComponent(current.routing, deletedPinCells, remainingPinCells)
       };
     });
     setSelectedComponentId(undefined);
@@ -586,6 +610,7 @@ export function App() {
           onPlaceComponent={handlePlaceComponent}
           onSelectComponent={handleSelectComponent}
           onMoveComponent={handleMoveComponent}
+          onMovePin={handleMovePin}
           onUpdateBoard={handleUpdateBoard}
           onRotateSelected={handleRotateSelected}
           onDeleteSelected={handleDeleteSelected}

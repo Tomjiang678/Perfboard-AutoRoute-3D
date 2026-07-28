@@ -1,0 +1,67 @@
+{
+  "ignoredComponentRules": [
+    {
+      "match": [
+        { "field": "category", "equals": "POWER_SOURCES" },
+        { "field": "category", "includes": "VOLTAGE_SOURCES" },
+        { "field": "ref", "equals": "0" },
+        { "field": "value", "equals": "GROUND" },
+        { "field": "value", "equals": "VCC" },
+        { "field": "value", "equals": "VDD" }
+      ]
+    }
+  ],
+  "simplePinResolverRules": [
+    {
+      "mode": "numeric",
+      "pinPattern": "^[123]$",
+      "match": [
+        { "field": "category", "includes": "VARIABLE_RESISTOR" }
+      ]
+    },
+    {
+      "mode": "numeric",
+      "pinPattern": "^P?\\d+$",
+      "match": [
+        { "field": "category", "includes": "BUZZER" },
+        { "field": "category", "includes": "HEADERS" }
+      ]
+    },
+    {
+      "mode": "numeric",
+      "pinPattern": "^[12]$",
+      "match": [
+        { "field": "category", "matches": "RESISTOR|CAP|INDUCTOR" }
+      ]
+    },
+    {
+      "mode": "pinMap",
+      "pinMap": {
+        "A": 1,
+        "K": 2
+      },
+      "match": [
+        { "field": "category", "matches": "DIODE|LED|ZENER" },
+        { "field": "value", "matches": "PHOTO_DIODE" }
+      ]
+    },
+    {
+      "mode": "pinMap",
+      "pinMap": {
+        "C": 1,
+        "B": 2,
+        "E": 3
+      },
+      "match": [
+        { "field": "category", "matches": "BJT" }
+      ]
+    },
+    {
+      "mode": "dipSwitch",
+      "match": [
+        { "field": "value", "includes": "DIPSW" },
+        { "field": "packageName", "includes": "DIPSW" }
+      ]
+    }
+  ]
+}

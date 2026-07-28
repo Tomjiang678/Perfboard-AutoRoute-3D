@@ -1,6 +1,7 @@
 import type { LibraryComponentKind, ParsedComponent } from "../../types/project";
+import behaviorData from "./importBehaviorData.json";
 import configData from "./importConfigData.json";
-import pinLibraryData from "./pinLibraryData.json";
+import pinLibraryOverrides from "./pinLibraryOverrides.json";
 
 export interface DevicePinModel {
   match: RegExp;
@@ -18,10 +19,20 @@ export interface ComponentMappingRule {
 }
 
 export interface NormalizedComponentFields {
+  ref: string;
   refPrefix: string;
   category: string;
   packageName: string;
   value: string;
+}
+
+export type SimplePinResolverMode = "numeric" | "pinMap" | "dipSwitch";
+
+export interface SimplePinResolverRule {
+  mode: SimplePinResolverMode;
+  match: (component: NormalizedComponentFields) => boolean;
+  pinPattern?: RegExp;
+  pinMap?: Record<string, number>;
 }
 
 interface RawDevicePinModel {
@@ -37,9 +48,29 @@ interface RawComponentMappingRule {
   label: string;
   match: MatchExpression[];
   matchMode?: "any" | "all";
-  pinCountStrategy?: "dipPackage" | "dipSwitch" | "moduleFallback" | "fixed2" | "fixed3" | "fixed8" | "fixed10" | "fixed14";
+  pinCountStrategy?: "dipPackage" | "dipSwitch" | "fixed2" | "fixed3" | "fixed8" | "fixed10" | "fixed18";
   leadSpacing?: number;
   rowSpacing?: number;
+}
+
+interface RawBehaviorRule {
+  match: MatchExpression[];
+  matchMode?: "any" | "all";
+}
+
+interface RawSimplePinResolverRule extends RawBehaviorRule {
+  mode: SimplePinResolverMode;
+  pinPattern?: string;
+  pinMap?: Record<string, number>;
+}
+
+interface RawPinLibraryData {
+  source?: string;
+  pinModelTemplates?: Record<string, {
+    units: Record<string, Record<string, number>>;
+    powerPins: Record<string, number>;
+  }>;
+  devicePinModels?: RawDevicePinModel[];
 }
 
 type MatchExpression =
@@ -57,34 +88,14 @@ const rawConfig = configData as unknown as {
   };
 };
 
-const rawPinLibrary = pinLibraryData as unknown as {
-  pinModelTemplates: Record<string, {
-    units: Record<string, Record<string, number>>;
-    powerPins: Record<string, number>;
-  }>;
-  devicePinModels: RawDevicePinModel[];
-  simplePinMaps: {
-    passiveCategories: string;
-    diodeCategories: string;
-    diodeValuePatterns: string;
-    diodePins: Record<string, number>;
-    bjtCategories: string;
-    bjtPins: Record<string, number>;
-    switchCategories: string;
-  };
+const rawBehavior = behaviorData as unknown as {
+  ignoredComponentRules: RawBehaviorRule[];
+  simplePinResolverRules: RawSimplePinResolverRule[];
 };
 
-export const devicePinModels: DevicePinModel[] = rawPinLibrary.devicePinModels.map(buildDevicePinModel);
+const rawPinLibrary = pinLibraryOverrides as unknown as RawPinLibraryData;
 
-export const simplePinMaps = {
-  passiveCategories: new RegExp(rawPinLibrary.simplePinMaps.passiveCategories),
-  diodeCategories: new RegExp(rawPinLibrary.simplePinMaps.diodeCategories),
-  diodeValuePatterns: new RegExp(rawPinLibrary.simplePinMaps.diodeValuePatterns),
-  diodePins: rawPinLibrary.simplePinMaps.diodePins,
-  bjtCategories: new RegExp(rawPinLibrary.simplePinMaps.bjtCategories),
-  bjtPins: rawPinLibrary.simplePinMaps.bjtPins,
-  switchCategories: new RegExp(rawPinLibrary.simplePinMaps.switchCategories)
-};
+export const devicePinModels: DevicePinModel[] = (rawPinLibrary.devicePinModels ?? []).map(buildDevicePinModel);
 
 export const componentMappingRules: ComponentMappingRule[] = rawConfig.componentMappingRules.map((rule) => ({
   kind: rule.kind,
@@ -97,8 +108,27 @@ export const componentMappingRules: ComponentMappingRule[] = rawConfig.component
 
 export const fallbackComponentMapping = rawConfig.fallbackComponentMapping;
 
+export const ignoredComponentRules = rawBehavior.ignoredComponentRules.map(buildBehaviorRule);
+
+export const simplePinResolverRules: SimplePinResolverRule[] = rawBehavior.simplePinResolverRules.map((rule) => ({
+  mode: rule.mode,
+  pinPattern: rule.pinPattern ? new RegExp(rule.pinPattern) : undefined,
+  pinMap: rule.pinMap,
+  match: buildBehaviorRule(rule).match
+}));
+
+export function normalizeComponentFields(component: ParsedComponent): NormalizedComponentFields {
+  return {
+    ref: component.ref.toUpperCase(),
+    refPrefix: component.ref.match(/^[A-Za-z]+/)?.[0].toUpperCase() ?? "",
+    category: component.category.toUpperCase(),
+    packageName: component.packageName.toUpperCase(),
+    value: component.value.toUpperCase()
+  };
+}
+
 function buildDevicePinModel(model: RawDevicePinModel): DevicePinModel {
-  const template = model.template ? rawPinLibrary.pinModelTemplates[model.template] : undefined;
+  const template = model.template ? rawPinLibrary.pinModelTemplates?.[model.template] : undefined;
   return {
     match: new RegExp(model.match, model.flags),
     units: mergeUnitMaps(template?.units, model.units),
@@ -106,6 +136,12 @@ function buildDevicePinModel(model: RawDevicePinModel): DevicePinModel {
       ...(template?.powerPins ?? {}),
       ...(model.powerPins ?? {})
     }
+  };
+}
+
+function buildBehaviorRule(rule: RawBehaviorRule) {
+  return {
+    match: (component: NormalizedComponentFields) => evaluateMatchList(rule.match, component, rule.matchMode ?? "any")
   };
 }
 
@@ -135,6 +171,8 @@ export function parseDipPinCount(packageName: string) {
   const match = normalized.match(/(?:DIP|PDIP|SDIP|SO|SOP|SOIC)-?P?-?(\d+)/i)
     ?? normalized.match(/\bD0?(\d+)\b/i)
     ?? normalized.match(/\bDO(\d+)\b/i)
+    ?? normalized.match(/\bN0?(\d+)\b/i)
+    ?? normalized.match(/\bNO(\d+)\b/i)
     ?? normalized.match(/(\d+)\s*PIN/i);
   if (!match) {
     return undefined;
@@ -156,13 +194,10 @@ export function parseDipSwitchPinCount(value: string) {
 
 function buildPinCountResolver(strategy: RawComponentMappingRule["pinCountStrategy"]) {
   if (strategy === "dipPackage") {
-    return (component: ParsedComponent) => parseDipPinCount(component.packageName) ?? 8;
+    return (component: ParsedComponent) => parseDipPinCount(component.packageName) ?? inferPinCountFromDevicePinModels(component.value) ?? 8;
   }
   if (strategy === "dipSwitch") {
     return (component: ParsedComponent) => parseDipSwitchPinCount(component.value) ?? parseDipSwitchPinCount(component.packageName) ?? 4;
-  }
-  if (strategy === "moduleFallback") {
-    return getFallbackPinCount;
   }
   if (strategy === "fixed2") {
     return () => 2;
@@ -176,14 +211,24 @@ function buildPinCountResolver(strategy: RawComponentMappingRule["pinCountStrate
   if (strategy === "fixed10") {
     return () => 10;
   }
-  if (strategy === "fixed14") {
-    return () => 14;
+  if (strategy === "fixed18") {
+    return () => 18;
   }
   return undefined;
 }
 
-function getFallbackPinCount() {
-  return 4;
+function inferPinCountFromDevicePinModels(value: string) {
+  const model = devicePinModels.find((candidate) => candidate.match.test(value));
+  if (!model) {
+    return undefined;
+  }
+
+  const pins = [
+    ...Object.values(model.powerPins),
+    ...Object.values(model.units).flatMap((unitPins) => Object.values(unitPins))
+  ];
+  const pinCount = Math.max(0, ...pins);
+  return pinCount > 0 ? pinCount : undefined;
 }
 
 function evaluateMatchList(expressions: MatchExpression[], component: NormalizedComponentFields, mode: "any" | "all") {

@@ -47,7 +47,17 @@
       "match": [
         { "field": "refPrefix", "equals": "D" },
         { "field": "category", "includes": "DIODE" },
+        { "field": "category", "includes": "ZENER" },
         { "field": "value", "includes": "PHOTO_DIODE" }
+      ]
+    },
+    {
+      "kind": "dip",
+      "label": "DIP",
+      "rowSpacing": 3,
+      "pinCountStrategy": "fixed8",
+      "match": [
+        { "field": "value", "matches": "^LM358(?:[A-Z0-9_+-]*)" }
       ]
     },
     {
@@ -164,9 +174,25 @@
             { "field": "packageName", "matches": "^(?:P?DIP|SDIP)-?P?-?[0-9]+" },
             { "field": "packageName", "includes": "SO-" },
             { "field": "packageName", "includes": "SOIC" },
-            { "field": "packageName", "matches": "^D0?14$" },
-            { "field": "packageName", "matches": "^DO14$" },
+            { "field": "packageName", "matches": "^D0?[0-9]+$" },
+            { "field": "packageName", "matches": "^DO[0-9]+$" },
             { "field": "packageName", "includes": "CASE751A" }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "dip",
+      "label": "DIP",
+      "rowSpacing": 3,
+      "pinCountStrategy": "dipPackage",
+      "matchMode": "all",
+      "match": [
+        { "field": "refPrefix", "equals": "U" },
+        {
+          "any": [
+            { "field": "category", "matches": "^74" },
+            { "field": "value", "matches": "^74[A-Z0-9_+-]*" }
           ]
         }
       ]
@@ -192,7 +218,7 @@
     {
       "kind": "alphanumeric_display",
       "label": "ALNUM",
-      "pinCountStrategy": "fixed14",
+      "pinCountStrategy": "fixed18",
       "match": [
         { "field": "value", "includes": "ALPHA_NUMERIC" },
         { "field": "value", "includes": "ALPHANUMERIC" }
@@ -214,26 +240,6 @@
       "match": [
         { "field": "category", "includes": "HEADERS_TEST" },
         { "field": "packageName", "includes": "1787234" }
-      ]
-    },
-    {
-      "kind": "pin_header",
-      "label": "HDR",
-      "pinCountStrategy": "moduleFallback",
-      "match": [
-        { "field": "refPrefix", "equals": "J" },
-        { "field": "refPrefix", "equals": "P" },
-        { "field": "refPrefix", "equals": "A" }
-      ]
-    },
-    {
-      "kind": "pin_header",
-      "label": "SW",
-      "pinCountStrategy": "dipSwitch",
-      "match": [
-        { "field": "refPrefix", "equals": "S" },
-        { "field": "refPrefix", "equals": "SW" },
-        { "field": "category", "includes": "SWITCH" }
       ]
     }
   ],

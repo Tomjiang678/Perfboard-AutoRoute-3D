@@ -1,5 +1,13 @@
 import type { ImportState, NetNode, ParsedComponent, ParsedNet } from "../../types/project";
-import { devicePinModels, parseDipSwitchPinCount, simplePinMaps } from "./importConfig";
+import { buildFallbackPinMaps, normalizePinName, splitLogicalRef, type FallbackPinMaps } from "./fallbackPinMapping";
+import {
+  devicePinModels,
+  ignoredComponentRules,
+  normalizeComponentFields,
+  parseDipSwitchPinCount,
+  simplePinResolverRules,
+  type SimplePinResolverRule
+} from "./importConfig";
 
 export interface ResolvedPinNode extends NetNode {
   physicalRef: string;
@@ -26,10 +34,11 @@ export interface PinResolveResult {
 
 export function resolveImportPins(importState: ImportState): PinResolveResult {
   const componentMap = new Map(importState.components.map((component) => [component.ref, component]));
+  const fallbackPinMaps = buildFallbackPinMaps(importState.nets);
   const warnings: PinResolveWarning[] = [];
 
   return {
-    nets: importState.nets.map((net) => resolveNet(net, componentMap, warnings)),
+    nets: importState.nets.map((net) => resolveNet(net, componentMap, fallbackPinMaps, warnings)),
     warnings
   };
 }
@@ -37,13 +46,18 @@ export function resolveImportPins(importState: ImportState): PinResolveResult {
 function resolveNet(
   net: ParsedNet,
   componentMap: Map<string, ParsedComponent>,
+  fallbackPinMaps: FallbackPinMaps,
   warnings: PinResolveWarning[]
 ): ResolvedNet {
   const nodes: ResolvedPinNode[] = [];
   const unresolved: NetNode[] = [];
 
   for (const node of net.nodes) {
-    const resolved = resolveNode(node, componentMap);
+    if (isIgnoredComponentNode(node, componentMap)) {
+      continue;
+    }
+
+    const resolved = resolveNode(node, componentMap, fallbackPinMaps);
     if (resolved) {
       nodes.push(resolved);
     } else {
@@ -63,7 +77,18 @@ function resolveNet(
   };
 }
 
-function resolveNode(node: NetNode, componentMap: Map<string, ParsedComponent>): ResolvedPinNode | undefined {
+function isIgnoredComponentNode(node: NetNode, componentMap: Map<string, ParsedComponent>) {
+  const logical = splitLogicalRef(node.ref);
+  const component = componentMap.get(logical.baseRef);
+  if (!component) {
+    return false;
+  }
+
+  const fields = normalizeComponentFields(component);
+  return ignoredComponentRules.some((rule) => rule.match(fields));
+}
+
+function resolveNode(node: NetNode, componentMap: Map<string, ParsedComponent>, fallbackPinMaps: FallbackPinMaps): ResolvedPinNode | undefined {
   const logical = splitLogicalRef(node.ref);
   const component = componentMap.get(logical.baseRef);
   if (!component) {
@@ -77,7 +102,7 @@ function resolveNode(node: NetNode, componentMap: Map<string, ParsedComponent>):
 
   const model = devicePinModels.find((candidate) => candidate.match.test(component.value));
   if (!model) {
-    return undefined;
+    return resolveFallbackComponentNode(node, logical.baseRef, fallbackPinMaps);
   }
 
   const normalizedPin = normalizePinName(node.pin);
@@ -91,7 +116,7 @@ function resolveNode(node: NetNode, componentMap: Map<string, ParsedComponent>):
     };
   }
 
-  const unitPins = model.units[logical.unit] ?? model.units[""];
+  const unitPins = model.units[logical.unit] ?? model.units[""] ?? getOnlyUnitPins(model.units);
   const physicalPin = unitPins?.[normalizedPin];
   if (!physicalPin) {
     return undefined;
@@ -119,75 +144,49 @@ function resolveSimpleTwoPinNode(node: NetNode): ResolvedPinNode | undefined {
 }
 
 function resolveSimpleComponentNode(node: NetNode, component: ParsedComponent): ResolvedPinNode | undefined {
-  const category = component.category.toUpperCase();
+  const fields = normalizeComponentFields(component);
   const pin = normalizePinName(node.pin);
-  const numericPin = parseNumericPinName(pin);
-
-  if (category.includes("VARIABLE_RESISTOR") && /^[123]$/.test(pin)) {
-    return {
+  const rule = simplePinResolverRules.find((candidate) => candidate.match(fields) && (candidate.pinPattern?.test(pin) ?? true));
+  const physicalPin = rule ? resolveSimplePhysicalPin(rule, component, pin) : undefined;
+  return physicalPin
+    ? {
       ...node,
       physicalRef: component.ref,
-      physicalPin: numericPin ?? Number(pin),
+      physicalPin,
       pinRole: pin
-    };
-  }
-
-  if ((category.includes("BUZZER") || category.includes("HEADERS")) && numericPin) {
-    return {
-      ...node,
-      physicalRef: component.ref,
-      physicalPin: numericPin,
-      pinRole: pin
-    };
-  }
-
-  if (/^[12]$/.test(pin) && simplePinMaps.passiveCategories.test(category)) {
-    return {
-      ...node,
-      physicalRef: component.ref,
-      physicalPin: Number(pin),
-      pinRole: pin
-    };
-  }
-
-  if (simplePinMaps.diodeCategories.test(category) || simplePinMaps.diodeValuePatterns.test(component.value.toUpperCase())) {
-    const physicalPin = simplePinMaps.diodePins[pin];
-    if (physicalPin) {
-      return {
-        ...node,
-        physicalRef: component.ref,
-        physicalPin,
-        pinRole: pin
-      };
     }
+    : undefined;
+}
+
+function resolveFallbackComponentNode(node: NetNode, baseRef: string, fallbackPinMaps: FallbackPinMaps): ResolvedPinNode | undefined {
+  const normalizedPin = normalizePinName(node.pin);
+  const physicalPin = fallbackPinMaps.get(baseRef)?.[normalizedPin];
+  if (!physicalPin) {
+    return undefined;
   }
 
-  if (simplePinMaps.bjtCategories.test(category)) {
-    const physicalPin = simplePinMaps.bjtPins[pin];
-    if (physicalPin) {
-      return {
-        ...node,
-        physicalRef: component.ref,
-        physicalPin,
-        pinRole: pin
-      };
+  return {
+    ...node,
+    physicalRef: baseRef,
+    physicalPin,
+    pinRole: normalizedPin
+  };
+}
+
+function resolveSimplePhysicalPin(rule: SimplePinResolverRule, component: ParsedComponent, pin: string) {
+  const resolvers: Record<SimplePinResolverRule["mode"], () => number | undefined> = {
+    numeric: () => parseNumericPinName(pin),
+    pinMap: () => rule.pinMap?.[pin],
+    dipSwitch: () => {
+      const switchPin = pin.match(/^(\d+)P(\d+)$/);
+      const physicalPin = switchPin
+        ? resolveDipSwitchPhysicalPin(component, Number(switchPin[1]), Number(switchPin[2]))
+        : Number(pin);
+      return Number.isFinite(physicalPin) && physicalPin > 0 ? physicalPin : undefined;
     }
-  }
+  };
 
-  if (simplePinMaps.switchCategories.test(category)) {
-    const switchPin = pin.match(/^(\d+)P(\d+)$/);
-    const physicalPin = switchPin ? resolveDipSwitchPhysicalPin(component, Number(switchPin[1]), Number(switchPin[2])) : Number(pin);
-    if (Number.isFinite(physicalPin) && physicalPin > 0) {
-      return {
-        ...node,
-        physicalRef: component.ref,
-        physicalPin,
-        pinRole: pin
-      };
-    }
-  }
-
-  return undefined;
+  return resolvers[rule.mode]();
 }
 
 function parseNumericPinName(pin: string) {
@@ -198,6 +197,11 @@ function parseNumericPinName(pin: string) {
 
   const value = Number(match[1]);
   return Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function getOnlyUnitPins(units: Record<string, Record<string, number>>) {
+  const unitEntries = Object.entries(units);
+  return unitEntries.length === 1 ? unitEntries[0][1] : undefined;
 }
 
 function resolveDipSwitchPhysicalPin(component: ParsedComponent, switchIndex: number, side: number) {
@@ -215,23 +219,4 @@ function resolveDipSwitchPhysicalPin(component: ParsedComponent, switchIndex: nu
   }
 
   return switchCount - switchIndex + 1;
-}
-
-function splitLogicalRef(ref: string) {
-  const match = ref.match(/^([A-Za-z]+\d+)([A-Z])$/);
-  if (!match) {
-    return {
-      baseRef: ref,
-      unit: ""
-    };
-  }
-
-  return {
-    baseRef: match[1],
-    unit: match[2]
-  };
-}
-
-function normalizePinName(pin: string) {
-  return pin.trim().toUpperCase().replace(/\s+/g, "");
 }
