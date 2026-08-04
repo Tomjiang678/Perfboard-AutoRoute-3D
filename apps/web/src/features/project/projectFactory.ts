@@ -22,6 +22,8 @@ export function createProject(name: string, width: number, height: number): Perf
       failedNets: [],
       warnings: []
     },
+    constraints: [],
+    constraintSchemaVersion: 1,
     createdAt: new Date().toISOString()
   };
 }

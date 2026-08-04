@@ -12,13 +12,28 @@ import {
 import { mergeImportState, parseImportFiles } from "./features/import/multisimReportParser";
 import { createPlacedComponentsFromParsed } from "./features/import/componentMapping";
 import { autoPlaceComponents, type PlacementRegion } from "./features/layout/autoPlacement";
+import {
+  EMPTY_AI_API_CONFIGURATION,
+  type AiApiConfiguration
+} from "./features/ai/aiProvider";
+import { loadAiApiConfiguration, saveAiApiConfiguration } from "./features/ai/aiConfigStore";
+import { requestConstraintDrafts, testAiApiConnection } from "./features/ai/aiConstraintClient";
+import { resolveConstraintDrafts } from "./features/constraints/resolveDrafts";
+import { detectConstraintConflicts } from "./features/constraints/conflictDetector";
+import { projectConstraints, withMigratedConstraints } from "./features/constraints/model";
+import {
+  applyRoutingConstraintReport,
+  buildPowerRailTraces,
+  evaluatePlacementConstraints,
+  prepareComponentsForConstraints
+} from "./features/constraints/execution";
 import { bendComponentPin, pinGridPosition } from "./features/layout/manualPlacement";
 import { resolveNetEndpoints } from "./features/import/netEndpointResolver";
 import { autoRouteBoard, validateRoutingResult } from "./features/routing/autoRouter";
 import { expandOrthogonalPath } from "./features/routing/routingGeometry";
 import { removeRoutesToComponent } from "./features/routing/removeComponentRoutes";
 import { createProject } from "./features/project/projectFactory";
-import type { BoardSize, DragMoveModifier, ImportKind, KeyboardShortcuts, PerfboardProject } from "./types/project";
+import type { BoardSize, DesignConstraint, DragMoveModifier, ImportKind, KeyboardShortcuts, PerfboardProject } from "./types/project";
 
 const STORAGE_KEY = "perfboard-autoroute-project";
 const SETTINGS_KEY = "perfboard-autoroute-settings";
@@ -61,6 +76,12 @@ export function App() {
   const [autoPlacementWarnings, setAutoPlacementWarnings] = useState<string[]>([]);
   const [selectedComponentId, setSelectedComponentId] = useState<string | undefined>();
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+  const [aiApiConfiguration, setAiApiConfiguration] = useState<AiApiConfiguration>(EMPTY_AI_API_CONFIGURATION);
+  const [aiConfigurationLoaded, setAiConfigurationLoaded] = useState(false);
+  const [aiConfigurationStorageMessage, setAiConfigurationStorageMessage] = useState<string>();
+  const [aiDraftConstraints, setAiDraftConstraints] = useState<DesignConstraint[]>([]);
+  const [aiInstructionStatus, setAiInstructionStatus] = useState<string>();
+  const [isAiInstructionRunning, setIsAiInstructionRunning] = useState(false);
   const [undoCount, setUndoCount] = useState(0);
   const undoStackRef = useRef<PerfboardProject[]>([]);
 
@@ -71,7 +92,7 @@ export function App() {
     }
 
     try {
-      setProject(JSON.parse(saved) as PerfboardProject);
+      setProject(withMigratedConstraints(JSON.parse(saved) as PerfboardProject));
     } catch {
       window.localStorage.removeItem(STORAGE_KEY);
     }
@@ -90,6 +111,44 @@ export function App() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadAiApiConfiguration()
+      .then((configuration) => {
+        if (!cancelled) {
+          setAiApiConfiguration(configuration);
+          setAiConfigurationLoaded(true);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setAiConfigurationLoaded(true);
+          setAiConfigurationStorageMessage(error instanceof Error ? error.message : "无法读取 AI 配置。");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!aiConfigurationLoaded) {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      saveAiApiConfiguration(aiApiConfiguration)
+        .then((storage) => setAiConfigurationStorageMessage(
+          storage === "electron-safe-storage"
+            ? "配置已加密保存到桌面应用配置目录。"
+            : "网页版配置已保存到当前浏览器。"
+        ))
+        .catch((error) => setAiConfigurationStorageMessage(
+          error instanceof Error ? error.message : "AI 配置保存失败。"
+        ));
+    }, 500);
+    return () => window.clearTimeout(timeout);
+  }, [aiApiConfiguration, aiConfigurationLoaded]);
 
   useEffect(() => {
     if (!project) {
@@ -159,7 +218,7 @@ export function App() {
   async function handleOpenProject(file: File) {
     try {
       const text = await file.text();
-      const next = JSON.parse(text) as PerfboardProject;
+      const next = withMigratedConstraints(JSON.parse(text) as PerfboardProject);
       setProject(next);
       setSelectedComponentId(undefined);
       clearUndoHistory();
@@ -311,20 +370,24 @@ export function App() {
     }
 
     const sourceProject = project;
+    const constraints = projectConstraints(sourceProject);
+    const preparedComponents = prepareComponentsForConstraints(sourceProject.components, constraints);
     setAutoPlacementWarnings([]);
     setIsAutoPlacementRunning(true);
     await waitForPaint();
 
-    const endpoints = resolveNetEndpoints(sourceProject.importState, sourceProject.components);
+    const endpoints = resolveNetEndpoints(sourceProject.importState, preparedComponents);
     const result = autoPlaceComponents(
-      sourceProject.components,
+      preparedComponents,
       region,
       sourceProject.board.width,
       sourceProject.board.height,
-      endpoints
+      endpoints,
+      constraints
     );
 
-    setAutoPlacementWarnings(result.warnings);
+    const constraintWarnings = evaluatePlacementConstraints(result.components, constraints);
+    setAutoPlacementWarnings([...result.warnings, ...constraintWarnings]);
     setIsAutoPlacementRunning(false);
     if (result.warnings.length > 0 && result.placedCount === 0) {
       return;
@@ -341,6 +404,75 @@ export function App() {
       };
     });
     setIsAutoPlacing(false);
+  }
+
+  async function handleTestAiConnection() {
+    if (isAiInstructionRunning) return;
+    setIsAiInstructionRunning(true);
+    setAiInstructionStatus("正在测试 API 连接……");
+    try {
+      await testAiApiConnection(aiApiConfiguration);
+      setAiInstructionStatus("连接成功，API 可以返回结构化指令。");
+    } catch (error) {
+      setAiInstructionStatus(error instanceof Error ? error.message : "API 连接测试失败。");
+    } finally {
+      setIsAiInstructionRunning(false);
+    }
+  }
+
+  async function handleParseAiInstruction(text: string) {
+    if (!project || isAiInstructionRunning) return;
+    setIsAiInstructionRunning(true);
+    setAiInstructionStatus("正在解析工程指令……");
+    setAiDraftConstraints([]);
+    try {
+      const response = await requestConstraintDrafts(aiApiConfiguration, text, project);
+      if (response.action === "no_action" || response.constraints.length === 0) {
+        setAiInstructionStatus(response.message?.trim() || "未识别到可执行的工程要求。请检查工程中是否存在所指元件和网络。");
+        return;
+      }
+      const resolved = resolveConstraintDrafts(response.constraints, text, project);
+      setAiDraftConstraints(resolved.constraints);
+      setAiInstructionStatus(resolved.errors.length > 0
+        ? `识别到 ${resolved.constraints.length} 条可确认指令；${resolved.errors.join(" ")}`
+        : `识别到 ${resolved.constraints.length} 条指令，请确认后应用。`);
+    } catch (error) {
+      setAiInstructionStatus(error instanceof Error ? error.message : "AI 指令解析失败。");
+    } finally {
+      setIsAiInstructionRunning(false);
+    }
+  }
+
+  function handleConfirmAiDrafts() {
+    if (!project || aiDraftConstraints.length === 0) return;
+    const conflicts = detectConstraintConflicts([...projectConstraints(project), ...aiDraftConstraints]);
+    if (conflicts.length > 0) {
+      setAiInstructionStatus(conflicts.join(" "));
+      return;
+    }
+    commitProject((current) => ({
+      ...current,
+      constraints: [...projectConstraints(current), ...aiDraftConstraints],
+      constraintSchemaVersion: 1
+    }));
+    setAiInstructionStatus(`已添加 ${aiDraftConstraints.length} 条工程约束。`);
+    setAiDraftConstraints([]);
+  }
+
+  function handleToggleConstraint(constraintId: string) {
+    commitProject((current) => ({
+      ...current,
+      constraints: projectConstraints(current).map((constraint) => constraint.id === constraintId
+        ? { ...constraint, enabled: !constraint.enabled, status: constraint.enabled ? "disabled" : "active" }
+        : constraint)
+    }));
+  }
+
+  function handleDeleteConstraint(constraintId: string) {
+    commitProject((current) => ({
+      ...current,
+      constraints: projectConstraints(current).filter((constraint) => constraint.id !== constraintId)
+    }));
   }
 
   function handleMovePin(componentId: string, pin: number, position: [number, number]) {
@@ -378,9 +510,21 @@ export function App() {
   function handleAutoRoute() {
     commitProject((current) => {
       const endpoints = resolveNetEndpoints(current.importState, current.components);
+      const constraints = projectConstraints(current);
+      const rails = buildPowerRailTraces(constraints, endpoints, current.components);
+      if (rails.errors.length > 0) {
+        return {
+          ...current,
+          routing: {
+            ...current.routing,
+            warnings: [...current.routing.warnings, ...rails.errors]
+          }
+        };
+      }
+      const routing = autoRouteBoard(current.board, endpoints, current.components, rails.traces, constraints);
       return {
         ...current,
-        routing: autoRouteBoard(current.board, endpoints, current.components)
+        routing: applyRoutingConstraintReport(routing, constraints)
       };
     });
   }
@@ -642,6 +786,19 @@ export function App() {
           boardHeight={project.board.height}
           warnings={autoPlacementWarnings}
           running={isAutoPlacementRunning}
+          aiConfiguration={aiApiConfiguration}
+          aiConfigurationStorageMessage={aiConfigurationStorageMessage}
+          onAiConfigurationChange={setAiApiConfiguration}
+          aiInstructionRunning={isAiInstructionRunning}
+          aiInstructionStatus={aiInstructionStatus}
+          draftConstraints={aiDraftConstraints}
+          activeConstraints={projectConstraints(project)}
+          onTestAiConnection={handleTestAiConnection}
+          onParseAiInstruction={handleParseAiInstruction}
+          onConfirmAiDrafts={handleConfirmAiDrafts}
+          onDiscardAiDrafts={() => setAiDraftConstraints([])}
+          onToggleConstraint={handleToggleConstraint}
+          onDeleteConstraint={handleDeleteConstraint}
           onCancel={() => {
             if (!isAutoPlacementRunning) {
               setIsAutoPlacing(false);

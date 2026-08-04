@@ -1004,7 +1004,9 @@ button:disabled {
 }
 
 .dialog {
-  width: min(440px, 100%);
+  width: min(560px, 100%);
+  max-height: calc(100vh - 36px);
+  overflow: auto;
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 24px 70px rgb(15 23 42 / 28%);
@@ -1687,6 +1689,242 @@ body {
   margin: 0 9px 9px;
   color: var(--ui-muted);
   font-size: 11px;
+}
+
+.auto-placement-ai-section {
+  overflow: hidden;
+  border: 1px solid #d8dee5;
+  border-radius: 7px;
+  background: #f8fafc;
+}
+
+.auto-placement-ai-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  background: transparent;
+  color: #29323d;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.auto-placement-ai-toggle:hover:not(:disabled) {
+  background: #eef3f9;
+}
+
+.auto-placement-ai-toggle-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ai-config-status {
+  border: 1px solid #cbd5df;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #667085;
+  padding: 2px 7px;
+  font-size: 11px;
+}
+
+.ai-config-status.ready {
+  border-color: #9bc9a9;
+  background: #edf9f0;
+  color: #26713b;
+}
+
+.auto-placement-ai-fields {
+  display: grid;
+  gap: 11px;
+  border-top: 1px solid #d8dee5;
+  padding: 11px;
+}
+
+.auto-placement-ai-description,
+.auto-placement-ai-hint,
+.auto-placement-ai-storage-status {
+  margin: 0;
+  color: #667085;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.auto-placement-ai-storage-status {
+  color: #2f6b3d;
+}
+
+.auto-placement-ai-fields select {
+  width: 100%;
+  height: 36px;
+  border: 1px solid #cbd5df;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #1e242b;
+  padding: 0 10px;
+}
+
+.auto-placement-ai-fields select:focus {
+  border-color: #235bdb;
+  outline: 3px solid #dce8ff;
+}
+
+.ai-api-key-field {
+  position: relative;
+  display: block;
+}
+
+.ai-api-key-field input {
+  padding-right: 40px;
+}
+
+.ai-api-key-field button {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #667085;
+  cursor: pointer;
+}
+
+.ai-api-key-field button:hover:not(:disabled) {
+  background: #edf1f5;
+  color: #1f2937;
+}
+
+.auto-placement-ai-test {
+  justify-self: start;
+}
+
+.ai-instruction-section,
+.constraint-list-section {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #d8dee5;
+  border-radius: 4px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.ai-instruction-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ai-instruction-heading h3,
+.constraint-list-section h3 {
+  margin: 0;
+  color: #29323d;
+  font-size: 12px;
+}
+
+.ai-instruction-heading span {
+  color: #7a8491;
+  font-size: 10px;
+}
+
+.ai-instruction-section textarea {
+  width: 100%;
+  min-height: 66px;
+  resize: vertical;
+  border: 1px solid var(--ui-border, #cbd5df);
+  border-radius: 3px;
+  background: #ffffff;
+  color: #1e242b;
+  padding: 8px;
+  font: inherit;
+  line-height: 1.5;
+}
+
+.ai-instruction-section textarea:focus {
+  border-color: var(--ui-accent, #235bdb);
+  outline: 1px solid #b9d2ff;
+}
+
+.ai-instruction-section > .tool-button {
+  justify-self: end;
+}
+
+.ai-instruction-status {
+  margin: 0;
+  border-left: 3px solid #7da2d8;
+  background: #f0f5fc;
+  color: #40546e;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.constraint-list-section.draft {
+  border-color: #b9cae2;
+  background: #f7faff;
+}
+
+.constraint-row {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #e1e6ec;
+  border-radius: 3px;
+  background: #ffffff;
+  padding: 7px 8px;
+}
+
+.constraint-row.disabled {
+  opacity: 0.55;
+}
+
+.constraint-row > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.constraint-row strong {
+  flex: 0 0 auto;
+  border-radius: 2px;
+  background: #eaf0f8;
+  color: #315a91;
+  padding: 2px 4px;
+  font-size: 9px;
+}
+
+.constraint-row span {
+  color: #303943;
+  font-size: 11px;
+}
+
+.constraint-row small {
+  color: #6e7885;
+  font-size: 10px;
+}
+
+.constraint-row footer,
+.constraint-list-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.constraint-row footer button {
+  border: 0;
+  background: transparent;
+  color: #245b9f;
+  padding: 2px 3px;
+  font-size: 10px;
+  cursor: pointer;
 }
 
 .fallback-component-note {

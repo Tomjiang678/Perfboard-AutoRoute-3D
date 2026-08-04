@@ -1,6 +1,7 @@
 import type {
   BoardSize,
   BottomTrace,
+  DesignConstraint,
   DrcIssue,
   DrcReport,
   JumperRoute,
@@ -136,9 +137,12 @@ const MAX_ESCAPES_PER_PIN = 3;
 export function autoRouteBoard(
   board: BoardSize,
   endpoints: RoutedNetEndpoint[],
-  components: PlacedComponent[] = []
+  components: PlacedComponent[] = [],
+  fixedTraces: BottomTrace[] = [],
+  constraints: DesignConstraint[] = []
 ): RoutingState {
   const plans = buildNetPlans(endpoints);
+  const fixedTerminalsByNet = buildFixedTerminalsByNet(fixedTraces);
   const endpointOwner = buildEndpointOwner(endpoints);
   const padOwner = buildPadOwner(components, endpoints);
   const pinAccessKeepout = buildPinAccessKeepout(board, endpoints);
@@ -153,6 +157,8 @@ export function autoRouteBoard(
     const routeOwner = new Map<string, RouteOwner>();
     const edgeOwner = new Map<string, RouteOwner>();
     const failedNets = new Set<string>();
+    seedFixedTraces(fixedTraces, records, routeOwner, edgeOwner);
+    seedRoutingKeepouts(board, constraints, routeOwner);
     const queue = sortNetPlans(plans, congestionBias);
     let didRipUp = false;
 
@@ -168,7 +174,9 @@ export function autoRouteBoard(
         routeOwner,
         edgeOwner,
         congestionMap,
-        escapeCandidates
+        escapeCandidates,
+        constraints,
+        fixedTerminalsByNet.get(plan.net) ?? []
       );
 
       if (attempt.jumpers.length > Math.max(1, Math.ceil(plan.endpoints.length / 2))) {
@@ -285,7 +293,9 @@ function routeMultiPinNet(
   routeOwner: Map<string, RouteOwner>,
   edgeOwner: Map<string, RouteOwner>,
   congestionMap: CongestionMap,
-  escapeCandidates: Map<string, EscapeCandidate[]>
+  escapeCandidates: Map<string, EscapeCandidate[]>,
+  constraints: DesignConstraint[],
+  fixedTerminals: Array<[number, number]> = []
 ): RouteAttempt {
   const blockedRouteIds = new Set<string>();
   const endpointByCell = new Map(plan.endpoints.map((endpoint) => [key(endpoint.grid[0], endpoint.grid[1]), endpoint]));
@@ -298,10 +308,12 @@ function routeMultiPinNet(
   }
 
   const connectionOrder = createMultiPinConnectionOrder(terminals);
-  const connected: Array<[number, number]> = [connectionOrder[0]];
-  const remaining = connectionOrder.slice(1);
+  const connected: Array<[number, number]> = fixedTerminals.length > 0 ? dedupePoints(fixedTerminals) : [connectionOrder[0]];
+  const connectedCellIds = new Set(connected.map((point) => key(point[0], point[1])));
+  const remaining = (fixedTerminals.length > 0 ? connectionOrder : connectionOrder.slice(1))
+    .filter((point) => !connectedCellIds.has(key(point[0], point[1])));
   const connectedEndpointCells = new Set<string>();
-  connectedEndpointCells.add(key(connectionOrder[0][0], connectionOrder[0][1]));
+  connected.forEach((point) => connectedEndpointCells.add(key(point[0], point[1])));
 
   while (remaining.length > 0) {
     const pair = findBestPair(connected, remaining, congestionMap);
@@ -360,7 +372,7 @@ function routeMultiPinNet(
     mergeSet(blockedRouteIds, routed.blockedRouteIds);
     const shouldUseJumper = !routed.path;
 
-    if (shouldUseJumper) {
+    if (shouldUseJumper && !jumperBlockedByConstraint(pair.from, pair.to, constraints)) {
       jumpers.push({
         id: makeId(),
         net: plan.net,
@@ -386,6 +398,26 @@ function routeMultiPinNet(
   }
 
   return { traces, jumpers, blockedRouteIds };
+}
+
+function jumperBlockedByConstraint(from: GridPoint, to: GridPoint, constraints: DesignConstraint[]) {
+  return constraints.some((constraint) => {
+    if (!constraint.enabled || constraint.status !== "active" || constraint.kind !== "region_keepout" || !constraint.blockJumpers) return false;
+    const { x, y, width, height } = constraint.region;
+    const left = x - 0.49;
+    const right = x + width - 0.51;
+    const top = y - 0.49;
+    const bottom = y + height - 0.51;
+    const inside = (point: GridPoint) => point[0] >= left && point[0] <= right && point[1] >= top && point[1] <= bottom;
+    if (inside(from) || inside(to)) return true;
+    const edges: Array<[GridPoint, GridPoint]> = [
+      [[left, top], [right, top]],
+      [[right, top], [right, bottom]],
+      [[right, bottom], [left, bottom]],
+      [[left, bottom], [left, top]]
+    ];
+    return edges.some(([a, b]) => segmentsIntersect(from, to, a, b));
+  });
 }
 
 function routeNetWithAStar(
@@ -465,6 +497,44 @@ function routeNetWithAStar(
   }
 
   return { cost: Number.POSITIVE_INFINITY, blockedRouteIds };
+}
+
+function seedFixedTraces(
+  traces: BottomTrace[],
+  records: Map<string, RouteRecord>,
+  routeOwner: Map<string, RouteOwner>,
+  edgeOwner: Map<string, RouteOwner>
+) {
+  traces.forEach((trace) => {
+    const priority = Number.MAX_SAFE_INTEGER;
+    const record: RouteRecord = { id: trace.id, net: trace.net, traces: [{ ...trace, locked: true }], jumpers: [], priority };
+    records.set(record.id, record);
+    trace.points.forEach(([x, y]) => routeOwner.set(key(x, y), { net: trace.net, routeId: trace.id, priority }));
+    traceEdges(trace.points).forEach((edge) => edgeOwner.set(edge, { net: trace.net, routeId: trace.id, priority }));
+  });
+}
+
+function buildFixedTerminalsByNet(traces: BottomTrace[]) {
+  const terminals = new Map<string, Array<[number, number]>>();
+  traces.forEach((trace) => {
+    const list = terminals.get(trace.net) ?? [];
+    trace.points.forEach((point) => list.push(point));
+    terminals.set(trace.net, list);
+  });
+  return terminals;
+}
+
+function seedRoutingKeepouts(board: BoardSize, constraints: DesignConstraint[], routeOwner: Map<string, RouteOwner>) {
+  constraints.forEach((constraint) => {
+    if (!constraint.enabled || constraint.status !== "active" || constraint.kind !== "region_keepout" || !constraint.blockBottomRouting) return;
+    for (let y = constraint.region.y; y < constraint.region.y + constraint.region.height; y += 1) {
+      for (let x = constraint.region.x; x < constraint.region.x + constraint.region.width; x += 1) {
+        if (inBounds([x, y], board)) {
+          routeOwner.set(key(x, y), { net: "__KEEPOUT__", routeId: `keepout-${constraint.id}`, priority: Number.MAX_SAFE_INTEGER });
+        }
+      }
+    }
+  });
 }
 
 function routePairWithEscapes(
@@ -624,7 +694,11 @@ function ripUpBlockingRoutes(
 
   const candidates = [...blockedRouteIds]
     .map((id) => records.get(id))
-    .filter((record): record is RouteRecord => record !== undefined && record.net !== currentPlan.net)
+    .filter((record): record is RouteRecord => (
+      record !== undefined &&
+      record.net !== currentPlan.net &&
+      !record.traces.some((trace) => trace.locked)
+    ))
     .sort((a, b) => a.priority - b.priority)
     .slice(0, Math.min(MAX_RIP_UPS_PER_FAILURE, remainingBudget));
 

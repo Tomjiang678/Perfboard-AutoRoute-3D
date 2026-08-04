@@ -201,6 +201,98 @@ export interface BoardSize {
   height: number;
 }
 
+export type ConstraintStrength = "hard" | "soft";
+export type ConstraintStatus = "active" | "disabled" | "conflicted" | "orphaned";
+
+export interface ConstraintRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface DesignConstraintBase {
+  id: string;
+  strength: ConstraintStrength;
+  status: ConstraintStatus;
+  enabled: boolean;
+  sourceText: string;
+  explanation: string;
+  createdAt: string;
+}
+
+export interface ComponentRegionConstraint extends DesignConstraintBase {
+  kind: "component_in_region";
+  componentIds: string[];
+  componentRefs: string[];
+  region: ConstraintRegion;
+}
+
+export interface ComponentBoardEdgeConstraint extends DesignConstraintBase {
+  kind: "component_on_board_edge";
+  componentIds: string[];
+  componentRefs: string[];
+  edge: "top" | "bottom" | "left" | "right" | "short_side" | "long_side" | "any";
+  depth?: number;
+}
+
+export interface ComponentNearConstraint extends DesignConstraintBase {
+  kind: "component_near_component";
+  componentId: string;
+  componentRef: string;
+  anchorComponentId: string;
+  anchorComponentRef: string;
+  maxDistance: number;
+}
+
+export interface ComponentLockConstraint extends DesignConstraintBase {
+  kind: "component_lock";
+  componentId: string;
+  componentRef: string;
+  lockPosition: boolean;
+  lockRotation: boolean;
+}
+
+export interface ComponentOrientationConstraint extends DesignConstraintBase {
+  kind: "component_orientation";
+  componentId: string;
+  componentRef: string;
+  rotationDegrees: number;
+}
+
+export interface RegionKeepoutConstraint extends DesignConstraintBase {
+  kind: "region_keepout";
+  region: ConstraintRegion;
+  blockPlacement: boolean;
+  blockBottomRouting: boolean;
+  blockJumpers: boolean;
+}
+
+export interface PowerRailConstraint extends DesignConstraintBase {
+  kind: "power_rail";
+  net: string;
+  axis: "row" | "column";
+  index: number;
+  from: number;
+  to: number;
+}
+
+export interface NetJumperLimitConstraint extends DesignConstraintBase {
+  kind: "net_jumper_limit";
+  net: string;
+  maxJumpers: number;
+}
+
+export type DesignConstraint =
+  | ComponentRegionConstraint
+  | ComponentBoardEdgeConstraint
+  | ComponentNearConstraint
+  | ComponentLockConstraint
+  | ComponentOrientationConstraint
+  | RegionKeepoutConstraint
+  | PowerRailConstraint
+  | NetJumperLimitConstraint;
+
 export interface PerfboardProject {
   id: string;
   name: string;
@@ -210,5 +302,7 @@ export interface PerfboardProject {
   components: PlacedComponent[];
   selectedNetName?: string;
   routing: RoutingState;
+  constraints?: DesignConstraint[];
+  constraintSchemaVersion?: number;
   createdAt: string;
 }
