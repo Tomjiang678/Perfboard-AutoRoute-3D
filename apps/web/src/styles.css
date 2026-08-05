@@ -1117,7 +1117,19 @@ button:disabled {
   margin: 0;
   color: var(--ui-muted, #667085);
   font-size: 12px;
-  text-align: center;
+}
+
+.auto-placement-progress-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #344054;
+  font-size: 12px;
+}
+
+.auto-placement-progress-heading strong {
+  color: #1d4f9c;
+  font-variant-numeric: tabular-nums;
 }
 
 .auto-placement-progress-bar {
@@ -1130,20 +1142,37 @@ button:disabled {
 
 .auto-placement-progress-bar span {
   display: block;
-  width: 36%;
   height: 100%;
   border-radius: 3px;
   background: #2c63bd;
-  animation: auto-placement-progress-slide 1.3s ease-in-out infinite;
+  transition: width 160ms ease-out;
 }
 
-@keyframes auto-placement-progress-slide {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(380%);
-  }
+.auto-placement-diagnostic-popup {
+  display: grid;
+  gap: 5px;
+  border: 1px solid #b7c8e5;
+  border-radius: 6px;
+  background: #f4f8ff;
+  box-shadow: 0 8px 24px rgb(30 64 175 / 12%);
+  padding: 9px 10px;
+}
+
+.auto-placement-diagnostic-popup strong {
+  color: #27466f;
+  font-size: 12px;
+}
+
+.auto-placement-diagnostic-popup p {
+  color: #1f2937;
+  font-family: Consolas, "Courier New", monospace;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.auto-placement-diagnostic-popup small {
+  color: #667085;
+  font-size: 11px;
 }
 
 /* Desktop EDA refinement: flat light workbench, docked panels, compact controls. */

@@ -129,6 +129,16 @@ export interface RoutingValidationResult {
   drc: DrcReport;
 }
 
+export interface AutoRoutingProgress {
+  round: number;
+  totalRounds: number;
+  net?: string;
+  stage: "round" | "net" | "strict-search" | "relaxed-search" | "escape-search";
+  expandedNodes?: number;
+}
+
+export type AutoRoutingProgressReporter = (progress: AutoRoutingProgress) => void;
+
 const MAX_ROUTING_ROUNDS = 5;
 const MAX_RIP_UPS_PER_FAILURE = 3;
 const MAX_TOTAL_RIP_UPS = 18;
@@ -139,7 +149,8 @@ export function autoRouteBoard(
   endpoints: RoutedNetEndpoint[],
   components: PlacedComponent[] = [],
   fixedTraces: BottomTrace[] = [],
-  constraints: DesignConstraint[] = []
+  constraints: DesignConstraint[] = [],
+  reportProgress?: AutoRoutingProgressReporter
 ): RoutingState {
   const plans = buildNetPlans(endpoints);
   const fixedTerminalsByNet = buildFixedTerminalsByNet(fixedTraces);
@@ -153,6 +164,7 @@ export function autoRouteBoard(
   const congestionBias = createEmptyCongestionBias(board);
 
   for (let round = 0; round < MAX_ROUTING_ROUNDS; round += 1) {
+    reportProgress?.({ round: round + 1, totalRounds: MAX_ROUTING_ROUNDS, stage: "round" });
     const records = new Map<string, RouteRecord>();
     const routeOwner = new Map<string, RouteOwner>();
     const edgeOwner = new Map<string, RouteOwner>();
@@ -164,6 +176,7 @@ export function autoRouteBoard(
 
     for (let queueIndex = 0; queueIndex < queue.length; queueIndex += 1) {
       const plan = queue[queueIndex];
+      reportProgress?.({ round: round + 1, totalRounds: MAX_ROUTING_ROUNDS, net: plan.net, stage: "net" });
       const congestionMap = buildCongestionMap(board, endpoints, routeOwner, congestionBias);
       const attempt = routeMultiPinNet(
         board,
@@ -176,7 +189,14 @@ export function autoRouteBoard(
         congestionMap,
         escapeCandidates,
         constraints,
-        fixedTerminalsByNet.get(plan.net) ?? []
+        fixedTerminalsByNet.get(plan.net) ?? [],
+        (stage, expandedNodes) => reportProgress?.({
+          round: round + 1,
+          totalRounds: MAX_ROUTING_ROUNDS,
+          net: plan.net,
+          stage,
+          expandedNodes
+        })
       );
 
       if (attempt.jumpers.length > Math.max(1, Math.ceil(plan.endpoints.length / 2))) {
@@ -295,7 +315,8 @@ function routeMultiPinNet(
   congestionMap: CongestionMap,
   escapeCandidates: Map<string, EscapeCandidate[]>,
   constraints: DesignConstraint[],
-  fixedTerminals: Array<[number, number]> = []
+  fixedTerminals: Array<[number, number]> = [],
+  reportProgress?: (stage: "strict-search" | "relaxed-search" | "escape-search", expandedNodes?: number) => void
 ): RouteAttempt {
   const blockedRouteIds = new Set<string>();
   const endpointByCell = new Map(plan.endpoints.map((endpoint) => [key(endpoint.grid[0], endpoint.grid[1]), endpoint]));
@@ -320,6 +341,7 @@ function routeMultiPinNet(
     const targetEndpointCell = key(pair.to[0], pair.to[1]);
     const allowedSameNetEndpointCells = new Set(connectedEndpointCells);
     allowedSameNetEndpointCells.add(targetEndpointCell);
+    reportProgress?.("strict-search");
     const strictRoute = routeNetWithAStar(
       board,
       pair.from,
@@ -332,9 +354,11 @@ function routeMultiPinNet(
       routeOwner,
       edgeOwner,
       congestionMap,
-      "strict"
+      "strict",
+      (expandedNodes) => reportProgress?.("strict-search", expandedNodes)
     );
     mergeSet(blockedRouteIds, strictRoute.blockedRouteIds);
+    if (!strictRoute.path) reportProgress?.("relaxed-search");
     const relaxedRoute = strictRoute.path ? strictRoute : routeNetWithAStar(
       board,
       pair.from,
@@ -347,9 +371,11 @@ function routeMultiPinNet(
       routeOwner,
       edgeOwner,
       congestionMap,
-      "relaxed"
+      "relaxed",
+      (expandedNodes) => reportProgress?.("relaxed-search", expandedNodes)
     );
     mergeSet(blockedRouteIds, relaxedRoute.blockedRouteIds);
+    if (!relaxedRoute.path) reportProgress?.("escape-search");
     const escapedRoute = relaxedRoute.path ? undefined : routePairWithEscapes(
       board,
       pair.from,
@@ -363,7 +389,8 @@ function routeMultiPinNet(
       routeOwner,
       edgeOwner,
       congestionMap,
-      escapeCandidates
+      escapeCandidates,
+      (expandedNodes) => reportProgress?.("escape-search", expandedNodes)
     );
     if (escapedRoute) {
       mergeSet(blockedRouteIds, escapedRoute.blockedRouteIds);
@@ -432,7 +459,8 @@ function routeNetWithAStar(
   routeOwner: Map<string, RouteOwner>,
   edgeOwner: Map<string, RouteOwner>,
   congestionMap: CongestionMap,
-  mode: RouteSearchMode = "strict"
+  mode: RouteSearchMode = "strict",
+  reportExpandedNodes?: (expandedNodes: number) => void
 ): SearchResult {
   const startId = key(from[0], from[1]);
   const targetId = key(to[0], to[1]);
@@ -441,7 +469,12 @@ function routeNetWithAStar(
   const parent = new Map<string, string>();
   const blockedRouteIds = new Set<string>();
 
+  let expandedNodes = 0;
   while (open.length > 0) {
+    expandedNodes += 1;
+    if (expandedNodes % 500 === 0) {
+      reportExpandedNodes?.(expandedNodes);
+    }
     const current = open.splice(takeLowestPriorityIndex(open), 1)[0];
     const currentId = key(current.x, current.y);
     if (currentId === targetId) {
@@ -550,7 +583,8 @@ function routePairWithEscapes(
   routeOwner: Map<string, RouteOwner>,
   edgeOwner: Map<string, RouteOwner>,
   congestionMap: CongestionMap,
-  escapeCandidates: Map<string, EscapeCandidate[]>
+  escapeCandidates: Map<string, EscapeCandidate[]>,
+  reportExpandedNodes?: (expandedNodes: number) => void
 ): EscapedSearchResult | undefined {
   const fromEndpoint = endpointByCell.get(key(from[0], from[1]));
   const toEndpoint = endpointByCell.get(key(to[0], to[1]));
@@ -579,7 +613,8 @@ function routePairWithEscapes(
         routeOwner,
         edgeOwner,
         congestionMap,
-        "relaxed"
+        "relaxed",
+        reportExpandedNodes
       );
       if (!routed.path) {
         return;

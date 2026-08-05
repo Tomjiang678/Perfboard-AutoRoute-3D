@@ -15,6 +15,14 @@ export interface AutoPlacementResult {
   warnings: string[];
 }
 
+export interface AutoPlacementProgress {
+  percent: number;
+  phase: "prepare" | "initial-placement" | "candidate-routing" | "optimization" | "complete";
+  detail: string;
+}
+
+export type AutoPlacementProgressReporter = (progress: AutoPlacementProgress) => void;
+
 interface FootprintBox {
   minX: number;
   minY: number;
@@ -65,8 +73,10 @@ export function autoPlaceComponents(
   boardWidth: number,
   boardHeight: number,
   endpoints: RoutedNetEndpoint[] = [],
-  constraints: DesignConstraint[] = []
+  constraints: DesignConstraint[] = [],
+  reportProgress?: AutoPlacementProgressReporter
 ): AutoPlacementResult {
+  reportProgress?.({ percent: 1, phase: "prepare", detail: "[autoplacement] 正在整理板尺寸、元件和工程约束" });
   const normalizedRegion = insetRegion(normalizeRegion(region, boardWidth, boardHeight), 1);
   const warnings: string[] = [];
 
@@ -75,12 +85,13 @@ export function autoPlaceComponents(
   }
 
   const movableIds = new Set(components.filter((component) => !component.mounted).map((component) => component.id));
-  const initial = createInitialPlacement(components, normalizedRegion, boardWidth, boardHeight, endpoints, warnings, constraints);
+  const initial = createInitialPlacement(components, normalizedRegion, boardWidth, boardHeight, endpoints, warnings, constraints, reportProgress);
   if (initial.placedCount === 0) {
     return { components, placedCount: 0, warnings };
   }
 
-  const optimized = optimizePlacement(initial.components, movableIds, normalizedRegion, { width: boardWidth, height: boardHeight }, endpoints, constraints);
+  const optimized = optimizePlacement(initial.components, movableIds, normalizedRegion, { width: boardWidth, height: boardHeight }, endpoints, constraints, reportProgress);
+  reportProgress?.({ percent: 100, phase: "complete", detail: "[autoplacement] 自动放置计算完成" });
   return {
     components: optimized,
     placedCount: initial.placedCount,
@@ -95,7 +106,8 @@ function createInitialPlacement(
   boardHeight: number,
   endpoints: RoutedNetEndpoint[],
   warnings: string[],
-  constraints: DesignConstraint[]
+  constraints: DesignConstraint[],
+  reportProgress?: AutoPlacementProgressReporter
 ) {
   const endpointMap = buildEndpointMap(endpoints);
   const netGraph = buildNetGraph(endpoints);
@@ -127,7 +139,12 @@ function createInitialPlacement(
 
   // ── Phase 1: Place hard-constrained components FIRST ──
   // These go directly to their AI-specified positions/edges before anything else.
-  for (const component of constrainedMovable) {
+  for (const [index, component] of constrainedMovable.entries()) {
+    reportProgress?.({
+      percent: progressInRange(index, constrainedMovable.length, 5, 15),
+      phase: "initial-placement",
+      detail: `[autoplacement] 正在放置硬约束元件 ${component.name}（${index + 1}/${constrainedMovable.length}）`
+    });
     const effectiveRegion = constrainedRegionFor(component, region, constraints, board);
     if (effectiveRegion.width <= 0 || effectiveRegion.height <= 0) {
       warnings.push(`${component.name} 的约束区域为空，无法落位。`);
@@ -157,8 +174,14 @@ function createInitialPlacement(
     warnings.push(`Placement region is tight: estimated ${requiredArea} occupied cells, current region has ${regionArea}.`);
   }
 
-  for (const component of sortedNormal) {
-    const candidate = findPlacement(component, components, region, boardWidth, boardHeight, occupied, placedAnchors, placedByName, endpointMap, netGraph, endpoints, constraints);
+  for (const [index, component] of sortedNormal.entries()) {
+    const percent = progressInRange(index, sortedNormal.length, 15, 50);
+    reportProgress?.({
+      percent,
+      phase: "initial-placement",
+      detail: `[autoplacement] 正在为 ${component.name} 生成初始放置候选（${index + 1}/${sortedNormal.length}）`
+    });
+    const candidate = findPlacement(component, components, region, boardWidth, boardHeight, occupied, placedAnchors, placedByName, endpointMap, netGraph, endpoints, constraints, reportProgress, percent);
     if (!candidate) {
       warnings.push(`${component.name} cannot fit in the selected placement region.`);
       continue;
@@ -226,7 +249,9 @@ function findPlacement(
   endpointMap: EndpointMap,
   netGraph: NetGraph,
   endpoints: RoutedNetEndpoint[],
-  constraints: DesignConstraint[]
+  constraints: DesignConstraint[],
+  reportProgress?: AutoPlacementProgressReporter,
+  progressPercent = 25
 ): PlacementCandidate | undefined {
   const componentRegion = constrainedRegionFor(component, region, constraints, { width: boardWidth, height: boardHeight });
   const placedAirwires = buildPlacedAirwires(placedByName, endpointMap);
@@ -257,15 +282,35 @@ function findPlacement(
   const partialEndpoints = endpoints.filter((endpoint) => refs.has(endpoint.ref));
 
   let best = shortlist[0];
+  reportProgress?.({
+    percent: progressPercent,
+    phase: "candidate-routing",
+    detail: `[autoplacement] 正在用完整布线评估 ${component.name} 的候选 1/${shortlist.length}`
+  });
   let bestQuality = routeQualityForComponents(
     replaceComponent(partialComponents, { ...best.component, mounted: true }),
     partialEndpoints,
-    { width: boardWidth, height: boardHeight }
+    { width: boardWidth, height: boardHeight },
+    reportProgress,
+    progressPercent,
+    `${component.name} 候选 1/${shortlist.length}`
   );
 
-  shortlist.slice(1).forEach((candidate) => {
+  shortlist.slice(1).forEach((candidate, index) => {
+    reportProgress?.({
+      percent: progressPercent,
+      phase: "candidate-routing",
+      detail: `[autoplacement] 正在用完整布线评估 ${component.name} 的候选 ${index + 2}/${shortlist.length}`
+    });
     const trial = replaceComponent(partialComponents, { ...candidate.component, mounted: true });
-    const quality = routeQualityForComponents(trial, partialEndpoints, { width: boardWidth, height: boardHeight });
+    const quality = routeQualityForComponents(
+      trial,
+      partialEndpoints,
+      { width: boardWidth, height: boardHeight },
+      reportProgress,
+      progressPercent,
+      `${component.name} 候选 ${index + 2}/${shortlist.length}`
+    );
     if (compareQuality(quality, bestQuality) < 0 || (compareQuality(quality, bestQuality) === 0 && candidate.airwireScore < best.airwireScore)) {
       best = candidate;
       bestQuality = quality;
@@ -319,7 +364,8 @@ function optimizePlacement(
   region: PlacementRegion,
   board: BoardSize,
   endpoints: RoutedNetEndpoint[],
-  constraints: DesignConstraint[]
+  constraints: DesignConstraint[],
+  reportProgress?: AutoPlacementProgressReporter
 ) {
   const movable = components.filter((component) => movableIds.has(component.id)).slice(0, MAX_OPTIMIZATION_COMPONENTS);
   if (movable.length === 0 || endpoints.length === 0) {
@@ -327,16 +373,30 @@ function optimizePlacement(
   }
 
   let best = components;
-  let bestQuality = routeQualityForComponents(best, endpoints, board);
+  reportProgress?.({ percent: 52, phase: "optimization", detail: "[autoplacement] 正在评估初始整板布局" });
+  let bestQuality = routeQualityForComponents(best, endpoints, board, reportProgress, 52, "初始整板布局");
 
   for (let round = 0; round < OPTIMIZATION_ROUNDS; round += 1) {
     let improved = false;
     const focused = focusComponents(best, movableIds, bestQuality, endpoints);
 
-    for (const component of focused) {
+    for (const [componentIndex, component] of focused.entries()) {
+      const percent = progressInRange(
+        round * focused.length + componentIndex,
+        Math.max(1, OPTIMIZATION_ROUNDS * focused.length),
+        55,
+        94
+      );
+      reportProgress?.({
+        percent,
+        phase: "optimization",
+        detail: `[autoplacement] 正在优化 ${component.name}（第 ${round + 1}/${OPTIMIZATION_ROUNDS} 轮）`
+      });
       const trials = generateLocalCandidates(best, component, movableIds, region, board, endpoints, constraints);
-      for (const trial of trials) {
-        const quality = routeQualityForComponents(trial, endpoints, board);
+      for (const [trialIndex, trial] of trials.entries()) {
+        const context = `${component.name} 优化候选 ${trialIndex + 1}/${trials.length}，第 ${round + 1}/${OPTIMIZATION_ROUNDS} 轮`;
+        reportProgress?.({ percent, phase: "candidate-routing", detail: `[autoplacement] 正在用完整布线评估 ${context}` });
+        const quality = routeQualityForComponents(trial, endpoints, board, reportProgress, percent, context);
         if (compareQuality(quality, bestQuality) < 0) {
           best = trial;
           bestQuality = quality;
@@ -350,7 +410,7 @@ function optimizePlacement(
     }
 
     if (!improved) {
-      const swap = findImprovingSwap(best, movableIds, region, board, endpoints, bestQuality, constraints);
+      const swap = findImprovingSwap(best, movableIds, region, board, endpoints, bestQuality, constraints, reportProgress, 95);
       if (swap) {
         best = swap.components;
         bestQuality = swap.quality;
@@ -411,7 +471,9 @@ function findImprovingSwap(
   board: BoardSize,
   endpoints: RoutedNetEndpoint[],
   currentQuality: RouteQuality,
-  constraints: DesignConstraint[]
+  constraints: DesignConstraint[],
+  reportProgress?: AutoPlacementProgressReporter,
+  progressPercent = 95
 ) {
   const movable = components.filter((component) => movableIds.has(component.id)).slice(0, 12);
   for (let a = 0; a < movable.length; a += 1) {
@@ -430,7 +492,9 @@ function findImprovingSwap(
       if (!isValidPlacement(swapped, movableIds, region, board, constraints)) {
         continue;
       }
-      const quality = routeQualityForComponents(swapped, endpoints, board);
+      const context = `${first.name} 与 ${second.name} 交换位置`;
+      reportProgress?.({ percent: progressPercent, phase: "candidate-routing", detail: `[autoplacement] 正在用完整布线评估 ${context}` });
+      const quality = routeQualityForComponents(swapped, endpoints, board, reportProgress, progressPercent, context);
       if (compareQuality(quality, currentQuality) < 0) {
         return { components: swapped, quality };
       }
@@ -439,9 +503,31 @@ function findImprovingSwap(
   return undefined;
 }
 
-function routeQualityForComponents(components: PlacedComponent[], endpointTemplates: RoutedNetEndpoint[], board: BoardSize): RouteQuality {
+function routeQualityForComponents(
+  components: PlacedComponent[],
+  endpointTemplates: RoutedNetEndpoint[],
+  board: BoardSize,
+  reportProgress?: AutoPlacementProgressReporter,
+  progressPercent = 50,
+  context = "放置候选"
+): RouteQuality {
   const endpoints = endpointsForComponents(endpointTemplates, components);
-  const routing = autoRouteBoard(board, endpoints, components);
+  const routing = autoRouteBoard(board, endpoints, components, [], [], (routingProgress) => {
+    const stageLabels = {
+      round: "准备布线轮次",
+      net: "处理网络",
+      "strict-search": "严格寻路",
+      "relaxed-search": "宽松寻路",
+      "escape-search": "引脚逃逸寻路"
+    } as const;
+    const net = routingProgress.net ? `，网络 ${routingProgress.net}` : "";
+    const expanded = routingProgress.expandedNodes ? `，已展开 ${routingProgress.expandedNodes} 个节点` : "";
+    reportProgress?.({
+      percent: progressPercent,
+      phase: "candidate-routing",
+      detail: `[autoplacement] ${context}：${stageLabels[routingProgress.stage]} ${routingProgress.round}/${routingProgress.totalRounds}${net}${expanded}`
+    });
+  });
   return qualityFromRouting(routing, components, endpoints);
 }
 
@@ -1191,6 +1277,11 @@ function isPowerNet(net: string) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function progressInRange(index: number, total: number, start: number, end: number) {
+  if (total <= 0) return end;
+  return Math.round(start + (end - start) * Math.min(1, Math.max(0, index / total)));
 }
 
 function key(x: number, y: number) {
