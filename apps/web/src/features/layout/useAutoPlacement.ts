@@ -56,6 +56,7 @@ export function useAutoPlacement({ project, commitProject }: UseAutoPlacementOpt
         region,
         boardWidth: sourceProject.board.width,
         boardHeight: sourceProject.board.height,
+        board: sourceProject.board,
         endpoints,
         constraints
       }, setProgress);
@@ -89,4 +90,3 @@ function waitForPaint() {
     window.requestAnimationFrame(() => window.setTimeout(resolve, 0));
   });
 }
-

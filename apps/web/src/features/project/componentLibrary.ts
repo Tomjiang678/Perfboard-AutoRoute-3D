@@ -1,4 +1,6 @@
 import type { LibraryComponentKind } from "../../types/project";
+import { createPinHeaderDefinition, createPinHeaderOffsets } from "./pinHeader";
+import { centerBridgeKinds, threeInlinePinKinds } from "./componentTraits";
 
 export interface LibraryComponentDefinition {
   kind: LibraryComponentKind;
@@ -8,6 +10,8 @@ export interface LibraryComponentDefinition {
   leadSpacing: number;
   rowSpacing: number;
   sameSidePitch: number;
+  pinHeaderRows?: number;
+  pinHeaderColumns?: number;
   pinOffsets: Array<[number, number]>;
 }
 
@@ -29,7 +33,7 @@ export const componentLibrary: LibraryComponentDefinition[] = [
   makeDipSwitch("DIPSW10", "DIP 开关 10 位", 20, 3, 1),
   makeDisplay("7SEG", "七段数码管", "seven_segment_display", 10, 3, 1),
   makeDisplay("ALNUM", "字母数字显示器", "alphanumeric_display", 14, 3, 1),
-  { kind: "pin_header", label: "HDR", title: "排针", pinCount: 4, leadSpacing: 1, rowSpacing: 0, sameSidePitch: 1, pinOffsets: [[0, 0], [1, 0], [2, 0], [3, 0]] },
+  createPinHeaderDefinition(1, 4),
   makeTwoPin("terminal_block", "TB", "接线端子", 1, 2),
   { kind: "slide_switch", label: "SW", title: "拨动开关 SPDT", pinCount: 3, leadSpacing: 1, rowSpacing: 0, sameSidePitch: 1, pinOffsets: [[-1, 0], [0, 0], [1, 0]] },
   makeTwoPin("buzzer", "BZ", "蜂鸣器", 2),
@@ -43,18 +47,7 @@ export const componentLibraryByKey = new Map(
 
 export function getLibraryComponentByKind(kind: LibraryComponentKind, pinCount?: number) {
   const exact = componentLibrary.find((component) => component.kind === kind && component.pinCount === pinCount);
-  if (exact) {
-    return exact;
-  }
-
-  if (pinCount) {
-    const dynamic = makeDynamicLibraryComponent(kind, pinCount);
-    if (dynamic) {
-      return dynamic;
-    }
-  }
-
-  return componentLibrary.find((component) => component.kind === kind);
+  return exact ?? (pinCount ? makeDynamicLibraryComponent(kind, pinCount) : undefined) ?? componentLibrary.find((component) => component.kind === kind);
 }
 
 export function makeLibraryDragKey(component: LibraryComponentDefinition) {
@@ -79,16 +72,7 @@ function makeDynamicLibraryComponent(
   }
 
   if (kind === "pin_header") {
-    return {
-      kind: "pin_header",
-      label: "HDR",
-      title: `排针 ${pinCount} 脚`,
-      pinCount,
-      leadSpacing: 1,
-      rowSpacing: 0,
-      sameSidePitch: 1,
-      pinOffsets: Array.from({ length: pinCount }, (_, index) => [index, 0] as [number, number])
-    };
+    return createPinHeaderDefinition(1, pinCount);
   }
 
   if (kind === "seven_segment_display") {
@@ -108,12 +92,14 @@ export function buildPinOffsetsForComponent(component: {
   leadSpacing: number;
   rowSpacing: number;
   sameSidePitch: number;
+  pinHeaderRows?: number;
+  pinHeaderColumns?: number;
 }): Array<[number, number]> {
-  if (component.kind === "dip" || component.kind === "dip_switch" || component.kind === "seven_segment_display" || component.kind === "alphanumeric_display") {
+  if (centerBridgeKinds.has(component.kind)) {
     return makeDipPinOffsetsWithPitch(component.pinCount ?? 8, component.rowSpacing, component.sameSidePitch);
   }
 
-  if (component.kind === "to92" || component.kind === "to220" || component.kind === "potentiometer" || component.kind === "slide_switch") {
+  if (threeInlinePinKinds.has(component.kind)) {
     return [[-component.leadSpacing, 0], [0, 0], [component.leadSpacing, 0]];
   }
 
@@ -122,7 +108,9 @@ export function buildPinOffsetsForComponent(component: {
   }
 
   if (component.kind === "pin_header") {
-    return Array.from({ length: component.pinCount ?? 4 }, (_, index) => [index * component.sameSidePitch, 0] as [number, number]);
+    const rows = component.pinHeaderRows ?? 1;
+    const columns = component.pinHeaderColumns ?? component.pinCount ?? 4;
+    return createPinHeaderOffsets(rows, columns, component.sameSidePitch);
   }
 
   if (component.kind === "tactile_switch") {
@@ -158,16 +146,7 @@ function makeDip(
   rowSpacing: number,
   sameSidePitch: number
 ): LibraryComponentDefinition {
-  return {
-    kind: "dip",
-    label,
-    title,
-    pinCount,
-    leadSpacing: rowSpacing,
-    rowSpacing,
-    sameSidePitch,
-    pinOffsets: makeDipPinOffsetsWithPitch(pinCount, rowSpacing, sameSidePitch)
-  };
+  return makeDualRow("dip", label, title, pinCount, rowSpacing, sameSidePitch);
 }
 
 function makeDipSwitch(
@@ -177,22 +156,24 @@ function makeDipSwitch(
   rowSpacing: number,
   sameSidePitch: number
 ): LibraryComponentDefinition {
-  return {
-    kind: "dip_switch",
-    label,
-    title,
-    pinCount,
-    leadSpacing: rowSpacing,
-    rowSpacing,
-    sameSidePitch,
-    pinOffsets: makeDipPinOffsetsWithPitch(pinCount, rowSpacing, sameSidePitch)
-  };
+  return makeDualRow("dip_switch", label, title, pinCount, rowSpacing, sameSidePitch);
 }
 
 function makeDisplay(
   label: string,
   title: string,
   kind: "seven_segment_display" | "alphanumeric_display",
+  pinCount: number,
+  rowSpacing: number,
+  sameSidePitch: number
+): LibraryComponentDefinition {
+  return makeDualRow(kind, label, title, pinCount, rowSpacing, sameSidePitch);
+}
+
+function makeDualRow(
+  kind: "dip" | "dip_switch" | "seven_segment_display" | "alphanumeric_display",
+  label: string,
+  title: string,
   pinCount: number,
   rowSpacing: number,
   sameSidePitch: number

@@ -1,14 +1,14 @@
-_ucj4ea453c95f15752862a58868ff08676581ea65876863ff1a54047c7b539f4ef66c47603bff09   (_uc46253537065e5671f: 2026_uc15e747_uc167087_uc165e5, 13:41:00)
+_ucj4ea453c95f15752862a58868ff08676581ea65876863ff1a54047c7b539f4ef66c47603bff09   (_uc46253537065e5671f: 2026_uc15e748_uc1670824_uc165e5, 9:57:39)
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 RefDes                      _uc263cf8ff0                               _uc27cfb5217                               _uc25c0188c5                                                 _uc375358def56fe                            
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 0                           GROUND                           POWER_SOURCES                    -                                                                                 
-U1                          LM358AD                          OPAMP                            SO-8                                               _uc654047c7b539f4ef66c47603b                         
+U2                          LM324AD                          OPAMP                            CASE751A                                           _uc654047c7b539f4ef66c47603b                         
 U3                          LM393AD                          COMPARATOR                       SO-8                                               _uc654047c7b539f4ef66c47603b                         
 U4                          LM339AD                          COMPARATOR                       SO-14                                              _uc654047c7b539f4ef66c47603b                         
 A1                          555_VIRTUAL                      MIXED_VIRTUAL                    -                                                  _uc654047c7b539f4ef66c47603b                         
-U2                          LM324AD                          OPAMP                            CASE751A                                           _uc654047c7b539f4ef66c47603b                         
-U6                          74LS04D                          74LS                             DO14                                               _uc654047c7b539f4ef66c47603b                         
+U5                          74HC00D_2V                       74HC_2V                          DO14                                               _uc654047c7b539f4ef66c47603b                         
+U1                          LM358AD                          OPAMP                            SO-8                                               _uc654047c7b539f4ef66c47603b                         
 U7                          74LS74D                          74LS_IC                          DO14                                               _uc654047c7b539f4ef66c47603b                         
 U8                          LM317AH                          VOLTAGE_REGULATOR                TO-39(H03A)                                        _uc654047c7b539f4ef66c47603b                         
 Q1                          2N3904                           BJT_NPN                          TO-92-3(Z03A)                                      _uc654047c7b539f4ef66c47603b                         
@@ -23,10 +23,11 @@ S1                          DIPSW10                          SWITCH             
 S2                          DIPSW8                           SWITCH                           DIPSW8H                                            _uc654047c7b539f4ef66c47603b                         
 S3                          SPDT                             SWITCH                           SPDT                                               _uc654047c7b539f4ef66c47603b                         
 R1                          1kOhm                            VARIABLE_RESISTOR                -                                                  _uc654047c7b539f4ef66c47603b                         
-U5                          74HC00D_2V                       74HC_2V                          DO14                                               _uc654047c7b539f4ef66c47603b                         
+U6                          74LS04D                          74LS                             DO14                                               _uc654047c7b539f4ef66c47603b                         
 A2                          BOOST_CONVERTER                  BOOST_CONVERTER                  -                                                  _uc654047c7b539f4ef66c47603b                         
 A3                          BUCK_CONVERTER                   BUCK_CONVERTER                   -                                                  _uc654047c7b539f4ef66c47603b                         
 U11                         BUCK_BOOST_CONVERTER             BUCK_BOOST_CONVERTER             -                                                  _uc654047c7b539f4ef66c47603b                         
 U12                         74LS138D                         74LS                             DO16                                               _uc654047c7b539f4ef66c47603b                         
 U13                         74LS160D                         74LS                             DO16                                               _uc654047c7b539f4ef66c47603b                         
+U14                         OP07J                            OPAMP                            TO-99                                              _uc654047c7b539f4ef66c47603b                         
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

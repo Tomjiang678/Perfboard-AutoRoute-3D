@@ -1,8 +1,10 @@
 import type { PlacementRegion } from "../autoPlacement";
+import type { BoardKind } from "../../../types/project";
 
 interface PlacementRegionFieldsProps {
   boardWidth: number;
   boardHeight: number;
+  boardKind: BoardKind;
   disabled: boolean;
   values: PlacementRegion;
   onChange: {
@@ -13,7 +15,17 @@ interface PlacementRegionFieldsProps {
   };
 }
 
-export function PlacementRegionFields({ boardWidth, boardHeight, disabled, values, onChange }: PlacementRegionFieldsProps) {
+export function PlacementRegionFields({ boardWidth, boardHeight, boardKind, disabled, values, onChange }: PlacementRegionFieldsProps) {
+  if (boardKind === "breadboard") {
+    // Breadboard width is fixed; only the row range of the region is configurable.
+    return (
+      <div className="field-grid">
+        <NumberField label="起点 Y" min={0} max={boardHeight - 1} value={values.y} disabled={disabled} onChange={onChange.setY} />
+        <NumberField label="区域高" min={1} max={boardHeight} value={values.height} disabled={disabled} onChange={onChange.setHeight} />
+      </div>
+    );
+  }
+
   return (
     <div className="field-grid">
       <NumberField label="起点 X" min={0} max={boardWidth - 1} value={values.x} disabled={disabled} onChange={onChange.setX} />

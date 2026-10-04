@@ -1,17 +1,22 @@
-import { RotateCcw, Save, Settings } from "lucide-react";
+import { Moon, RotateCcw, Save, Settings, Sun } from "lucide-react";
 import type { ChangeEvent } from "react";
+import type { ThemeMode } from "../types/project";
+import { WorkspaceToolbar, type WorkspaceToolbarProps } from "./WorkspaceToolbar";
 
 interface HeaderBarProps {
   projectName?: string;
+  theme: ThemeMode;
+  onToggleTheme: () => void;
   onNewProject: () => void;
   onSaveProject: () => void;
   onOpenProject: (file: File) => void;
   onUndo: () => void;
   canUndo: boolean;
   onOpenSettings: () => void;
+  toolbar?: WorkspaceToolbarProps;
 }
 
-export function HeaderBar({ projectName, onNewProject, onSaveProject, onOpenProject, onUndo, canUndo, onOpenSettings }: HeaderBarProps) {
+export function HeaderBar({ projectName, theme, onToggleTheme, onNewProject, onSaveProject, onOpenProject, onUndo, canUndo, onOpenSettings, toolbar }: HeaderBarProps) {
   function handleProjectAction(event: ChangeEvent<HTMLSelectElement>) {
     const value = event.target.value;
     event.target.value = "";
@@ -33,6 +38,12 @@ export function HeaderBar({ projectName, onNewProject, onSaveProject, onOpenProj
         </div>
       </div>
 
+      {toolbar && (
+        <div className="header-toolbar">
+          <WorkspaceToolbar {...toolbar} />
+        </div>
+      )}
+
       <nav className="header-actions" aria-label="Project actions">
         <select className="project-action-select" defaultValue="" onChange={handleProjectAction} title="Project">
           <option value="" disabled>Project</option>
@@ -52,6 +63,9 @@ export function HeaderBar({ projectName, onNewProject, onSaveProject, onOpenProj
             event.target.value = "";
           }}
         />
+        <button className="icon-button" type="button" title="切换深色/浅色模式" onClick={onToggleTheme}>
+          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
         <button className="icon-button" type="button" title="Undo" disabled={!canUndo} onClick={onUndo}>
           <RotateCcw size={18} />
         </button>

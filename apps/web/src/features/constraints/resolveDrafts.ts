@@ -141,6 +141,9 @@ function footprintSize(pinOffsets: Array<[number, number]>) {
 }
 
 function validateRail(draft: Extract<ConstraintDraft, { kind: "power_rail" }>, project: PerfboardProject) {
+  if (project.board.kind === "breadboard") {
+    throw new Error("面包板不支持电源母线约束。");
+  }
   const axisLimit = draft.axis === "row" ? project.board.height : project.board.width;
   const rangeLimit = draft.axis === "row" ? project.board.width : project.board.height;
   if (draft.index >= axisLimit || draft.from > draft.to || draft.to >= rangeLimit) {

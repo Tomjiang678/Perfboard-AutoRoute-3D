@@ -7,11 +7,18 @@ import {
 } from "../features/project/componentLibrary";
 import type { BoardSize } from "../types/project";
 import type { DragMoveModifier } from "../types/project";
+import type { JumperRoute } from "../types/project";
 import type { PlacedComponent } from "../types/project";
 import type { RoutedNetEndpoint } from "../types/project";
 import type { RoutingState } from "../types/project";
-import { createParametricComponent } from "../renderer3d/parametricComponents";
+import type { ThemeMode } from "../types/project";
+import { createParametricComponent, setComponentTheme } from "../renderer3d/parametricComponents";
 import { bendComponentPin, isManuallyBendable, pinGridPosition } from "../features/layout/manualPlacement";
+import { createBreadboardDefinition } from "../features/board/breadboard";
+import { getBoardModel } from "../features/board/factory";
+import { rotateGridOffset } from "../features/board/placement";
+import { segmentsIntersect, shareEndpoint } from "../features/routing/routingGeometry";
+import { createBoardObject } from "../features/board/rendering";
 
 interface Perfboard3DViewportProps {
   board: BoardSize;
@@ -30,6 +37,7 @@ interface Perfboard3DViewportProps {
   highlightedEndpoints: RoutedNetEndpoint[];
   routing: RoutingState;
   transparentBoard: boolean;
+  theme: ThemeMode;
   routeEditMode?: "select" | "solder" | "jumper" | "erase";
   isPlacingComponent?: boolean;
   dragMoveModifier: DragMoveModifier;
@@ -58,11 +66,13 @@ export function Perfboard3DViewport({
   highlightedEndpoints,
   routing,
   transparentBoard,
+  theme,
   routeEditMode = "select",
   isPlacingComponent = false,
   dragMoveModifier,
   onRouteEditPoint
 }: Perfboard3DViewportProps) {
+  const boardModel = getBoardModel(board);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
@@ -91,7 +101,7 @@ export function Perfboard3DViewport({
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
-    scene.background = new THREE.Color(0xeef2f6);
+    scene.background = new THREE.Color(theme === "dark" ? 0x161b21 : 0xeef2f6);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -110,14 +120,14 @@ export function Perfboard3DViewport({
     controls.maxDistance = 4200;
     controlsRef.current = controls;
 
-    const boardObject = createBoardObject(board, transparentBoard);
+    const boardObject = createBoardObject(board, transparentBoard, theme);
     scene.add(boardObject);
-    const componentsGroup = createPlacedComponents(components, board, selectedComponentId);
+    const componentsGroup = createPlacedComponents(components, board, selectedComponentId, theme);
     scene.add(componentsGroup);
     const netHighlights = createNetEndpointHighlights([], board);
     netHighlightsRef.current = netHighlights;
     scene.add(netHighlights);
-    const routeObject = createRouteObjects(routing, board);
+    const routeObject = createRouteObjects(routing, board, components);
     scene.add(routeObject);
     const routingIssueHighlights = createRoutingIssueHighlights(routing, board);
     scene.add(routingIssueHighlights);
@@ -138,6 +148,11 @@ export function Perfboard3DViewport({
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.15);
     keyLight.position.set(80, 110, 95);
     scene.add(keyLight);
+
+    // Soft fill light from below so the back side of the board is not much darker than the front.
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.55);
+    fillLight.position.set(-70, -45, -80);
+    scene.add(fillLight);
 
     const resizeObserver = new ResizeObserver(() => {
       const width = Math.max(1, host.clientWidth);
@@ -175,7 +190,7 @@ export function Perfboard3DViewport({
       sceneObjectsRef.current = null;
       host.removeChild(renderer.domElement);
     };
-  }, [board, components, selectedComponentId, routing, transparentBoard]);
+  }, [board, components, selectedComponentId, routing, transparentBoard, theme]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -423,7 +438,9 @@ export function Perfboard3DViewport({
             min={5}
             max={150}
             value={board.width}
-            onChange={(event) => onUpdateBoard({ width: toBoardSize(event.target.value), height: board.height })}
+            disabled={!boardModel.capabilities.canResizeWidth}
+            title={!boardModel.capabilities.canResizeWidth ? "Board width is determined by its definition" : undefined}
+            onChange={(event) => onUpdateBoard({ ...board, width: toBoardSize(event.target.value) })}
           />
         </label>
         <label className="board-size-control">
@@ -433,15 +450,19 @@ export function Perfboard3DViewport({
             min={5}
             max={150}
             value={board.height}
-            onChange={(event) => onUpdateBoard({ width: board.width, height: toBoardSize(event.target.value) })}
+            onChange={(event) => onUpdateBoard(board.kind === "breadboard"
+              ? createBreadboardDefinition(toBoardSize(event.target.value), board.breadboard?.modules ?? 1)
+              : { ...board, height: toBoardSize(event.target.value) })}
           />
         </label>
         <button className="view-button" type="button" onClick={() => setView("top")}>
           正面
         </button>
-        <button className="view-button" type="button" onClick={() => setView("bottom")}>
-          背面
-        </button>
+        {boardModel.capabilities.canRenderBottomView && (
+          <button className="view-button" type="button" onClick={() => setView("bottom")}>
+            背面
+          </button>
+        )}
         <button className="view-button" type="button" onClick={() => setView("iso")}>
           斜视
         </button>
@@ -481,10 +502,7 @@ export function Perfboard3DViewport({
     const gridX = Math.round(hit.x + board.width / 2 - 0.5);
     const gridY = Math.round(hit.z + board.height / 2 - 0.5);
 
-    return [
-      Math.max(0, Math.min(board.width - 1, gridX)),
-      Math.max(0, Math.min(board.height - 1, gridY))
-    ];
+    return getBoardModel(board).snapToHole([gridX, gridY]) ?? [0, 0];
   }
 
   function pickComponent(event: React.PointerEvent<HTMLDivElement>) {
@@ -520,7 +538,7 @@ export function Perfboard3DViewport({
 
     const anchor = getPinAnchor(component.pinOffsets);
     const matchedPinIndex = component.pinOffsets.findIndex((offset) => {
-      const [rx, ry] = rotateOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
+      const [rx, ry] = rotateGridOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
       return component.position[0] + rx === gridPosition[0] && component.position[1] + ry === gridPosition[1];
     });
     return matchedPinIndex >= 0 ? { componentId: component.id, pin: matchedPinIndex + 1 } : undefined;
@@ -595,7 +613,7 @@ export function Perfboard3DViewport({
       disposeObject(child);
     });
 
-    const previewGroup = createPlacedComponents([component], board, selectedComponentId);
+    const previewGroup = createPlacedComponents([component], board, selectedComponentId, theme);
     while (previewGroup.children.length > 0) {
       sceneObjects.componentsGroup.add(previewGroup.children[0]);
     }
@@ -623,7 +641,9 @@ function toBoardSize(value: string) {
   return Math.max(5, Math.min(150, Math.round(next)));
 }
 
-function createPlacedComponents(components: PlacedComponent[], board: BoardSize, selectedComponentId?: string) {
+function createPlacedComponents(components: PlacedComponent[], board: BoardSize, selectedComponentId: string | undefined, theme: ThemeMode) {
+  const dark = theme === "dark";
+  setComponentTheme(dark);
   const group = new THREE.Group();
   components.forEach((placed) => {
     const component = createParametricComponent({
@@ -660,12 +680,48 @@ function createPlacedComponents(components: PlacedComponent[], board: BoardSize,
     }
   });
 
+  applyThemeToGroup(group, dark);
   return group;
+}
+
+const THEME_DARK_LIGHTNESS_FLOOR = 0.4;
+
+function applyThemeToGroup(group: THREE.Group, dark: boolean) {
+  group.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) {
+      return;
+    }
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    for (const material of materials) {
+      if (!material || !("color" in material)) {
+        continue;
+      }
+      if (dark) {
+        if (material.userData.themeOriginalColor === undefined) {
+          material.userData.themeOriginalColor = material.color.getHex();
+        }
+        const hsl = { h: 0, s: 0, l: 0 };
+        new THREE.Color(material.userData.themeOriginalColor as number).getHSL(hsl);
+        if (hsl.l < THEME_DARK_LIGHTNESS_FLOOR) {
+          // Only lift dark bodies (IC housings, black plastic, dark shells) so they
+          // stay visible against the dark background; colorful parts keep their
+          // hue and saturation instead of being washed out toward white.
+          hsl.l = 0.42 + (THEME_DARK_LIGHTNESS_FLOOR - hsl.l) * 0.45;
+          hsl.s = Math.min(1, hsl.s * 1.15);
+          material.color.setHSL(hsl.h, hsl.s, hsl.l);
+        } else {
+          material.color.setHex(material.userData.themeOriginalColor as number);
+        }
+      } else if (material.userData.themeOriginalColor !== undefined) {
+        material.color.setHex(material.userData.themeOriginalColor as number);
+      }
+    }
+  });
 }
 
 function getComponentWorldPosition(component: PlacedComponent, board: BoardSize) {
   const anchor = getPinAnchor(component.pinOffsets);
-  const rotatedAnchor = rotateOffset(anchor, component.rotation);
+  const rotatedAnchor = rotateGridOffset(anchor, component.rotation);
   const [gridX, gridY] = component.position;
   return new THREE.Vector3(
     gridX - board.width / 2 + 0.5 - rotatedAnchor[0],
@@ -681,7 +737,7 @@ function sameGridPosition(a: [number, number] | undefined, b: [number, number] |
 function createPinHighlights(component: PlacedComponent, board: BoardSize) {
   const anchor = getPinAnchor(component.pinOffsets);
   return component.pinOffsets.map((offset, index) => {
-    const [rx, ry] = rotateOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
+    const [rx, ry] = rotateGridOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
     const gridX = component.position[0] + rx;
     const gridY = component.position[1] + ry;
     const ring = new THREE.Mesh(
@@ -704,7 +760,7 @@ function createPinHighlights(component: PlacedComponent, board: BoardSize) {
 function createBacksidePins(component: PlacedComponent, board: BoardSize) {
   const anchor = getPinAnchor(component.pinOffsets);
   return component.pinOffsets.map((offset, index) => {
-    const [rx, ry] = rotateOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
+    const [rx, ry] = rotateGridOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
     const gridX = component.position[0] + rx;
     const gridY = component.position[1] + ry;
     const pin = new THREE.Mesh(
@@ -804,7 +860,7 @@ function createRoutingIssueHighlights(routing: RoutingState, board: BoardSize) {
   return group;
 }
 
-function createRouteObjects(routing: RoutingState, board: BoardSize) {
+function createRouteObjects(routing: RoutingState, board: BoardSize, components: PlacedComponent[]) {
   const group = new THREE.Group();
   const traceMaterial = new THREE.MeshStandardMaterial({
     color: 0xf2f2f2,
@@ -829,10 +885,219 @@ function createRouteObjects(routing: RoutingState, board: BoardSize) {
     }
   });
 
-  routing.jumpers.forEach((jumper) => {
-    group.add(createBottomJumper(jumper.from, jumper.to, board, jumperMaterial));
-  });
+  if ((board.kind ?? "perfboard") === "breadboard") {
+    const levels = computeJumperCrossLevels(routing.jumpers, components);
+    const materials = BREADBOARD_JUMPER_COLORS.map((color) => new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.28,
+      metalness: 0.3
+    }));
+    routing.jumpers.forEach((jumper, index) => {
+      group.add(createBreadboardJumper(jumper.from, jumper.to, board, materials[netColorIndex(jumper.net)], levels[index]));
+    });
+  } else {
+    routing.jumpers.forEach((jumper) => {
+      group.add(createBottomJumper(jumper.from, jumper.to, board, jumperMaterial));
+    });
+  }
 
+  return group;
+}
+
+const BREADBOARD_JUMPER_COLORS = [0xd92d20, 0xf5c518, 0x2563eb, 0x16a34a];
+const BREADBOARD_JUMPER_BASE_Y = 0.32;
+
+function netColorIndex(net: string) {
+  let hash = 0;
+  for (let index = 0; index < net.length; index += 1) {
+    hash = ((hash << 5) - hash + net.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash) % BREADBOARD_JUMPER_COLORS.length;
+}
+
+function computeJumperCrossLevels(jumpers: JumperRoute[], components: PlacedComponent[]) {
+  const levels = new Array<number>(jumpers.length).fill(0);
+
+  // Pass 1 — containment: a jumper that is completely covered by another one
+  // bulges above its coverer (the coverer stays flat). Iterate to a fixpoint
+  // so nested chains A⊃B⊃C stack one above the other.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let inner = 0; inner < jumpers.length; inner += 1) {
+      let coverer = -1;
+      for (let outer = 0; outer < jumpers.length; outer += 1) {
+        if (outer === inner) continue;
+        if (isContainedIn(jumpers[inner], jumpers[outer]) &&
+          (coverer === -1 || jumperSpan(jumpers[outer]) < jumperSpan(jumpers[coverer]))) {
+          coverer = outer;
+        }
+      }
+      if (coverer >= 0) {
+        const next = levels[coverer] + 1;
+        if (next !== levels[inner]) {
+          levels[inner] = next;
+          changed = true;
+        }
+      }
+    }
+  }
+
+  // Pass 1.5 — a wire running underneath a mounted component body (e.g. a
+  // chip straddling the channel) must bulge so it stays visible.
+  const footprintBoxes = components
+    .filter((component) => component.mounted)
+    .map(componentFootprintBox);
+  for (let index = 0; index < jumpers.length; index += 1) {
+    if (levels[index] === 0 && footprintBoxes.some((box) => jumperSegmentPassesThroughBox(jumpers[index], box))) {
+      levels[index] = 1;
+    }
+  }
+
+  // Pass 2 — remaining intersections (crossings, partial overlaps): ensure
+  // different levels without disturbing the containment stacking.
+  for (let later = 0; later < jumpers.length; later += 1) {
+    const blocked = new Set<number>();
+    for (let earlier = 0; earlier < later; earlier += 1) {
+      if (jumperSegmentsCross(jumpers[earlier], jumpers[later])) {
+        blocked.add(levels[earlier]);
+      }
+    }
+    let level = levels[later];
+    while (blocked.has(level)) level += 1;
+    levels[later] = level;
+  }
+  return levels;
+}
+
+function componentFootprintBox(component: PlacedComponent) {
+  const anchor = component.pinOffsets[0] ?? [0, 0];
+  const holes = component.pinOffsets.map((offset) => rotateGridOffset(
+    [offset[0] - anchor[0], offset[1] - anchor[1]],
+    component.rotation
+  ));
+  const xs = holes.map(([x]) => x);
+  const ys = holes.map(([, y]) => y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const margin = component.pinOffsets.length <= 2 ? 0 : 0.5;
+  return {
+    minX: component.position[0] + minX - margin,
+    maxX: component.position[0] + maxX + margin,
+    minY: component.position[1] + minY - margin,
+    maxY: component.position[1] + maxY + margin
+  };
+}
+
+function jumperSegmentPassesThroughBox(jumper: JumperRoute, box: { minX: number; minY: number; maxX: number; maxY: number }) {
+  const inside = ([x, y]: [number, number]) => x >= box.minX && x <= box.maxX && y >= box.minY && y <= box.maxY;
+  if (inside(jumper.from) || inside(jumper.to)) {
+    return false;
+  }
+  const [x1, y1] = jumper.from;
+  const [x2, y2] = jumper.to;
+  if (x1 === x2) {
+    if (x1 < box.minX || x1 > box.maxX) return false;
+    const lo = Math.min(y1, y2);
+    const hi = Math.max(y1, y2);
+    return hi > box.minY && lo < box.maxY;
+  }
+  if (y1 === y2) {
+    if (y1 < box.minY || y1 > box.maxY) return false;
+    const lo = Math.min(x1, x2);
+    const hi = Math.max(x1, x2);
+    return hi > box.minX && lo < box.maxX;
+  }
+  return false;
+}
+
+function jumperSpan(jumper: JumperRoute) {
+  return Math.abs(jumper.from[0] - jumper.to[0]) + Math.abs(jumper.from[1] - jumper.to[1]);
+}
+
+function isContainedIn(inner: JumperRoute, outer: JumperRoute) {
+  if (outer.from[0] === outer.to[0] && inner.from[0] === inner.to[0] && outer.from[0] === inner.from[0]) {
+    const outerStart = Math.min(outer.from[1], outer.to[1]);
+    const outerEnd = Math.max(outer.from[1], outer.to[1]);
+    const innerStart = Math.min(inner.from[1], inner.to[1]);
+    const innerEnd = Math.max(inner.from[1], inner.to[1]);
+    return innerStart >= outerStart && innerEnd <= outerEnd && (innerStart !== outerStart || innerEnd !== outerEnd);
+  }
+  if (outer.from[1] === outer.to[1] && inner.from[1] === inner.to[1] && outer.from[1] === inner.from[1]) {
+    const outerStart = Math.min(outer.from[0], outer.to[0]);
+    const outerEnd = Math.max(outer.from[0], outer.to[0]);
+    const innerStart = Math.min(inner.from[0], inner.to[0]);
+    const innerEnd = Math.max(inner.from[0], inner.to[0]);
+    return innerStart >= outerStart && innerEnd <= outerEnd && (innerStart !== outerStart || innerEnd !== outerEnd);
+  }
+  return false;
+}
+
+function jumperSegmentsCross(first: JumperRoute, second: JumperRoute) {
+  if (!segmentsIntersect(first.from, first.to, second.from, second.to)) {
+    return false;
+  }
+  // A chain (A ends where B starts) only touches at one point and needs no
+  // lift, but collinear wires that overlap — e.g. two jumpers running along
+  // the same column where one hides the other — must be separated.
+  return !shareEndpoint(first.from, first.to, second.from, second.to) || collinearOverlap(first, second);
+}
+
+function collinearOverlap(first: JumperRoute, second: JumperRoute) {
+  if (first.from[0] === first.to[0] && second.from[0] === second.to[0] && first.from[0] === second.from[0]) {
+    const firstStart = Math.min(first.from[1], first.to[1]);
+    const firstEnd = Math.max(first.from[1], first.to[1]);
+    const secondStart = Math.min(second.from[1], second.to[1]);
+    const secondEnd = Math.max(second.from[1], second.to[1]);
+    return Math.max(firstStart, secondStart) < Math.min(firstEnd, secondEnd);
+  }
+  if (first.from[1] === first.to[1] && second.from[1] === second.to[1] && first.from[1] === second.from[1]) {
+    const firstStart = Math.min(first.from[0], first.to[0]);
+    const firstEnd = Math.max(first.from[0], first.to[0]);
+    const secondStart = Math.min(second.from[0], second.to[0]);
+    const secondEnd = Math.max(second.from[0], second.to[0]);
+    return Math.max(firstStart, secondStart) < Math.min(firstEnd, secondEnd);
+  }
+  return false;
+}
+
+function createBreadboardJumper(
+  from: [number, number],
+  to: [number, number],
+  board: BoardSize,
+  material: THREE.Material,
+  level: number
+) {
+  const start = new THREE.Vector3(from[0] - board.width / 2 + 0.5, BREADBOARD_JUMPER_BASE_Y, from[1] - board.height / 2 + 0.5);
+  const end = new THREE.Vector3(to[0] - board.width / 2 + 0.5, BREADBOARD_JUMPER_BASE_Y, to[1] - board.height / 2 + 0.5);
+  const group = new THREE.Group();
+
+  if (level === 0) {
+    group.add(createSegment(from, to, board, BREADBOARD_JUMPER_BASE_Y, material, 0.055));
+  } else {
+    // Visible bulge: the arch bows SIDEWAYS in the board plane (plus a small
+    // rise), so it is obvious even from a top-down view; stacked levels bow
+    // to alternating sides.
+    const direction = end.clone().sub(start);
+    const length = Math.max(0.001, direction.length());
+    const lateral = Math.min(0.5 + (level - 1) * 0.35, Math.max(0.35, length * 0.25));
+    const side = level % 2 === 1 ? 1 : -1;
+    const lift = 0.22 + (level - 1) * 0.16;
+    const perpendicular = new THREE.Vector3(-direction.z / length, 0, direction.x / length).multiplyScalar(lateral * side);
+    const upward = new THREE.Vector3(0, lift, 0);
+    const mid1 = start.clone().lerp(end, 1 / 3).add(perpendicular).add(upward);
+    const mid2 = start.clone().lerp(end, 2 / 3).add(perpendicular).add(upward);
+    const curve = new THREE.CatmullRomCurve3([start, mid1, mid2, end]);
+    group.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 32, 0.055, 10, false), material));
+  }
+
+  const startJoint = new THREE.Mesh(new THREE.SphereGeometry(0.1, 14, 10), material);
+  const endJoint = new THREE.Mesh(new THREE.SphereGeometry(0.1, 14, 10), material);
+  startJoint.position.copy(start);
+  endJoint.position.copy(end);
+  group.add(startJoint, endJoint);
   return group;
 }
 
@@ -842,18 +1107,20 @@ function createBottomJumper(
   board: BoardSize,
   material: THREE.Material
 ) {
-  const start = new THREE.Vector3(from[0] - board.width / 2 + 0.5, -0.7, from[1] - board.height / 2 + 0.5);
-  const end = new THREE.Vector3(to[0] - board.width / 2 + 0.5, -0.7, to[1] - board.height / 2 + 0.5);
+  const isTopWire = getBoardModel(board).capabilities.jumperSide === "top";
+  const wireY = isTopWire ? 0.48 : -0.7;
+  const start = new THREE.Vector3(from[0] - board.width / 2 + 0.5, wireY, from[1] - board.height / 2 + 0.5);
+  const end = new THREE.Vector3(to[0] - board.width / 2 + 0.5, wireY, to[1] - board.height / 2 + 0.5);
   const span = start.distanceTo(end);
-  const lift = Math.max(1.2, Math.min(5.2, span * 0.22));
+  const lift = isTopWire ? Math.max(0.16, Math.min(0.52, span * 0.035)) : Math.max(1.2, Math.min(5.2, span * 0.22));
   const middle = start.clone().lerp(end, 0.5);
-  middle.y -= lift;
+  middle.y += isTopWire ? lift : -lift;
 
   const group = new THREE.Group();
   const curve = new THREE.CatmullRomCurve3([start, middle, end]);
-  const wire = new THREE.Mesh(new THREE.TubeGeometry(curve, 32, 0.075, 10, false), material);
-  const startJoint = new THREE.Mesh(new THREE.SphereGeometry(0.16, 14, 10), material);
-  const endJoint = new THREE.Mesh(new THREE.SphereGeometry(0.16, 14, 10), material);
+  const wire = new THREE.Mesh(new THREE.TubeGeometry(curve, 32, isTopWire ? 0.055 : 0.075, 10, false), material);
+  const startJoint = new THREE.Mesh(new THREE.SphereGeometry(isTopWire ? 0.11 : 0.16, 14, 10), material);
+  const endJoint = new THREE.Mesh(new THREE.SphereGeometry(isTopWire ? 0.11 : 0.16, 14, 10), material);
 
   startJoint.position.copy(start);
   endJoint.position.copy(end);
@@ -877,20 +1144,6 @@ function createSegment(
   mesh.position.copy(start).add(end).multiplyScalar(0.5);
   mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
   return mesh;
-}
-
-function rotateOffset([x, y]: [number, number], rotation: number): [number, number] {
-  const quarterTurns = ((Math.round(rotation / (Math.PI / 2)) % 4) + 4) % 4;
-  if (quarterTurns === 1) {
-    return [y, -x];
-  }
-  if (quarterTurns === 2) {
-    return [-x, -y];
-  }
-  if (quarterTurns === 3) {
-    return [-y, x];
-  }
-  return [x, y];
 }
 
 function getPinAnchor(pinOffsets: Array<[number, number]>): [number, number] {
@@ -924,223 +1177,6 @@ function findPinObject(object: THREE.Object3D): THREE.Object3D | undefined {
     current = current.parent;
   }
   return undefined;
-}
-
-function createBoardObject(board: BoardSize, transparent: boolean) {
-  const group = new THREE.Group();
-  const pitch = 1;
-  const width = board.width * pitch;
-  const height = board.height * pitch;
-  const thickness = 0.55;
-
-  const boardGeometry = new THREE.BoxGeometry(width, thickness, height);
-  const topTexture = createHoleTexture(board.width, board.height, false);
-  const bottomTexture = createHoleTexture(board.width, board.height, true);
-  topTexture.colorSpace = THREE.SRGBColorSpace;
-  bottomTexture.colorSpace = THREE.SRGBColorSpace;
-
-  const sideMaterial = new THREE.MeshStandardMaterial({
-    color: 0x0d6b48,
-    roughness: 0.28,
-    metalness: 0.02,
-    transparent,
-    opacity: transparent ? 0.22 : 1,
-    depthWrite: !transparent
-  });
-  const topMaterial = new THREE.MeshStandardMaterial({
-    map: topTexture,
-    color: 0xffffff,
-    roughness: 0.24,
-    metalness: 0.02,
-    transparent,
-    opacity: transparent ? 0.18 : 1,
-    depthWrite: !transparent
-  });
-  const bottomMaterial = new THREE.MeshStandardMaterial({
-    map: bottomTexture,
-    color: 0xffffff,
-    roughness: 0.24,
-    metalness: 0.02,
-    transparent,
-    opacity: transparent ? 0.18 : 1,
-    depthWrite: !transparent
-  });
-
-  const boardMesh = new THREE.Mesh(boardGeometry, [
-    sideMaterial,
-    sideMaterial,
-    topMaterial,
-    bottomMaterial,
-    sideMaterial,
-    sideMaterial
-  ]);
-  boardMesh.castShadow = true;
-  boardMesh.receiveShadow = true;
-  group.add(boardMesh);
-
-  const edge = new THREE.LineSegments(
-    new THREE.EdgesGeometry(boardGeometry),
-    new THREE.LineBasicMaterial({ color: 0x08432f, transparent: true, opacity: 0.42 })
-  );
-  group.add(edge);
-  group.add(createGridIndexLabels(board));
-
-  return group;
-}
-
-function createGridIndexLabels(board: BoardSize) {
-  const group = new THREE.Group();
-  const xStep = getIndexLabelStep(board.width);
-  const yStep = getIndexLabelStep(board.height);
-  const topY = 0.58;
-  const xFrontZ = -board.height / 2 - 0.68;
-  const xBackZ = board.height / 2 + 0.68;
-  const yLeftX = -board.width / 2 - 0.68;
-  const yRightX = board.width / 2 + 0.68;
-
-  for (let x = 0; x < board.width; x += 1) {
-    if (!shouldShowIndexLabel(x, board.width, xStep)) {
-      continue;
-    }
-
-    const worldX = x - board.width / 2 + 0.5;
-    group.add(createGridIndexSprite(String(x + 1), worldX, topY, xFrontZ));
-    group.add(createGridIndexSprite(String(x + 1), worldX, topY, xBackZ));
-  }
-
-  for (let y = 0; y < board.height; y += 1) {
-    if (!shouldShowIndexLabel(y, board.height, yStep)) {
-      continue;
-    }
-
-    const worldZ = y - board.height / 2 + 0.5;
-    group.add(createGridIndexSprite(String(y + 1), yLeftX, topY, worldZ));
-    group.add(createGridIndexSprite(String(y + 1), yRightX, topY, worldZ));
-  }
-
-  return group;
-}
-
-function createGridIndexSprite(text: string, x: number, y: number, z: number) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 96;
-  canvas.height = 64;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "rgba(255,255,255,0.88)";
-    roundRect(ctx, 12, 10, 72, 44, 8);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(8,67,47,0.35)";
-    ctx.lineWidth = 2;
-    roundRect(ctx, 12, 10, 72, 44, 8);
-    ctx.stroke();
-    ctx.fillStyle = "#10201b";
-    ctx.font = "700 28px Segoe UI, Arial, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(text, 48, 33);
-  }
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  const material = new THREE.SpriteMaterial({
-    map: texture,
-    transparent: true,
-    depthTest: false,
-    depthWrite: false
-  });
-  const sprite = new THREE.Sprite(material);
-  sprite.position.set(x, y, z);
-  sprite.scale.set(0.72, 0.48, 1);
-  sprite.renderOrder = 20;
-  return sprite;
-}
-
-function getIndexLabelStep(count: number) {
-  if (count <= 40) {
-    return 1;
-  }
-  if (count <= 80) {
-    return 2;
-  }
-  return 5;
-}
-
-function shouldShowIndexLabel(index: number, count: number, step: number) {
-  return index === 0 || index === count - 1 || index % step === 0;
-}
-
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + width - radius, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-  ctx.lineTo(x + width, y + height - radius);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-  ctx.lineTo(x + radius, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
-  ctx.closePath();
-}
-
-function createHoleTexture(width: number, height: number, isBottom: boolean) {
-  const maxCanvas = 2048;
-  const cells = Math.max(width, height);
-  const cellPx = Math.max(2, Math.min(18, Math.floor(maxCanvas / cells)));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(64, width * cellPx);
-  canvas.height = Math.max(64, height * cellPx);
-
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    return new THREE.CanvasTexture(canvas);
-  }
-
-  ctx.fillStyle = isBottom ? "#0d6b48" : "#0f7c53";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-  gradient.addColorStop(0, "rgba(255,255,255,0.20)");
-  gradient.addColorStop(0.35, "rgba(255,255,255,0.03)");
-  gradient.addColorStop(1, "rgba(0,0,0,0.18)");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  const radius = Math.max(0.75, cellPx * 0.2);
-  const ringRadius = Math.max(radius + 0.9, cellPx * 0.39);
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const cx = x * cellPx + cellPx / 2;
-      const cy = y * cellPx + cellPx / 2;
-
-      if (isBottom && cellPx >= 4) {
-        ctx.beginPath();
-        ctx.fillStyle = "#d7a43d";
-        ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.strokeStyle = "rgba(255,255,255,0.38)";
-        ctx.lineWidth = Math.max(0.6, cellPx * 0.055);
-        ctx.arc(cx, cy, ringRadius * 0.72, -0.9, 0.8);
-        ctx.stroke();
-      }
-
-      ctx.beginPath();
-      ctx.fillStyle = "#111918";
-      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.anisotropy = 8;
-  texture.wrapS = THREE.ClampToEdgeWrapping;
-  texture.wrapT = THREE.ClampToEdgeWrapping;
-  texture.needsUpdate = true;
-  return texture;
 }
 
 function disposeObject(object: THREE.Object3D) {

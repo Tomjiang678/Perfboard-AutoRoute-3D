@@ -34,6 +34,12 @@ const BOARD_TOP_Y = 0.28;
 const LEAD_RADIUS = 0.045;
 const EXPOSED_LEAD = 0.18;
 
+let darkComponentTheme = false;
+
+export function setComponentTheme(dark: boolean) {
+  darkComponentTheme = dark;
+}
+
 const materials = {
   lead: new THREE.MeshStandardMaterial({ color: 0xc7c7c7, roughness: 0.28, metalness: 0.72 }),
   resistorBody: new THREE.MeshStandardMaterial({ color: 0xd5ba86, roughness: 0.55 }),
@@ -58,47 +64,30 @@ Object.values(materials).forEach((material) => {
 });
 
 export function createParametricComponent(spec: ParametricComponentSpec) {
-  switch (spec.kind) {
-    case "resistor":
-      return createAxialPart(spec.label ?? "R", materials.resistorBody, 0.45, 2.2, true, spec.pinOffsets);
-    case "inductor":
-      return createAxialPart(spec.label ?? "L", materials.inductorBody, 0.52, 2.35, false, spec.pinOffsets);
-    case "diode":
-      return createDiode(spec.label ?? "D", spec.pinOffsets);
-    case "led":
-      return createLed(spec.color ?? 0xe83f3f, spec.pinOffsets);
-    case "radial_capacitor":
-      return createRadialCapacitor(spec.label ?? "C", false, spec.pinOffsets);
-    case "electrolytic_capacitor":
-      return createRadialCapacitor(spec.label ?? "C", true, spec.pinOffsets);
-    case "to92":
-      return createTo92(spec.label ?? "Q", spec.pinOffsets);
-    case "to39":
-      return createTo39(spec.label ?? "Q", spec.pinOffsets);
-    case "to220":
-      return createTo220(spec.label ?? "Q", spec.pinOffsets);
-    case "dip":
-      return createDip(spec.pinCount ?? 8, spec.label ?? `DIP-${spec.pinCount ?? 8}`, spec.pinOffsets);
-    case "dip_switch":
-      return createDipSwitch(spec.pinCount ?? 16, spec.label ?? `DIPSW${Math.floor((spec.pinCount ?? 16) / 2)}`, spec.pinOffsets);
-    case "seven_segment_display":
-      return createSevenSegmentDisplay(spec.label ?? "7SEG", spec.pinOffsets);
-    case "alphanumeric_display":
-      return createAlphanumericDisplay(spec.label ?? "ALNUM", spec.pinOffsets);
-    case "pin_header":
-      return createPinHeader(spec.pinCount ?? 4, spec.pinOffsets, spec.isFallback);
-    case "terminal_block":
-      return createTerminalBlock(spec.pinCount ?? 2, spec.pinOffsets);
-    case "slide_switch":
-      return createSlideSwitch(spec.pinOffsets);
-    case "buzzer":
-      return createBuzzer(spec.label ?? "BZ", spec.pinOffsets);
-    case "tactile_switch":
-      return createTactileSwitch(spec.pinOffsets);
-    case "potentiometer":
-      return createPotentiometer(spec.pinOffsets);
-  }
+  return componentFactories[spec.kind](spec);
 }
+
+const componentFactories: Record<ParametricComponentKind, (spec: ParametricComponentSpec) => THREE.Group> = {
+  resistor: (s) => createAxialPart(s.label ?? "R", materials.resistorBody, 0.45, 2.2, true, s.pinOffsets),
+  inductor: (s) => createAxialPart(s.label ?? "L", materials.inductorBody, 0.52, 2.35, false, s.pinOffsets),
+  diode: (s) => createDiode(s.label ?? "D", s.pinOffsets),
+  led: (s) => createLed(s.color ?? 0xe83f3f, s.pinOffsets),
+  radial_capacitor: (s) => createRadialCapacitor(s.label ?? "C", false, s.pinOffsets),
+  electrolytic_capacitor: (s) => createRadialCapacitor(s.label ?? "C", true, s.pinOffsets),
+  to92: (s) => createTo92(s.label ?? "Q", s.pinOffsets),
+  to39: (s) => createTo39(s.label ?? "Q", s.pinOffsets),
+  to220: (s) => createTo220(s.label ?? "Q", s.pinOffsets),
+  dip: (s) => createDip(s.pinCount ?? 8, s.label ?? `DIP-${s.pinCount ?? 8}`, s.pinOffsets),
+  dip_switch: (s) => createDipSwitch(s.pinCount ?? 16, s.label ?? `DIPSW${Math.floor((s.pinCount ?? 16) / 2)}`, s.pinOffsets),
+  seven_segment_display: (s) => createSevenSegmentDisplay(s.label ?? "7SEG", s.pinOffsets),
+  alphanumeric_display: (s) => createAlphanumericDisplay(s.label ?? "ALNUM", s.pinOffsets),
+  pin_header: (s) => createPinHeader(s.pinCount ?? 4, s.pinOffsets, s.isFallback),
+  terminal_block: (s) => createTerminalBlock(s.pinCount ?? 2, s.pinOffsets),
+  slide_switch: (s) => createSlideSwitch(s.pinOffsets),
+  buzzer: (s) => createBuzzer(s.label ?? "BZ", s.pinOffsets),
+  tactile_switch: (s) => createTactileSwitch(s.pinOffsets),
+  potentiometer: (s) => createPotentiometer(s.pinOffsets)
+};
 
 function createAxialPart(
   label: string,
@@ -332,57 +321,46 @@ function createDipSwitch(pinCount: number, label: string, pinOffsets = makeDipPi
 }
 
 function createSevenSegmentDisplay(label: string, pinOffsets: Array<[number, number]> = makeDipPinOffsets(10, 3)) {
-  const group = new THREE.Group();
-  const box = getPinBox(pinOffsets);
-  const bodyWidth = Math.max(3.2, box.width + 1.0);
-  const bodyLength = Math.max(5.1, box.height + 1.0);
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(bodyWidth, 0.72, bodyLength),
-    new THREE.MeshStandardMaterial({ color: 0x1b2230, roughness: 0.3 })
-  );
-  body.position.set(box.centerX, 1.05, box.centerZ);
-  group.add(body);
-
-  const face = new THREE.Mesh(
-    new THREE.BoxGeometry(bodyWidth - 0.42, 0.08, bodyLength - 0.5),
-    new THREE.MeshStandardMaterial({ color: 0x7f1d1d, roughness: 0.2, transparent: true, opacity: 0.78 })
-  );
-  face.position.set(box.centerX, 1.45, box.centerZ);
-  group.add(face);
-
-  addSevenSegmentBars(group, box.centerX, 1.52, box.centerZ, 0xff3b30, 1.0);
-  pinOffsets.forEach(([x, z]) => addStraightPin(group, x, z, 0.78));
-  addTextLabel(group, label, box.centerX, 1.86, box.centerZ + bodyLength * 0.36, 0xffffff, 1.35);
-  return group;
+  return createDisplay(label, pinOffsets, { minWidth: 3.2, minLength: 5.1, bodyColor: 0x1b2230, faceColor: 0x7f1d1d, barColor: 0xff3b30, barScale: 1, barOffset: 0, labelScale: 1.35 });
 }
 
 function createAlphanumericDisplay(label: string, pinOffsets: Array<[number, number]> = makeDipPinOffsets(14, 3)) {
+  return createDisplay(label, pinOffsets, { minWidth: 3.4, minLength: 6.2, bodyColor: 0x111827, faceColor: 0x1d4ed8, barColor: 0x60a5fa, barScale: 0.9, barOffset: -0.25, labelScale: 1.5, middleBar: true });
+}
+
+interface DisplayStyle {
+  minWidth: number; minLength: number; bodyColor: number; faceColor: number;
+  barColor: number; barScale: number; barOffset: number; labelScale: number; middleBar?: boolean;
+}
+
+function createDisplay(label: string, pinOffsets: Array<[number, number]>, style: DisplayStyle) {
   const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
-  const bodyWidth = Math.max(3.4, box.width + 1.0);
-  const bodyLength = Math.max(6.2, box.height + 1.0);
+  const bodyWidth = Math.max(style.minWidth, box.width + 1);
+  const bodyLength = Math.max(style.minLength, box.height + 1);
   const body = new THREE.Mesh(
-    new THREE.BoxGeometry(bodyWidth, 0.76, bodyLength),
-    new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.32 })
+    new THREE.BoxGeometry(bodyWidth, style.middleBar ? 0.76 : 0.72, bodyLength),
+    new THREE.MeshStandardMaterial({ color: style.bodyColor, roughness: style.middleBar ? 0.32 : 0.3 })
   );
-  body.position.set(box.centerX, 1.06, box.centerZ);
+  body.position.set(box.centerX, style.middleBar ? 1.06 : 1.05, box.centerZ);
   group.add(body);
-
   const face = new THREE.Mesh(
-    new THREE.BoxGeometry(bodyWidth - 0.45, 0.08, bodyLength - 0.55),
-    new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.2, transparent: true, opacity: 0.76 })
+    new THREE.BoxGeometry(bodyWidth - (style.middleBar ? 0.45 : 0.42), 0.08, bodyLength - (style.middleBar ? 0.55 : 0.5)),
+    new THREE.MeshStandardMaterial({ color: style.faceColor, roughness: 0.2, transparent: true, opacity: style.middleBar ? 0.76 : 0.78 })
   );
-  face.position.set(box.centerX, 1.47, box.centerZ);
+  face.position.set(box.centerX, style.middleBar ? 1.47 : 1.45, box.centerZ);
   group.add(face);
-
-  addSevenSegmentBars(group, box.centerX, 1.54, box.centerZ - 0.25, 0x60a5fa, 0.9);
-  const middle = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.05, 2.7), new THREE.MeshStandardMaterial({ color: 0x93c5fd, emissive: 0x1d4ed8, emissiveIntensity: 0.35 }));
-  middle.position.set(box.centerX, 1.58, box.centerZ);
-  group.add(middle);
-
+  addSevenSegmentBars(group, box.centerX, style.middleBar ? 1.54 : 1.52, box.centerZ + style.barOffset, style.barColor, style.barScale);
+  if (style.middleBar) addDisplayMiddleBar(group, box.centerX, box.centerZ);
   pinOffsets.forEach(([x, z]) => addStraightPin(group, x, z, 0.78));
-  addTextLabel(group, label, box.centerX, 1.9, box.centerZ + bodyLength * 0.38, 0xffffff, 1.5);
+  addTextLabel(group, label, box.centerX, style.middleBar ? 1.9 : 1.86, box.centerZ + bodyLength * (style.middleBar ? 0.38 : 0.36), 0xffffff, style.labelScale);
   return group;
+}
+
+function addDisplayMiddleBar(group: THREE.Group, x: number, z: number) {
+  const middle = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.05, 2.7), new THREE.MeshStandardMaterial({ color: 0x93c5fd, emissive: 0x1d4ed8, emissiveIntensity: 0.35 }));
+  middle.position.set(x, 1.58, z);
+  group.add(middle);
 }
 
 function addSevenSegmentBars(group: THREE.Group, x: number, y: number, z: number, color: number, scale: number) {
@@ -626,7 +604,7 @@ function addTextLabel(group: THREE.Group, text: string, x: number, y: number, z:
   }
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = `#${color.toString(16).padStart(6, "0")}`;
+  ctx.fillStyle = `#${labelColorForTheme(color).toString(16).padStart(6, "0")}`;
   ctx.font = "800 38px Segoe UI, Arial";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -638,4 +616,12 @@ function addTextLabel(group: THREE.Group, text: string, x: number, y: number, z:
   sprite.position.set(x, y, z);
   sprite.scale.set(width, width * 0.25, 1);
   group.add(sprite);
+}
+
+function labelColorForTheme(color: number) {
+  if (!darkComponentTheme) {
+    return color;
+  }
+  const lightness = new THREE.Color(color).getHSL({ h: 0, s: 0, l: 0 }).l;
+  return lightness < 0.5 ? 0xd7e3f4 : color;
 }

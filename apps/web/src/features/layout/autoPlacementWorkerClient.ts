@@ -1,4 +1,4 @@
-import type { DesignConstraint, PlacedComponent, RoutedNetEndpoint } from "../../types/project";
+import type { BoardSize, DesignConstraint, PlacedComponent, RoutedNetEndpoint } from "../../types/project";
 import type { AutoPlacementProgress, AutoPlacementResult, PlacementRegion } from "./autoPlacement";
 
 interface AutoPlacementWorkerRequest {
@@ -6,6 +6,7 @@ interface AutoPlacementWorkerRequest {
   region: PlacementRegion;
   boardWidth: number;
   boardHeight: number;
+  board: BoardSize;
   endpoints: RoutedNetEndpoint[];
   constraints: DesignConstraint[];
 }
@@ -44,4 +45,3 @@ export function runAutoPlacementInWorker(
     worker.postMessage(request);
   });
 }
-

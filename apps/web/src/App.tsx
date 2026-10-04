@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { HeaderBar } from "./components/HeaderBar";
 import { NewProjectDialog } from "./components/NewProjectDialog";
 import { ProjectSidebar } from "./components/ProjectSidebar";
@@ -24,7 +24,12 @@ import { autoRouteBoard, validateRoutingResult } from "./features/routing/autoRo
 import { expandOrthogonalPath } from "./features/routing/routingGeometry";
 import { removeRoutesToComponent } from "./features/routing/removeComponentRoutes";
 import { createProject } from "./features/project/projectFactory";
-import type { BoardSize, DragMoveModifier, ImportKind, KeyboardShortcuts, PerfboardProject } from "./types/project";
+import { getBoardModel, normalizeBoardDefinition } from "./features/board/factory";
+import { componentPinHoles } from "./features/board/placement";
+import type { PinNetAssignments } from "./features/board/types";
+import type { BoardSize, DragMoveModifier, ImportKind, KeyboardShortcuts, PerfboardProject, PlacedComponent, RoutedNetEndpoint, ThemeMode } from "./types/project";
+import type { SelectedPin } from "./components/Perfboard3DViewport";
+import type { RouteEditMode, WorkspaceToolbarProps } from "./components/WorkspaceToolbar";
 
 const STORAGE_KEY = "perfboard-autoroute-project";
 const SETTINGS_KEY = "perfboard-autoroute-settings";
@@ -33,6 +38,7 @@ const MAX_UNDO_HISTORY = 50;
 interface AppSettings {
   dragMoveModifier: DragMoveModifier;
   shortcuts: KeyboardShortcuts;
+  theme: ThemeMode;
 }
 
 const defaultShortcuts: KeyboardShortcuts = {
@@ -55,7 +61,8 @@ const defaultShortcuts: KeyboardShortcuts = {
 
 const defaultSettings: AppSettings = {
   dragMoveModifier: "shift",
-  shortcuts: defaultShortcuts
+  shortcuts: defaultShortcuts,
+  theme: "light"
 };
 
 export function App() {
@@ -66,6 +73,12 @@ export function App() {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [undoCount, setUndoCount] = useState(0);
   const undoStackRef = useRef<PerfboardProject[]>([]);
+  const [isTransparentBoard, setIsTransparentBoard] = useState(false);
+  const [routeEditMode, setRouteEditMode] = useState<RouteEditMode>("select");
+  const [routeDraftStart, setRouteDraftStart] = useState<[number, number] | undefined>();
+  const [pendingComponent, setPendingComponent] = useState<LibraryComponentDefinition | undefined>();
+  const [selectedPin, setSelectedPin] = useState<SelectedPin | undefined>();
+  const [toolbarOpenMenu, setToolbarOpenMenu] = useState<string | undefined>();
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -109,6 +122,11 @@ export function App() {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }, [settings]);
 
+  useEffect(() => {
+    document.documentElement.dataset.theme = settings.theme;
+    document.documentElement.style.colorScheme = settings.theme;
+  }, [settings.theme]);
+
   function commitProject(updater: (current: PerfboardProject) => PerfboardProject) {
     setProject((current) => {
       if (!current) {
@@ -126,8 +144,179 @@ export function App() {
     });
   }
 
+  function updateComponent(
+    componentId: string,
+    transform: (component: PlacedComponent) => PlacedComponent | undefined,
+    validate = true
+  ) {
+    commitProject((current) => {
+      const component = current.components.find((item) => item.id === componentId);
+      const updated = component && transform(component);
+      if (!updated || updated === component || (validate && !isProjectPlacementValid(current, updated))) return current;
+      return { ...current, components: current.components.map((item) => item.id === componentId ? updated : item) };
+    });
+  }
+
   const aiAssistant = useAiConstraintAssistant({ project, commitProject });
   const autoPlacement = useAutoPlacement({ project, commitProject });
+
+  const selectedComponent = project?.components.find((component) => component.id === selectedComponentId);
+  const boardModel = project ? getBoardModel(project.board) : undefined;
+  const canEditSelected = Boolean(selectedComponent && !selectedComponent.mounted);
+  const canUnmountSelected = Boolean(selectedComponent?.mounted);
+  const hasComponents = (project?.components.length ?? 0) > 0;
+  const hasImportedComponents = (project?.importState.components.length ?? 0) > 0;
+  const hasUnmountedComponents = Boolean(project?.components.some((component) => !component.mounted));
+  const hasDrc = Boolean(project?.routing.drc);
+  const resolvedEndpoints = useMemo(
+    () => (project ? resolveNetEndpoints(project.importState, project.components) : []),
+    [project?.importState, project?.components]
+  );
+  const highlightedEndpoints = useMemo(
+    () => getHighlightedEndpoints(resolvedEndpoints, project?.components ?? [], project?.selectedNetName, selectedPin),
+    [resolvedEndpoints, project?.components, project?.selectedNetName, selectedPin]
+  );
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (isTypingTarget(event.target)) {
+        return;
+      }
+      if (event.key === "Escape") {
+        setToolbarOpenMenu(undefined);
+        return;
+      }
+      const matched = keyboardCommands.find((candidate) => candidate.enabled && isShortcut(event, candidate.shortcut));
+      if (!matched) {
+        return;
+      }
+      event.preventDefault();
+      matched.run();
+    }
+
+    const keyboardCommands = [
+      command(settings.shortcuts.refresh, true, handleRefreshWorkspaceState),
+      command(settings.shortcuts.select, true, handleSelectMode),
+      command(settings.shortcuts.transparent, true, () => setIsTransparentBoard((current) => !current)),
+      command(settings.shortcuts.rotate, canEditSelected, handleRotateSelected),
+      command(settings.shortcuts.mount, canEditSelected, handleMountSelected),
+      command(settings.shortcuts.unmount, canUnmountSelected, handleUnmountSelected),
+      command(settings.shortcuts.delete, Boolean(selectedComponent), handleDeleteSelected),
+      command(settings.shortcuts.generateComponents, hasImportedComponents, handleCreateComponentsFromImport),
+      command(settings.shortcuts.autoPlace, hasUnmountedComponents, () => autoPlacement.open()),
+      command(settings.shortcuts.autoRoute, hasComponents, handleAutoRoute),
+      command(settings.shortcuts.runDrc, hasComponents, handleRunDrc),
+      command(settings.shortcuts.clearDrc, hasDrc, handleClearDrc),
+      command(settings.shortcuts.solder, Boolean(boardModel?.capabilities.routePrimitives.has("bottom_trace")), () => toggleRouteEditMode("solder")),
+      command(settings.shortcuts.jumper, true, () => toggleRouteEditMode("jumper")),
+      command(settings.shortcuts.erase, true, () => toggleRouteEditMode("erase"))
+    ];
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  });
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      if (event.target instanceof Element && event.target.closest(".toolbar-menu")) {
+        return;
+      }
+      setToolbarOpenMenu(undefined);
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
+
+  function toggleRouteEditMode(mode: RouteEditMode) {
+    setRouteEditMode((current) => (current === mode ? "select" : mode));
+    setRouteDraftStart(undefined);
+  }
+
+  function handleSelectMode() {
+    setRouteEditMode("select");
+    setRouteDraftStart(undefined);
+  }
+
+  function handlePickComponent(component: LibraryComponentDefinition) {
+    setPendingComponent(component);
+    setRouteEditMode("select");
+    setRouteDraftStart(undefined);
+  }
+
+  function handleToggleTheme() {
+    setSettings((current) => ({ ...current, theme: current.theme === "dark" ? "light" : "dark" }));
+  }
+
+  function handleRouteEditPoint(point: [number, number]) {
+    if (pendingComponent) {
+      handlePlaceComponent(pendingComponent, point);
+      setPendingComponent(undefined);
+      return;
+    }
+    if (routeEditMode === "select") {
+      return;
+    }
+    if (routeEditMode === "erase") {
+      handleRemoveRouteAt(point);
+      setRouteDraftStart(undefined);
+      return;
+    }
+    if (!routeDraftStart) {
+      setRouteDraftStart(point);
+      return;
+    }
+    if (routeEditMode === "solder") {
+      handleAddBottomTrace(routeDraftStart, point);
+    } else {
+      handleAddJumper(routeDraftStart, point);
+    }
+    setRouteDraftStart(undefined);
+  }
+
+  function handleRefreshWorkspaceState() {
+    setRouteEditMode("select");
+    setRouteDraftStart(undefined);
+    setPendingComponent(undefined);
+    setToolbarOpenMenu(undefined);
+    setSelectedPin(undefined);
+    setSelectedComponentId(undefined);
+    handleClearDrc();
+  }
+
+  const toolbar: WorkspaceToolbarProps | undefined = project ? {
+    canSolder: Boolean(boardModel?.capabilities.routePrimitives.has("bottom_trace")),
+    selectedComponent,
+    canEditSelected,
+    canUnmountSelected,
+    hasComponents,
+    hasImportedComponents,
+    hasUnmountedComponents,
+    hasDrc,
+    shortcuts: settings.shortcuts,
+    openMenu: toolbarOpenMenu,
+    onOpenMenu: setToolbarOpenMenu,
+    routeEditMode,
+    routeDraftStart,
+    pendingComponent,
+    isTransparentBoard,
+    isDarkMode: settings.theme === "dark",
+    onToggleDarkMode: handleToggleTheme,
+    onToggleRouteEditMode: toggleRouteEditMode,
+    onSelectMode: handleSelectMode,
+    onRefresh: handleRefreshWorkspaceState,
+    onToggleTransparent: () => setIsTransparentBoard((current) => !current),
+    onRotateSelected: handleRotateSelected,
+    onMountSelected: handleMountSelected,
+    onUnmountSelected: handleUnmountSelected,
+    onDeleteSelected: handleDeleteSelected,
+    onCreateComponentsFromImport: handleCreateComponentsFromImport,
+    onOpenAutoPlacement: autoPlacement.open,
+    onAutoRoute: handleAutoRoute,
+    onRunDrc: handleRunDrc,
+    onClearDrc: handleClearDrc,
+    onPickComponent: handlePickComponent
+  } : undefined;
 
   function clearUndoHistory() {
     undoStackRef.current = [];
@@ -168,6 +357,8 @@ export function App() {
       const next = withMigratedConstraints(JSON.parse(text) as PerfboardProject);
       setProject(next);
       setSelectedComponentId(undefined);
+      setSelectedPin(undefined);
+      setPendingComponent(undefined);
       clearUndoHistory();
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch {
@@ -176,8 +367,10 @@ export function App() {
   }
 
   function handleCreateProject(name: string, board: BoardSize) {
-    setProject(createProject(name, board.width, board.height));
+    setProject(createProject(name, board));
     setSelectedComponentId(undefined);
+    setSelectedPin(undefined);
+    setPendingComponent(undefined);
     clearUndoHistory();
     setIsCreatingProject(false);
   }
@@ -238,61 +431,52 @@ export function App() {
   function handlePlaceComponent(component: LibraryComponentDefinition, position: [number, number]) {
     const componentId = crypto.randomUUID();
     commitProject((current) => {
+      const placedComponent: PlacedComponent = {
+        id: componentId,
+        kind: component.kind,
+        label: component.label,
+        name: makeDefaultComponentName(component.label, current.components.length + 1),
+        value: "",
+        pinCount: component.pinCount,
+        leadSpacing: component.leadSpacing,
+        rowSpacing: component.rowSpacing,
+        sameSidePitch: component.sameSidePitch,
+        pinHeaderRows: component.pinHeaderRows,
+        pinHeaderColumns: component.pinHeaderColumns,
+        pinOffsets: component.pinOffsets,
+        position,
+        rotation: 0,
+        mounted: false
+      };
+      if (!isProjectPlacementValid(current, placedComponent)) {
+        return current;
+      }
+      setSelectedComponentId(componentId);
       return {
         ...current,
-        components: [
-          ...current.components,
-          {
-            id: componentId,
-            kind: component.kind,
-            label: component.label,
-            name: makeDefaultComponentName(component.label, current.components.length + 1),
-            value: "",
-            pinCount: component.pinCount,
-            leadSpacing: component.leadSpacing,
-            rowSpacing: component.rowSpacing,
-            sameSidePitch: component.sameSidePitch,
-            pinOffsets: component.pinOffsets,
-            position,
-            rotation: 0,
-            mounted: false
-          }
-        ]
+        components: [...current.components, placedComponent]
       };
     });
-    setSelectedComponentId(componentId);
   }
 
   function handleSelectComponent(componentId: string | undefined) {
     setSelectedComponentId(componentId);
+    setSelectedPin((current) => (current && current.componentId !== componentId ? undefined : current));
   }
 
   function handleMoveComponent(componentId: string, position: [number, number]) {
-    commitProject((current) => {
-      return {
-        ...current,
-        components: current.components.map((component) => {
-          if (component.id !== componentId || component.mounted) {
-            return component;
-          }
-
-          return { ...component, position };
-        })
-      };
-    });
+    updateComponent(componentId, (component) => component.mounted ? undefined : { ...component, position });
   }
 
   function handleUpdateBoard(board: BoardSize) {
     commitProject((current) => {
+      const normalizedBoard = normalizeBoardDefinition(board);
       return {
         ...current,
-        board,
+        board: normalizedBoard,
         components: current.components.map((component) => ({
           ...component,
-          position: [
-            Math.max(0, Math.min(board.width - 1, component.position[0])),
-            Math.max(0, Math.min(board.height - 1, component.position[1]))
-          ]
+          position: getBoardModel(normalizedBoard).snapToHole(component.position) ?? [0, 0]
         }))
       };
     });
@@ -312,15 +496,7 @@ export function App() {
   }
 
   function handleMovePin(componentId: string, pin: number, position: [number, number]) {
-    commitProject((current) => ({
-      ...current,
-      components: current.components.map((component) => {
-        if (component.id !== componentId) {
-          return component;
-        }
-        return bendComponentPin(component, pin, position) ?? component;
-      })
-    }));
+    updateComponent(componentId, (component) => bendComponentPin(component, pin, position));
   }
 
   function handleCreateComponentsFromImport() {
@@ -346,7 +522,16 @@ export function App() {
   function handleAutoRoute() {
     commitProject((current) => {
       const endpoints = resolveNetEndpoints(current.importState, current.components);
-      const constraints = projectConstraints(current);
+      const allConstraints = projectConstraints(current);
+      const extraWarnings: string[] = [];
+      let constraints = allConstraints;
+      if ((current.board.kind ?? "perfboard") === "breadboard") {
+        const railConstraints = allConstraints.filter((constraint) => constraint.kind === "power_rail");
+        if (railConstraints.length > 0) {
+          extraWarnings.push(...railConstraints.map((constraint) => `面包板不支持电源母线约束：${constraint.net}（已忽略）。`));
+          constraints = allConstraints.filter((constraint) => constraint.kind !== "power_rail");
+        }
+      }
       const rails = buildPowerRailTraces(constraints, endpoints, current.components);
       if (rails.errors.length > 0) {
         return {
@@ -357,10 +542,16 @@ export function App() {
           }
         };
       }
-      const routing = autoRouteBoard(current.board, endpoints, current.components, rails.traces, constraints);
+      const fixedTraces = [
+        ...rails.traces,
+        ...current.routing.traces.filter((trace) => trace.locked && !trace.id.startsWith("constraint-rail-"))
+      ];
+      const fixedJumpers = current.routing.jumpers.filter((jumper) => jumper.locked);
+      const routing = autoRouteBoard(current.board, endpoints, current.components, fixedTraces, constraints, undefined, fixedJumpers);
+      const reported = applyRoutingConstraintReport(routing, constraints);
       return {
         ...current,
-        routing: applyRoutingConstraintReport(routing, constraints)
+        routing: { ...reported, warnings: [...reported.warnings, ...extraWarnings] }
       };
     });
   }
@@ -407,6 +598,9 @@ export function App() {
 
   function handleAddBottomTrace(from: [number, number], to: [number, number]) {
     commitProject((current) => {
+      if (!getBoardModel(current.board).capabilities.routePrimitives.has("bottom_trace")) {
+        return current;
+      }
       const net = current.selectedNetName ?? "MANUAL";
       return {
         ...current,
@@ -430,6 +624,11 @@ export function App() {
   function handleAddJumper(from: [number, number], to: [number, number]) {
     commitProject((current) => {
       const net = current.selectedNetName ?? "MANUAL";
+      const nextFrom = relocateJumperEndpoint(current, from);
+      const nextTo = relocateJumperEndpoint(current, to);
+      if (!nextFrom || !nextTo || samePoint(nextFrom, nextTo)) {
+        return current;
+      }
       return {
         ...current,
         routing: {
@@ -439,8 +638,8 @@ export function App() {
             {
               id: crypto.randomUUID(),
               net,
-              from,
-              to,
+              from: nextFrom,
+              to: nextTo,
               layer: "jumper",
               locked: true
             }
@@ -470,22 +669,7 @@ export function App() {
   }
 
   function handleRotateSelected() {
-    if (!selectedComponentId) {
-      return;
-    }
-
-    commitProject((current) => {
-      return {
-        ...current,
-        components: current.components.map((component) => {
-          if (component.id !== selectedComponentId || component.mounted) {
-            return component;
-          }
-
-          return { ...component, rotation: component.rotation + Math.PI / 2 };
-        })
-      };
-    });
+    if (selectedComponentId) updateComponent(selectedComponentId, (component) => component.mounted ? undefined : { ...component, rotation: component.rotation + Math.PI / 2 });
   }
 
   function handleDeleteSelected() {
@@ -512,33 +696,11 @@ export function App() {
   }
 
   function handleMountSelected() {
-    if (!selectedComponentId) {
-      return;
-    }
-
-    commitProject((current) => {
-      return {
-        ...current,
-        components: current.components.map((component) =>
-          component.id === selectedComponentId ? { ...component, mounted: true } : component
-        )
-      };
-    });
+    if (selectedComponentId) updateComponent(selectedComponentId, (component) => ({ ...component, mounted: true }));
   }
 
   function handleUnmountSelected() {
-    if (!selectedComponentId) {
-      return;
-    }
-
-    commitProject((current) => {
-      return {
-        ...current,
-        components: current.components.map((component) =>
-          component.id === selectedComponentId ? { ...component, mounted: false } : component
-        )
-      };
-    });
+    if (selectedComponentId) updateComponent(selectedComponentId, (component) => ({ ...component, mounted: false }), false);
   }
 
   function handleUpdateSelected(patch: {
@@ -548,25 +710,9 @@ export function App() {
     rowSpacing?: number;
     sameSidePitch?: number;
   }) {
-    if (!selectedComponentId) {
-      return;
-    }
-
-    commitProject((current) => {
-      return {
-        ...current,
-        components: current.components.map((component) => {
-          if (component.id !== selectedComponentId) {
-            return component;
-          }
-
-          const next = { ...component, ...patch };
-          return {
-            ...next,
-            pinOffsets: buildPinOffsetsForComponent(next)
-          };
-        })
-      };
+    if (selectedComponentId) updateComponent(selectedComponentId, (component) => {
+      const next = { ...component, ...patch };
+      return { ...next, pinOffsets: buildPinOffsetsForComponent(next) };
     });
   }
 
@@ -574,12 +720,15 @@ export function App() {
     <div className="app-shell">
       <HeaderBar
         projectName={project?.name}
+        theme={settings.theme}
+        onToggleTheme={handleToggleTheme}
         onNewProject={() => setIsCreatingProject(true)}
         onSaveProject={handleExportProject}
         onOpenProject={handleOpenProject}
         onUndo={handleUndo}
         canUndo={undoCount > 0}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        toolbar={toolbar}
       />
       <div className={project ? "main-layout with-sidebar" : "main-layout"}>
         {project && <ProjectSidebar project={project} onImportFiles={handleImportFiles} onRemoveImportedFile={handleRemoveImportedFile} onSelectNet={handleSelectNet} />}
@@ -589,6 +738,7 @@ export function App() {
           onNewProject={() => setIsCreatingProject(true)}
           onPlaceComponent={handlePlaceComponent}
           onSelectComponent={handleSelectComponent}
+          onSelectPin={setSelectedPin}
           onMoveComponent={handleMoveComponent}
           onMovePin={handleMovePin}
           onUpdateBoard={handleUpdateBoard}
@@ -597,16 +747,13 @@ export function App() {
           onMountSelected={handleMountSelected}
           onUnmountSelected={handleUnmountSelected}
           onUpdateSelected={handleUpdateSelected}
-          onCreateComponentsFromImport={handleCreateComponentsFromImport}
-          onOpenAutoPlacement={autoPlacement.open}
-          onAutoRoute={handleAutoRoute}
-          onRunDrc={handleRunDrc}
-          onClearDrc={handleClearDrc}
-          onAddBottomTrace={handleAddBottomTrace}
-          onAddJumper={handleAddJumper}
-          onRemoveRouteAt={handleRemoveRouteAt}
+          highlightedEndpoints={highlightedEndpoints}
+          routeEditMode={routeEditMode}
+          isPlacingComponent={Boolean(pendingComponent)}
+          transparentBoard={isTransparentBoard}
+          theme={settings.theme}
+          onRouteEditPoint={handleRouteEditPoint}
           dragMoveModifier={settings.dragMoveModifier}
-          shortcuts={settings.shortcuts}
         />
       </div>
 
@@ -617,6 +764,7 @@ export function App() {
         <AutoPlacementDialog
           boardWidth={project.board.width}
           boardHeight={project.board.height}
+          boardKind={project.board.kind ?? "perfboard"}
           warnings={autoPlacement.warnings}
           running={autoPlacement.running}
           progress={autoPlacement.progress}
@@ -641,9 +789,115 @@ export function App() {
   );
 }
 
+function getHighlightedEndpoints(
+  endpoints: RoutedNetEndpoint[],
+  components: PerfboardProject["components"],
+  selectedNetName: string | undefined,
+  selectedPin: SelectedPin | undefined
+) {
+  if (selectedPin) {
+    const component = components.find((item) => item.id === selectedPin.componentId);
+    const selectedEndpoint = component
+      ? endpoints.find((endpoint) => endpoint.ref === component.name && endpoint.pin === selectedPin.pin)
+      : undefined;
+    if (!selectedEndpoint) {
+      return [];
+    }
+
+    return endpoints.filter((endpoint) => endpoint.net === selectedEndpoint.net);
+  }
+
+  const highlighted = new Map<string, RoutedNetEndpoint>();
+
+  endpoints.forEach((endpoint) => {
+    if (endpoint.net !== selectedNetName) {
+      return;
+    }
+    highlighted.set(`${endpoint.net}:${endpoint.ref}:${endpoint.pin}:${endpoint.grid[0]},${endpoint.grid[1]}`, endpoint);
+  });
+
+  return [...highlighted.values()];
+}
+
+function isShortcut(event: KeyboardEvent, shortcut: string | undefined) {
+  if (!shortcut || shortcut === "None") {
+    return false;
+  }
+
+  const parts = shortcut.split("+");
+  const expectedKey = parts.at(-1);
+  const expectsCtrl = parts.includes("Ctrl");
+  const expectsAlt = parts.includes("Alt");
+  const expectsShift = parts.includes("Shift");
+  const expectsMeta = parts.includes("Meta");
+  if (
+    event.ctrlKey !== expectsCtrl ||
+    event.altKey !== expectsAlt ||
+    event.shiftKey !== expectsShift ||
+    event.metaKey !== expectsMeta
+  ) {
+    return false;
+  }
+
+  if (!expectedKey) {
+    return false;
+  }
+  if (expectedKey.length === 1) {
+    return event.key.toLowerCase() === expectedKey.toLowerCase();
+  }
+  return normalizeEventKey(event.key) === expectedKey;
+}
+
+function normalizeEventKey(key: string) {
+  return key === " " ? "Space" : key;
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable;
+}
+
+function command(shortcut: string | undefined, enabled: boolean, run: () => void) {
+  return { shortcut, enabled, run };
+}
+
 function makeDefaultComponentName(label: string, index: number) {
   const prefix = label.replace(/[^A-Za-z]/g, "") || "U";
   return `${prefix}${index}`;
+}
+
+function isProjectPlacementValid(project: PerfboardProject, candidate: PlacedComponent) {
+  const components = project.components.some((component) => component.id === candidate.id)
+    ? project.components.map((component) => component.id === candidate.id ? candidate : component)
+    : [...project.components, candidate];
+  const endpoints = resolveNetEndpoints(project.importState, components);
+  const endpointNets = new Map(endpoints.map((endpoint) => [`${endpoint.ref}:${endpoint.pin}`, endpoint.net]));
+  const pinNets: PinNetAssignments = Object.fromEntries(
+    candidate.pinOffsets.map((_, index) => [index + 1, endpointNets.get(`${candidate.name}:${index + 1}`)])
+  );
+  const board = getBoardModel(project.board);
+  if (!board.validatePlacement(candidate, pinNets).valid) return false;
+
+  const candidateHoles = componentPinHoles(candidate);
+  for (const other of components) {
+    if (other.id === candidate.id) continue;
+    const otherHoles = componentPinHoles(other);
+    for (let candidateIndex = 0; candidateIndex < candidateHoles.length; candidateIndex += 1) {
+      const candidateHole = candidateHoles[candidateIndex];
+      const candidateNet = pinNets[candidateIndex + 1];
+      for (let otherIndex = 0; otherIndex < otherHoles.length; otherIndex += 1) {
+        const otherHole = otherHoles[otherIndex];
+        if (samePoint(candidateHole, otherHole)) return false;
+        if (!board.areInternallyConnected(candidateHole, otherHole)) continue;
+        const otherNet = endpointNets.get(`${other.name}:${otherIndex + 1}`);
+        if (!candidateNet || !otherNet || candidateNet !== otherNet) return false;
+      }
+    }
+  }
+  return true;
 }
 
 function createManualBottomPath(from: [number, number], to: [number, number]): Array<[number, number]> {
@@ -731,4 +985,45 @@ function isSameStraightLine(a: [number, number], b: [number, number], from: [num
 
 function samePoint(a: [number, number], b: [number, number]) {
   return a[0] === b[0] && a[1] === b[1];
+}
+
+/**
+ * Breadboard rule: one hole takes one wire. A manually drawn jumper endpoint
+ * that lands on a component pin hole or another jumper's hole is moved to the
+ * nearest free hole of the same electrical node (same 5-hole row / same rail);
+ * if no free hole exists there, the jumper is rejected.
+ */
+function relocateJumperEndpoint(project: PerfboardProject, point: [number, number]): [number, number] | undefined {
+  if ((project.board.kind ?? "perfboard") !== "breadboard") {
+    return point;
+  }
+  const boardModel = getBoardModel(project.board);
+  const occupied = new Set<string>();
+  project.components.forEach((component) => componentPinHoles(component).forEach(([x, y]) => occupied.add(`${x},${y}`)));
+  project.routing.jumpers.forEach((jumper) => {
+    occupied.add(`${jumper.from[0]},${jumper.from[1]}`);
+    occupied.add(`${jumper.to[0]},${jumper.to[1]}`);
+  });
+
+  const pointId = `${point[0]},${point[1]}`;
+  if (!occupied.has(pointId)) {
+    return point;
+  }
+  const node = boardModel.getElectricalNode(point);
+  if (!node) {
+    return undefined;
+  }
+  let best: [number, number] | undefined;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  boardModel.getAllHoles().forEach((hole) => {
+    if (boardModel.getElectricalNode(hole.id) !== node) return;
+    const holeId = `${hole.grid[0]},${hole.grid[1]}`;
+    if (occupied.has(holeId)) return;
+    const distance = Math.abs(hole.grid[0] - point[0]) + Math.abs(hole.grid[1] - point[1]);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = hole.grid;
+    }
+  });
+  return best;
 }

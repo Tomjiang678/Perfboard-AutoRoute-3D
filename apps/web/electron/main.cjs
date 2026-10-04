@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, safeStorage } = require("electron");
+const { app, BrowserWindow, ipcMain, safeStorage, Menu } = require("electron");
 const fs = require("fs/promises");
 const path = require("path");
 
@@ -66,6 +66,9 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Hide the default native menu bar (File/Edit/View/Window/Help) so the
+  // in-app toolbar row is the first thing at the top of the window.
+  Menu.setApplicationMenu(null);
   ipcMain.handle("ai-config:load", readAiConfig);
   ipcMain.handle("ai-config:save", writeAiConfig);
   ipcMain.handle("ai-api:request", requestAiApi);

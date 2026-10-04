@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
+    "test": "node --experimental-strip-types --experimental-specifier-resolution=node --test tests/*.test.ts",
     "preview": "vite preview --host 127.0.0.1",
     "electron": "npm run build && electron .",
     "dist:win": "npm run build && electron-builder --win dir"

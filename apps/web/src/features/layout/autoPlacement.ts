@@ -1,6 +1,10 @@
 import type { BoardSize, ConstraintRegion, DesignConstraint, PlacedComponent, RoutedNetEndpoint, RoutingState } from "../../types/project";
 import { activeConstraints } from "../constraints/model";
 import { autoRouteBoard } from "../routing/autoRouter";
+import { getBoardModel } from "../board/factory";
+import { componentPinHoles, isPowerNet, rotateGridOffset } from "../board/placement";
+import { key, manhattan } from "../routing/routingGeometry";
+import { isBendableTwoPin, maximumLeadSpan, preferredLeadSpan } from "../project/componentTraits";
 
 export interface PlacementRegion {
   x: number;
@@ -74,7 +78,8 @@ export function autoPlaceComponents(
   boardHeight: number,
   endpoints: RoutedNetEndpoint[] = [],
   constraints: DesignConstraint[] = [],
-  reportProgress?: AutoPlacementProgressReporter
+  reportProgress?: AutoPlacementProgressReporter,
+  boardConfig?: BoardSize
 ): AutoPlacementResult {
   reportProgress?.({ percent: 1, phase: "prepare", detail: "[autoplacement] 正在整理板尺寸、元件和工程约束" });
   const normalizedRegion = insetRegion(normalizeRegion(region, boardWidth, boardHeight), 1);
@@ -85,12 +90,13 @@ export function autoPlaceComponents(
   }
 
   const movableIds = new Set(components.filter((component) => !component.mounted).map((component) => component.id));
-  const initial = createInitialPlacement(components, normalizedRegion, boardWidth, boardHeight, endpoints, warnings, constraints, reportProgress);
+  const board = boardConfig ?? { width: boardWidth, height: boardHeight };
+  const initial = createInitialPlacement(components, normalizedRegion, boardWidth, boardHeight, endpoints, warnings, constraints, reportProgress, board);
   if (initial.placedCount === 0) {
     return { components, placedCount: 0, warnings };
   }
 
-  const optimized = optimizePlacement(initial.components, movableIds, normalizedRegion, { width: boardWidth, height: boardHeight }, endpoints, constraints, reportProgress);
+  const optimized = optimizePlacement(initial.components, movableIds, normalizedRegion, board, endpoints, constraints, reportProgress);
   reportProgress?.({ percent: 100, phase: "complete", detail: "[autoplacement] 自动放置计算完成" });
   return {
     components: optimized,
@@ -107,7 +113,8 @@ function createInitialPlacement(
   endpoints: RoutedNetEndpoint[],
   warnings: string[],
   constraints: DesignConstraint[],
-  reportProgress?: AutoPlacementProgressReporter
+  reportProgress?: AutoPlacementProgressReporter,
+  boardConfig?: BoardSize
 ) {
   const endpointMap = buildEndpointMap(endpoints);
   const netGraph = buildNetGraph(endpoints);
@@ -117,7 +124,7 @@ function createInitialPlacement(
   const placedByName = new Map<string, PlacedComponent>();
   const placedPositions = new Map<string, PlacementCandidate>();
   const placedAnchors: Array<[number, number]> = [];
-  const board: BoardSize = { width: boardWidth, height: boardHeight };
+  const board: BoardSize = boardConfig ?? { width: boardWidth, height: boardHeight };
 
   // Register locked (already placed) components as obstacles
   lockedComponents.forEach((component) => {
@@ -150,7 +157,7 @@ function createInitialPlacement(
       warnings.push(`${component.name} 的约束区域为空，无法落位。`);
       continue;
     }
-    const candidate = findPlacementForConstrained(component, effectiveRegion, boardWidth, boardHeight, occupied, placedAnchors, placedByName, endpointMap, netGraph, endpoints, constraints);
+    const candidate = findPlacement(component, components, effectiveRegion, boardWidth, boardHeight, occupied, placedAnchors, placedByName, endpointMap, netGraph, endpoints, constraints, undefined, 10, board, false);
     if (!candidate) {
       warnings.push(`${component.name} 无法满足约束条件，无法落位。`);
       continue;
@@ -181,7 +188,7 @@ function createInitialPlacement(
       phase: "initial-placement",
       detail: `[autoplacement] 正在为 ${component.name} 生成初始放置候选（${index + 1}/${sortedNormal.length}）`
     });
-    const candidate = findPlacement(component, components, region, boardWidth, boardHeight, occupied, placedAnchors, placedByName, endpointMap, netGraph, endpoints, constraints, reportProgress, percent);
+    const candidate = findPlacement(component, components, region, boardWidth, boardHeight, occupied, placedAnchors, placedByName, endpointMap, netGraph, endpoints, constraints, reportProgress, percent, board);
     if (!candidate) {
       warnings.push(`${component.name} cannot fit in the selected placement region.`);
       continue;
@@ -203,40 +210,6 @@ function createInitialPlacement(
   };
 }
 
-/** Simplified placement for hard-constrained components: picks the first valid position
- *  within the AI-specified region, without route-quality scoring. */
-function findPlacementForConstrained(
-  component: PlacedComponent,
-  effectiveRegion: PlacementRegion,
-  boardWidth: number,
-  boardHeight: number,
-  occupied: Set<string>,
-  placedAnchors: Array<[number, number]>,
-  placedByName: Map<string, PlacedComponent>,
-  endpointMap: EndpointMap,
-  netGraph: NetGraph,
-  endpoints: RoutedNetEndpoint[],
-  constraints: DesignConstraint[]
-): PlacementCandidate | undefined {
-  const placedAirwires = buildPlacedAirwires(placedByName, endpointMap);
-  const candidates = generatePlacementPoseCandidates(component, false)
-    .filter((posed) => matchesOrientationConstraint(posed, constraints))
-    .flatMap((posed) => {
-      const box = getFootprintBox(posed);
-      return createSpreadCandidates(effectiveRegion, box)
-        .filter((position) => canPlaceAt(posed, position, effectiveRegion, boardWidth, boardHeight, occupied, constraints))
-        .map((position) => ({
-          position,
-          rotation: posed.rotation,
-          component: { ...posed, position },
-          airwireScore: scorePlacement(position, posed, placedAnchors, effectiveRegion, placedByName, endpointMap, netGraph, placedAirwires, constraints)
-        }));
-    })
-    .sort((a, b) => a.airwireScore - b.airwireScore);
-
-  return candidates.length > 0 ? candidates[0] : undefined;
-}
-
 function findPlacement(
   component: PlacedComponent,
   allComponents: PlacedComponent[],
@@ -251,17 +224,19 @@ function findPlacement(
   endpoints: RoutedNetEndpoint[],
   constraints: DesignConstraint[],
   reportProgress?: AutoPlacementProgressReporter,
-  progressPercent = 25
+  progressPercent = 25,
+  board: BoardSize = { width: boardWidth, height: boardHeight },
+  verifyRoutes = true
 ): PlacementCandidate | undefined {
-  const componentRegion = constrainedRegionFor(component, region, constraints, { width: boardWidth, height: boardHeight });
+  const componentRegion = constrainedRegionFor(component, region, constraints, board);
   const placedAirwires = buildPlacedAirwires(placedByName, endpointMap);
-  const candidates = generatePlacementPoseCandidates(component, false)
+  const candidates = generatePlacementPoseCandidates(component, true)
     .filter((posed) => matchesOrientationConstraint(posed, constraints))
     .flatMap((posed) => {
     const rotated = posed;
     const box = getFootprintBox(rotated);
     return createSpreadCandidates(componentRegion, box)
-      .filter((position) => canPlaceAt(rotated, position, componentRegion, boardWidth, boardHeight, occupied, constraints))
+      .filter((position) => canPlaceAt(rotated, position, componentRegion, boardWidth, boardHeight, occupied, constraints, board, endpointMap, [...placedByName.values()]))
       .map((position) => ({
         position,
         rotation: rotated.rotation,
@@ -274,6 +249,7 @@ function findPlacement(
   if (shortlist.length === 0) {
     return undefined;
   }
+  if (!verifyRoutes) return shortlist[0];
 
   const refs = new Set([...placedByName.keys(), component.name]);
   const partialComponents = allComponents
@@ -290,7 +266,7 @@ function findPlacement(
   let bestQuality = routeQualityForComponents(
     replaceComponent(partialComponents, { ...best.component, mounted: true }),
     partialEndpoints,
-    { width: boardWidth, height: boardHeight },
+    board,
     reportProgress,
     progressPercent,
     `${component.name} 候选 1/${shortlist.length}`
@@ -306,7 +282,7 @@ function findPlacement(
     const quality = routeQualityForComponents(
       trial,
       partialEndpoints,
-      { width: boardWidth, height: boardHeight },
+      board,
       reportProgress,
       progressPercent,
       `${component.name} 候选 ${index + 2}/${shortlist.length}`
@@ -443,13 +419,13 @@ function generateLocalCandidates(
   const placedAnchors = components.filter((candidate) => candidate.id !== component.id).map((candidate) => candidate.position);
   const placedAirwires = buildPlacedAirwires(placedByName, endpointMap);
   const rotationTrials = generatePlacementPoseCandidates(component, false)
-    .filter((trial) => matchesOrientationConstraint(trial, constraints) && canPlaceAt(trial, trial.position, componentRegion, board.width, board.height, occupiedWithoutSelf, constraints))
+    .filter((trial) => matchesOrientationConstraint(trial, constraints) && canPlaceAt(trial, trial.position, componentRegion, board.width, board.height, occupiedWithoutSelf, constraints, board, endpointMap, [...placedByName.values()]))
     .map((trial) => replaceComponent(components, trial));
   const moveTrials = generatePlacementPoseCandidates(component, false).flatMap((posed) => {
     const rotated = posed;
     const box = getFootprintBox(rotated);
     return createSpreadCandidates(componentRegion, box)
-      .filter((position) => matchesOrientationConstraint(rotated, constraints) && canPlaceAt(rotated, position, componentRegion, board.width, board.height, occupiedWithoutSelf, constraints))
+      .filter((position) => matchesOrientationConstraint(rotated, constraints) && canPlaceAt(rotated, position, componentRegion, board.width, board.height, occupiedWithoutSelf, constraints, board, endpointMap, [...placedByName.values()]))
       .map((position) => ({
         component: { ...rotated, position },
         score: scorePlacement(position, rotated, placedAnchors, region, placedByName, endpointMap, netGraph, placedAirwires, constraints)
@@ -461,7 +437,7 @@ function generateLocalCandidates(
   const diagonalTrials = generateDiagonalCandidates(component, componentRegion, board, occupiedWithoutSelf, placedByName, endpointMap, netGraph, placedAirwires, placedAnchors, constraints)
     .map((trial) => replaceComponent(components, trial.component));
 
-  return [...rotationTrials, ...moveTrials, ...diagonalTrials].filter((trial) => isValidPlacement(trial, movableIds, region, board, constraints));
+  return [...rotationTrials, ...moveTrials, ...diagonalTrials].filter((trial) => isValidPlacement(trial, movableIds, region, board, constraints, endpoints));
 }
 
 function findImprovingSwap(
@@ -489,7 +465,7 @@ function findImprovingSwap(
         }
         return component;
       });
-      if (!isValidPlacement(swapped, movableIds, region, board, constraints)) {
+      if (!isValidPlacement(swapped, movableIds, region, board, constraints, endpoints)) {
         continue;
       }
       const context = `${first.name} 与 ${second.name} 交换位置`;
@@ -594,7 +570,7 @@ function generateDiagonalCandidates(
     .flatMap((candidate) => {
       const positions = nearbyPositions(component.position, DIAGONAL_SEARCH_RADIUS);
       return positions
-        .filter((position) => matchesOrientationConstraint(candidate, constraints) && canPlaceAt(candidate, position, region, board.width, board.height, occupiedWithoutSelf, constraints))
+        .filter((position) => matchesOrientationConstraint(candidate, constraints) && canPlaceAt(candidate, position, region, board.width, board.height, occupiedWithoutSelf, constraints, board, endpointMap, [...placedByName.values()]))
         .map((position) => ({
           component: { ...candidate, position },
           score: scorePlacement(position, candidate, placedAnchors, region, placedByName, endpointMap, netGraph, placedAirwires, constraints)
@@ -622,17 +598,11 @@ function relevantEndpointCount(component: PlacedComponent, endpoints: RoutedNetE
 }
 
 function isStretchableTwoPin(component: PlacedComponent) {
-  return component.pinOffsets.length === 2 && (
-    component.kind === "resistor" ||
-    component.kind === "inductor" ||
-    component.kind === "radial_capacitor" ||
-    component.kind === "diode" ||
-    component.kind === "led"
-  );
+  return isBendableTwoPin(component);
 }
 
 function leadSpacingRange(component: PlacedComponent) {
-  const max = component.kind === "diode" || component.kind === "led" ? 4 : 5;
+  const max = maximumLeadSpan(component);
   const values = new Set<number>([component.leadSpacing]);
   for (let spacing = 2; spacing <= max; spacing += 1) {
     values.add(spacing);
@@ -641,7 +611,7 @@ function leadSpacingRange(component: PlacedComponent) {
 }
 
 function diagonalVectors(component: PlacedComponent): Array<[number, number]> {
-  const max = component.kind === "diode" || component.kind === "led" ? 4 : 5;
+  const max = maximumLeadSpan(component);
   const vectors: Array<[number, number]> = [];
   for (let dx = -max; dx <= max; dx += 1) {
     for (let dy = -max; dy <= max; dy += 1) {
@@ -673,7 +643,7 @@ function isDiagonalPlacement(component: PlacedComponent) {
   }
   const anchor = component.pinOffsets[0] ?? [0, 0];
   const other = component.pinOffsets[1] ?? anchor;
-  const [dx, dy] = rotateOffset([other[0] - anchor[0], other[1] - anchor[1]], component.rotation);
+  const [dx, dy] = rotateGridOffset([other[0] - anchor[0], other[1] - anchor[1]], component.rotation);
   return dx !== 0 && dy !== 0;
 }
 
@@ -684,8 +654,7 @@ function leadStretchPenalty(component: PlacedComponent) {
   const anchor = component.pinOffsets[0] ?? [0, 0];
   const other = component.pinOffsets[1] ?? anchor;
   const actualSpacing = Math.hypot(other[0] - anchor[0], other[1] - anchor[1]);
-  const preferred = component.kind === "led" ? 1 : component.kind === "diode" ? 3 : component.kind === "radial_capacitor" ? 1 : 3;
-  return Math.abs(actualSpacing - preferred);
+  return Math.abs(actualSpacing - preferredLeadSpan(component));
 }
 
 function nearbyPositions(center: [number, number], radius: number) {
@@ -743,11 +712,19 @@ function canPlaceAt(
   boardWidth: number,
   boardHeight: number,
   occupied: Set<string>,
-  constraints: DesignConstraint[] = []
+  constraints: DesignConstraint[] = [],
+  board: BoardSize = { width: boardWidth, height: boardHeight },
+  endpointMap: EndpointMap = new Map(),
+  placedComponents: PlacedComponent[] = []
 ) {
   const placed = { ...component, position };
   const cells = getComponentOccupiedCells(placed);
-  return cells.every(([x, y]) => {
+  const boardModel = getBoardModel(board);
+  const placementIsValid = boardModel.validatePlacement(placed, pinNetsForComponent(placed, endpointMap)).valid;
+  if (pinsConflictWithPlaced(placed, placedComponents, endpointMap, board)) {
+    return false;
+  }
+  return placementIsValid && cells.every(([x, y]) => {
     return (
       x >= 0 &&
       y >= 0 &&
@@ -760,7 +737,66 @@ function canPlaceAt(
       !occupied.has(key(x, y)) &&
       !isPlacementKeepoutCell(x, y, constraints)
     );
-  }) && isWithinRequiredEdgeRegion(placed, cells, { width: boardWidth, height: boardHeight }, constraints);
+  }) && isWithinRequiredEdgeRegion(placed, cells, board, constraints);
+}
+
+/**
+ * Breadboard rule: two pins of different nets (or any no-net pin sharing a
+ * node with another pin) must not land on the same electrical node, e.g. the
+ * same 5-hole row of a terminal strip or the same power rail.
+ */
+function pinsConflictWithPlaced(
+  candidate: PlacedComponent,
+  placedComponents: PlacedComponent[],
+  endpointMap: EndpointMap,
+  board: BoardSize
+) {
+  if (placedComponents.length === 0) {
+    return false;
+  }
+  const boardModel = getBoardModel(board);
+  const candidateNets = pinNetsForComponent(candidate, endpointMap);
+  const candidateHoles = componentPinHoles(candidate);
+  for (const other of placedComponents) {
+    const otherNets = pinNetsForComponent(other, endpointMap);
+    const otherHoles = componentPinHoles(other);
+    for (let candidateIndex = 0; candidateIndex < candidateHoles.length; candidateIndex += 1) {
+      for (let otherIndex = 0; otherIndex < otherHoles.length; otherIndex += 1) {
+        if (!boardModel.areInternallyConnected(candidateHoles[candidateIndex], otherHoles[otherIndex])) {
+          continue;
+        }
+        const candidateNet = candidateNets[candidateIndex + 1];
+        const otherNet = otherNets[otherIndex + 1];
+        if (!candidateNet || !otherNet || candidateNet !== otherNet) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function hasCrossComponentNodeConflicts(components: PlacedComponent[], board: BoardSize, endpointMap: EndpointMap) {
+  const boardModel = getBoardModel(board);
+  const netsByNode = new Map<string, Array<string | undefined>>();
+  for (const component of components) {
+    const pinNets = pinNetsForComponent(component, endpointMap);
+    componentPinHoles(component).forEach((hole, index) => {
+      const node = boardModel.getElectricalNode(hole);
+      if (!node) return;
+      const nets = netsByNode.get(node) ?? [];
+      nets.push(pinNets[index + 1]);
+      netsByNode.set(node, nets);
+    });
+  }
+  for (const nets of netsByNode.values()) {
+    if (nets.length < 2) continue;
+    const defined = nets.filter((net): net is string => Boolean(net));
+    if (defined.length !== nets.length || new Set(defined).size !== 1) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function constrainedRegionFor(component: PlacedComponent, fallback: PlacementRegion, constraints: DesignConstraint[], board: BoardSize): PlacementRegion {
@@ -911,8 +947,17 @@ function isPlacementKeepoutCell(x: number, y: number, constraints: DesignConstra
   ));
 }
 
-function isValidPlacement(components: PlacedComponent[], movableIds: Set<string>, region: PlacementRegion, board: BoardSize, constraints: DesignConstraint[] = []) {
+function isValidPlacement(
+  components: PlacedComponent[],
+  movableIds: Set<string>,
+  region: PlacementRegion,
+  board: BoardSize,
+  constraints: DesignConstraint[] = [],
+  endpoints: RoutedNetEndpoint[] = []
+) {
   const occupied = new Set<string>();
+  const boardModel = getBoardModel(board);
+  const endpointMap = buildEndpointMap(endpoints);
   for (const component of components) {
     const cells = getComponentOccupiedCells(component);
     const effectiveRegion = movableIds.has(component.id)
@@ -934,9 +979,13 @@ function isValidPlacement(components: PlacedComponent[], movableIds: Set<string>
       }
       occupied.add(id);
     }
+    if (!boardModel.validatePlacement(component, pinNetsForComponent(component, endpointMap)).valid) return false;
     if (!isWithinRequiredEdgeRegion(component, cells, board, constraints)) {
       return false;
     }
+  }
+  if (hasCrossComponentNodeConflicts(components, board, endpointMap)) {
+    return false;
   }
   return true;
 }
@@ -986,16 +1035,12 @@ function estimateCourtyardArea(component: PlacedComponent) {
 }
 
 function getComponentOccupiedHoles(component: PlacedComponent): Array<[number, number]> {
-  const anchor = component.pinOffsets[0] ?? [0, 0];
-  return component.pinOffsets.map((offset) => {
-    const [rx, ry] = rotateOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
-    return [component.position[0] + rx, component.position[1] + ry];
-  });
+  return componentPinHoles(component);
 }
 
 function getFootprintBox(component: PlacedComponent): FootprintBox {
   const anchor = component.pinOffsets[0] ?? [0, 0];
-  const holes = component.pinOffsets.map((offset) => rotateOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation));
+  const holes = component.pinOffsets.map((offset) => rotateGridOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation));
   const xs = holes.map(([x]) => x);
   const ys = holes.map(([, y]) => y);
   const minX = Math.min(...xs);
@@ -1190,7 +1235,7 @@ function countCandidateCrossings(candidateAirwires: Airwire[], placedAirwires: A
 function pinGridAt(component: PlacedComponent, position: [number, number], pin: number): [number, number] {
   const anchor = component.pinOffsets[0] ?? [0, 0];
   const offset = component.pinOffsets[pin - 1] ?? anchor;
-  const [rx, ry] = rotateOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
+  const [rx, ry] = rotateGridOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
   return [position[0] + rx, position[1] + ry];
 }
 
@@ -1232,26 +1277,8 @@ function dedupePositions(positions: Array<[number, number]>) {
   return result;
 }
 
-function rotateOffset([x, y]: [number, number], rotation: number): [number, number] {
-  const quarterTurns = ((Math.round(rotation / (Math.PI / 2)) % 4) + 4) % 4;
-  if (quarterTurns === 1) {
-    return [y, -x];
-  }
-  if (quarterTurns === 2) {
-    return [-x, -y];
-  }
-  if (quarterTurns === 3) {
-    return [-y, x];
-  }
-  return [x, y];
-}
-
 function distance(a: [number, number], b: [number, number]) {
   return Math.hypot(a[0] - b[0], a[1] - b[1]);
-}
-
-function manhattan(a: [number, number], b: [number, number]) {
-  return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
 }
 
 function shareEndpoint(first: Airwire, second: Airwire) {
@@ -1271,19 +1298,15 @@ function orientation(a: [number, number], b: [number, number], c: [number, numbe
   return value === 0 ? 0 : value > 0 ? 1 : -1;
 }
 
-function isPowerNet(net: string) {
-  return /^(0|GND|VCC|VDD|VEE|VSS|VDC|VDC\d+|\+?\d+V)$/i.test(net);
-}
-
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function pinNetsForComponent(component: PlacedComponent, endpointMap: EndpointMap) {
+  return Object.fromEntries((endpointMap.get(component.name) ?? []).map((endpoint) => [endpoint.pin, endpoint.net]));
 }
 
 function progressInRange(index: number, total: number, start: number, end: number) {
   if (total <= 0) return end;
   return Math.round(start + (end - start) * Math.min(1, Math.max(0, index / total)));
-}
-
-function key(x: number, y: number) {
-  return `${x},${y}`;
 }

@@ -5,10 +5,12 @@ import { AiConstraintAssistantPanel } from "../features/ai/components/AiConstrai
 import type { AutoPlacementProgress, PlacementRegion } from "../features/layout/autoPlacement";
 import { AutoPlacementProgressPanel } from "../features/layout/components/AutoPlacementProgressPanel";
 import { PlacementRegionFields } from "../features/layout/components/PlacementRegionFields";
+import type { BoardKind } from "../types/project";
 
 interface AutoPlacementDialogProps {
   boardWidth: number;
   boardHeight: number;
+  boardKind: BoardKind;
   warnings: string[];
   running: boolean;
   progress?: AutoPlacementProgress;
@@ -20,6 +22,7 @@ interface AutoPlacementDialogProps {
 export function AutoPlacementDialog({
   boardWidth,
   boardHeight,
+  boardKind,
   warnings,
   running,
   progress,
@@ -34,7 +37,12 @@ export function AutoPlacementDialog({
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!running) onPlace({ x, y, width, height });
+    if (!running) {
+      const region = boardKind === "breadboard"
+        ? { x: 0, y, width: boardWidth, height }
+        : { x, y, width, height };
+      onPlace(region);
+    }
   }
 
   return (
@@ -53,12 +61,13 @@ export function AutoPlacementDialog({
           <PlacementRegionFields
             boardWidth={boardWidth}
             boardHeight={boardHeight}
+            boardKind={boardKind}
             disabled={running}
             values={{ x, y, width, height }}
             onChange={{ setX, setY, setWidth, setHeight }}
           />
 
-          <AiConstraintAssistantPanel controller={aiAssistant} disabled={running} />
+          {boardKind !== "breadboard" && <AiConstraintAssistantPanel controller={aiAssistant} disabled={running} />}
 
           {warnings.length > 0 && (
             <div className="warning-list">

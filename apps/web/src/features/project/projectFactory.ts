@@ -1,13 +1,11 @@
-import type { PerfboardProject } from "../../types/project";
+import type { BoardSize, PerfboardProject } from "../../types/project";
 
-export function createProject(name: string, width: number, height: number): PerfboardProject {
+export function createProject(name: string, board: BoardSize): PerfboardProject {
+  const kind = board.kind ?? "perfboard";
   return {
     id: crypto.randomUUID(),
-    name: name.trim() || "Untitled Perfboard",
-    board: {
-      width,
-      height
-    },
+    name: name.trim() || (kind === "breadboard" ? "Untitled Breadboard" : "Untitled Perfboard"),
+    board: { ...board, kind },
     files: [],
     importState: {
       components: [],

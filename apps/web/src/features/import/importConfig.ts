@@ -95,6 +95,16 @@ const rawBehavior = behaviorData as unknown as {
 
 const rawPinLibrary = pinLibraryOverrides as unknown as RawPinLibraryData;
 
+const pinCountResolvers: Record<NonNullable<RawComponentMappingRule["pinCountStrategy"]>, (component: ParsedComponent) => number> = {
+  dipPackage: (component) => parseDipPinCount(component.packageName) ?? inferPinCountFromDevicePinModels(component.value) ?? 8,
+  dipSwitch: (component) => parseDipSwitchPinCount(component.value) ?? parseDipSwitchPinCount(component.packageName) ?? 4,
+  fixed2: () => 2,
+  fixed3: () => 3,
+  fixed8: () => 8,
+  fixed10: () => 10,
+  fixed18: () => 18
+};
+
 export const devicePinModels: DevicePinModel[] = (rawPinLibrary.devicePinModels ?? []).map(buildDevicePinModel);
 
 export const componentMappingRules: ComponentMappingRule[] = rawConfig.componentMappingRules.map((rule) => ({
@@ -193,28 +203,7 @@ export function parseDipSwitchPinCount(value: string) {
 }
 
 function buildPinCountResolver(strategy: RawComponentMappingRule["pinCountStrategy"]) {
-  if (strategy === "dipPackage") {
-    return (component: ParsedComponent) => parseDipPinCount(component.packageName) ?? inferPinCountFromDevicePinModels(component.value) ?? 8;
-  }
-  if (strategy === "dipSwitch") {
-    return (component: ParsedComponent) => parseDipSwitchPinCount(component.value) ?? parseDipSwitchPinCount(component.packageName) ?? 4;
-  }
-  if (strategy === "fixed2") {
-    return () => 2;
-  }
-  if (strategy === "fixed3") {
-    return () => 3;
-  }
-  if (strategy === "fixed8") {
-    return () => 8;
-  }
-  if (strategy === "fixed10") {
-    return () => 10;
-  }
-  if (strategy === "fixed18") {
-    return () => 18;
-  }
-  return undefined;
+  return strategy ? pinCountResolvers[strategy] : undefined;
 }
 
 function inferPinCountFromDevicePinModels(value: string) {

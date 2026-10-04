@@ -1,4 +1,5 @@
 import type { DesignConstraint, PerfboardProject } from "../../types/project";
+import { normalizeBoardDefinition } from "../board/factory";
 
 export const CONSTRAINT_SCHEMA_VERSION = 1;
 
@@ -13,6 +14,7 @@ export function activeConstraints(constraints: DesignConstraint[]) {
 export function withMigratedConstraints(project: PerfboardProject): PerfboardProject {
   return {
     ...project,
+    board: normalizeBoardDefinition(project.board),
     constraints: Array.isArray(project.constraints) ? project.constraints : [],
     constraintSchemaVersion: CONSTRAINT_SCHEMA_VERSION
   };

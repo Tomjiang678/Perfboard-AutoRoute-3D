@@ -1,11 +1,12 @@
 import { autoPlaceComponents, type AutoPlacementProgress, type AutoPlacementResult, type PlacementRegion } from "./autoPlacement";
-import type { DesignConstraint, PlacedComponent, RoutedNetEndpoint } from "../../types/project";
+import type { BoardSize, DesignConstraint, PlacedComponent, RoutedNetEndpoint } from "../../types/project";
 
 interface AutoPlacementWorkerRequest {
   components: PlacedComponent[];
   region: PlacementRegion;
   boardWidth: number;
   boardHeight: number;
+  board: BoardSize;
   endpoints: RoutedNetEndpoint[];
   constraints: DesignConstraint[];
 }
@@ -25,7 +26,8 @@ self.onmessage = (event: MessageEvent<AutoPlacementWorkerRequest>) => {
       request.boardHeight,
       request.endpoints,
       request.constraints,
-      (progress) => self.postMessage({ type: "progress", progress } satisfies AutoPlacementWorkerMessage)
+      (progress) => self.postMessage({ type: "progress", progress } satisfies AutoPlacementWorkerMessage),
+      request.board
     );
     self.postMessage({ type: "result", result } satisfies AutoPlacementWorkerMessage);
   } catch (error) {
@@ -35,4 +37,3 @@ self.onmessage = (event: MessageEvent<AutoPlacementWorkerRequest>) => {
     } satisfies AutoPlacementWorkerMessage);
   }
 };
-

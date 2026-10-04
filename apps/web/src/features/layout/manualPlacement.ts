@@ -1,13 +1,11 @@
 import type { PlacedComponent } from "../../types/project";
+import { pinGridPosition } from "../board/placement";
+import { isBendableTwoPin, maximumLeadSpan } from "../project/componentTraits";
+
+export { pinGridPosition } from "../board/placement";
 
 export function isManuallyBendable(component: PlacedComponent) {
-  return component.pinOffsets.length === 2 && (
-    component.kind === "resistor" ||
-    component.kind === "inductor" ||
-    component.kind === "radial_capacitor" ||
-    component.kind === "diode" ||
-    component.kind === "led"
-  );
+  return isBendableTwoPin(component);
 }
 
 export function bendComponentPin(
@@ -26,8 +24,7 @@ export function bendComponentPin(
   const dx = nextSecond[0] - nextFirst[0];
   const dy = nextSecond[1] - nextFirst[1];
   const span = Math.hypot(dx, dy);
-  const maxSpan = component.kind === "diode" || component.kind === "led" ? 4 : 5;
-  if (span < 1 || span > maxSpan) {
+  if (span < 1 || span > maximumLeadSpan(component)) {
     return undefined;
   }
 
@@ -39,25 +36,4 @@ export function bendComponentPin(
     rowSpacing: dy,
     pinOffsets: [[0, 0], [dx, dy]]
   };
-}
-
-export function pinGridPosition(component: PlacedComponent, pin: number): [number, number] {
-  const anchor = component.pinOffsets[0] ?? [0, 0];
-  const offset = component.pinOffsets[pin - 1] ?? anchor;
-  const [rx, ry] = rotateOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
-  return [component.position[0] + rx, component.position[1] + ry];
-}
-
-function rotateOffset([x, y]: [number, number], rotation: number): [number, number] {
-  const quarterTurns = ((Math.round(rotation / (Math.PI / 2)) % 4) + 4) % 4;
-  if (quarterTurns === 1) {
-    return [y, -x];
-  }
-  if (quarterTurns === 2) {
-    return [-x, -y];
-  }
-  if (quarterTurns === 3) {
-    return [-y, x];
-  }
-  return [x, y];
 }

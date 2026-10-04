@@ -2,8 +2,10 @@ import { Box, Grid3X3 } from "lucide-react";
 import { useState } from "react";
 import { resolveImportPins } from "../features/import/pinResolver";
 import { resolveNetEndpoints } from "../features/import/netEndpointResolver";
+import { pinGridPosition } from "../features/board/placement";
 import type { DrcIssue, ImportedFile, ImportKind, PerfboardProject, PlacedComponent, RoutedNetEndpoint } from "../types/project";
 import { FileDropZone } from "./FileDropZone";
+import { getBoardModel } from "../features/board/factory";
 
 interface ProjectSidebarProps {
   project: PerfboardProject;
@@ -23,7 +25,7 @@ export function ProjectSidebar({ project, onImportFiles, onRemoveImportedFile, o
         <div className="project-card">
           <div className="project-card-row">
             <Grid3X3 size={18} />
-            <span>{project.board.width} x {project.board.height} holes</span>
+            <span>{getBoardModel(project.board).getDisplayName()}</span>
           </div>
           <div className="project-card-row">
             <Box size={18} />
@@ -247,12 +249,10 @@ function FileList({ title, files, emptyText, onRemove }: { title: string; files:
 function buildPinNetRows(components: PlacedComponent[], endpoints: RoutedNetEndpoint[]) {
   const endpointByRefPin = new Map(endpoints.map((endpoint) => [`${endpoint.ref}:${endpoint.pin}`, endpoint]));
   return components.flatMap((component) => {
-    const anchor = component.pinOffsets[0] ?? [0, 0];
-    return component.pinOffsets.map((offset, index) => {
+    return component.pinOffsets.map((_, index) => {
       const pin = index + 1;
       const endpoint = endpointByRefPin.get(`${component.name}:${pin}`);
-      const [rx, ry] = rotateOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
-      const grid: [number, number] = endpoint?.grid ?? [component.position[0] + rx, component.position[1] + ry];
+      const grid = endpoint?.grid ?? pinGridPosition(component, pin);
       return {
         ref: component.name,
         pin,
@@ -274,20 +274,6 @@ function formatDrcIssue(issue: DrcIssue) {
   const location = issue.grid ? ` @ ${issue.grid[0]},${issue.grid[1]}` : "";
   const pin = issue.ref ? ` ${issue.ref}${issue.pin ? `.${issue.pin}` : ""}` : "";
   return `${issue.severity.toUpperCase()} ${issue.code}${pin}${location}: ${issue.message}`;
-}
-
-function rotateOffset([x, y]: [number, number], rotation: number): [number, number] {
-  const quarterTurns = ((Math.round(rotation / (Math.PI / 2)) % 4) + 4) % 4;
-  if (quarterTurns === 1) {
-    return [y, -x];
-  }
-  if (quarterTurns === 2) {
-    return [-x, -y];
-  }
-  if (quarterTurns === 3) {
-    return [-y, x];
-  }
-  return [x, y];
 }
 
 function formatFileSize(size: number) {

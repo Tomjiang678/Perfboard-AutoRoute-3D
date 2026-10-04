@@ -27,6 +27,9 @@ import {
   type GridPoint,
   type RouterCell
 } from "./routingGeometry";
+import { getBoardModel } from "../board/factory";
+import { componentPinHoles, isPowerNet, pinGridPosition, rotateGridOffset } from "../board/placement";
+import type { BoardModel } from "../board/types";
 
 interface NetPlan {
   net: string;
@@ -150,8 +153,14 @@ export function autoRouteBoard(
   components: PlacedComponent[] = [],
   fixedTraces: BottomTrace[] = [],
   constraints: DesignConstraint[] = [],
-  reportProgress?: AutoRoutingProgressReporter
+  reportProgress?: AutoRoutingProgressReporter,
+  fixedJumpers: JumperRoute[] = []
 ): RoutingState {
+  const boardModel = getBoardModel(board);
+  if (!boardModel.capabilities.routePrimitives.has("bottom_trace")) {
+    return autoRouteJumperOnlyBoard(boardModel, endpoints, components, constraints, fixedJumpers);
+  }
+
   const plans = buildNetPlans(endpoints);
   const fixedTerminalsByNet = buildFixedTerminalsByNet(fixedTraces);
   const endpointOwner = buildEndpointOwner(endpoints);
@@ -425,6 +434,169 @@ function routeMultiPinNet(
   }
 
   return { traces, jumpers, blockedRouteIds };
+}
+
+function autoRouteJumperOnlyBoard(
+  boardModel: BoardModel,
+  endpoints: RoutedNetEndpoint[],
+  components: PlacedComponent[],
+  constraints: DesignConstraint[] = [],
+  fixedJumpers: JumperRoute[] = []
+): RoutingState {
+  const board = boardModel.definition;
+  const holesByGroup = new Map<string, GridPoint[]>();
+  boardModel.getAllHoles().forEach((hole) => {
+    const group = boardModel.getElectricalNode(hole.id);
+    if (!group) return;
+    const holes = holesByGroup.get(group) ?? [];
+    holes.push(hole.grid);
+    holesByGroup.set(group, holes);
+  });
+
+  const usedHoles = new Set<string>();
+  const nodePinNets = new Map<string, Set<string>>();
+  const nodeHasNoNetPin = new Set<string>();
+  const nodeJumperNet = new Map<string, string>();
+  const columnUse = new Map<number, number>();
+  const pinNetByRefPin = new Map(endpoints.map((endpoint) => [`${endpoint.ref}:${endpoint.pin}`, endpoint.net]));
+  components.forEach((component) => {
+    componentPinHoles(component).forEach(([x, y], index) => {
+      usedHoles.add(key(x, y));
+      const node = boardModel.getElectricalNode([x, y]);
+      if (!node) return;
+      const net = pinNetByRefPin.get(`${component.name}:${index + 1}`);
+      if (net) {
+        const nets = nodePinNets.get(node) ?? new Set<string>();
+        nets.add(net);
+        nodePinNets.set(node, nets);
+      } else {
+        nodeHasNoNetPin.add(node);
+      }
+    });
+  });
+  fixedJumpers.forEach((jumper) => {
+    usedHoles.add(key(jumper.from[0], jumper.from[1]));
+    usedHoles.add(key(jumper.to[0], jumper.to[1]));
+    columnUse.set(jumper.from[0], (columnUse.get(jumper.from[0]) ?? 0) + 1);
+    columnUse.set(jumper.to[0], (columnUse.get(jumper.to[0]) ?? 0) + 1);
+    const fromNode = boardModel.getElectricalNode(jumper.from);
+    const toNode = boardModel.getElectricalNode(jumper.to);
+    if (fromNode) nodeJumperNet.set(fromNode, jumper.net);
+    if (toNode) nodeJumperNet.set(toNode, jumper.net);
+  });
+
+  // A hole is only usable by a net if its electrical node is free, or already
+  // carries that same net (pin or jumper). Breadboard rows/rails conduct, so
+  // letting two different nets touch one node would create a short.
+  const canUseHoleForNet = ([x, y]: GridPoint, net: string) => {
+    if (usedHoles.has(key(x, y))) return false;
+    const node = boardModel.getElectricalNode([x, y]);
+    if (!node) return false;
+    if (nodeHasNoNetPin.has(node)) return false;
+    const pinNets = nodePinNets.get(node);
+    if (pinNets && pinNets.size > 0 && !pinNets.has(net)) return false;
+    const claimed = nodeJumperNet.get(node);
+    return claimed === undefined || claimed === net;
+  };
+  const warnings: string[] = [];
+  const jumpers: JumperRoute[] = [...fixedJumpers];
+  const endpointsByNet = new Map<string, RoutedNetEndpoint[]>();
+  endpoints.forEach((endpoint) => {
+    const list = endpointsByNet.get(endpoint.net) ?? [];
+    list.push(endpoint);
+    endpointsByNet.set(endpoint.net, list);
+  });
+
+  endpointsByNet.forEach((netEndpoints, net) => {
+    const isUsable = (hole: GridPoint) => canUseHoleForNet(hole, net);
+    const groups = new Set<string>();
+    netEndpoints.forEach((endpoint) => {
+      const group = boardModel.getElectricalNode(endpoint.grid);
+      if (group) groups.add(group);
+    });
+
+    // Groups already linked by locked manual jumpers count as one connected unit.
+    const dsu = new DisjointSet();
+    groups.forEach((group) => dsu.add(group));
+    fixedJumpers.forEach((jumper) => {
+      if (jumper.net !== net) return;
+      const fromGroup = boardModel.getElectricalNode(jumper.from);
+      const toGroup = boardModel.getElectricalNode(jumper.to);
+      if (fromGroup && toGroup) dsu.union(fromGroup, toGroup);
+    });
+
+    const holesByRoot = new Map<string, GridPoint[]>();
+    groups.forEach((group) => {
+      const root = dsu.find(group);
+      const holes = holesByRoot.get(root) ?? [];
+      holes.push(...(holesByGroup.get(group) ?? []));
+      holesByRoot.set(root, holes);
+    });
+    const roots = [...holesByRoot.keys()];
+    const firstRoot = roots[0];
+    if (!firstRoot) return;
+    const connected = new Set([firstRoot]);
+    const remaining = new Set(roots.slice(1));
+
+    while (remaining.size > 0) {
+      let best: { fromRoot: string; toRoot: string; from: GridPoint; to: GridPoint; distance: number } | undefined;
+      connected.forEach((fromRoot) => remaining.forEach((toRoot) => {
+        const pair = findClosestAvailableHolePair(
+          holesByRoot.get(fromRoot) ?? [],
+          holesByRoot.get(toRoot) ?? [],
+          isUsable,
+          constraints,
+          columnUse
+        );
+        if (!pair || (best && pair.distance >= best.distance)) return;
+        best = { fromRoot, toRoot, ...pair };
+      }));
+      if (!best) {
+        warnings.push(`Jumper-only net ${net} has no free hole pair.`);
+        break;
+      }
+      usedHoles.add(key(best.from[0], best.from[1]));
+      usedHoles.add(key(best.to[0], best.to[1]));
+      columnUse.set(best.from[0], (columnUse.get(best.from[0]) ?? 0) + 1);
+      columnUse.set(best.to[0], (columnUse.get(best.to[0]) ?? 0) + 1);
+      const fromNode = boardModel.getElectricalNode(best.from);
+      const toNode = boardModel.getElectricalNode(best.to);
+      if (fromNode) nodeJumperNet.set(fromNode, net);
+      if (toNode) nodeJumperNet.set(toNode, net);
+      jumpers.push({ id: makeId(), net, from: best.from, to: best.to, layer: "jumper", locked: false });
+      connected.add(best.toRoot);
+      remaining.delete(best.toRoot);
+    }
+  });
+
+  const result: RoutingState = { traces: [], jumpers, failedNets: [], warnings };
+  const validation = validateRoutingResult(board, result, endpoints, components);
+  result.drc = validation.drc;
+  result.diagnostics = { failedNetDetails: validation.failedNetDetails };
+  result.failedNets = validation.failedNetDetails.map((detail) => detail.net);
+  result.warnings = [...warnings, ...validation.warnings];
+  return result;
+}
+
+function findClosestAvailableHolePair(
+  fromHoles: GridPoint[],
+  toHoles: GridPoint[],
+  isUsable: (hole: GridPoint) => boolean,
+  constraints: DesignConstraint[],
+  columnUse: Map<number, number> = new Map()
+) {
+  const freeFrom = fromHoles.filter(isUsable);
+  const freeTo = toHoles.filter(isUsable);
+  let best: { from: GridPoint; to: GridPoint; distance: number } | undefined;
+  freeFrom.forEach((from) => freeTo.forEach((to) => {
+    if (jumperBlockedByConstraint(from, to, constraints)) return;
+    // Prefer columns other jumpers do not already run along, so wires do not
+    // stack invisibly on the same vertical line.
+    const spreadPenalty = ((columnUse.get(from[0]) ?? 0) + (columnUse.get(to[0]) ?? 0)) * 2;
+    const distance = manhattan(from, to) + spreadPenalty;
+    if (!best || distance < best.distance) best = { from, to, distance };
+  }));
+  return best;
 }
 
 function jumperBlockedByConstraint(from: GridPoint, to: GridPoint, constraints: DesignConstraint[]) {
@@ -799,11 +971,12 @@ function scoreRoutingResult(
 }
 
 export function validateRoutingResult(
-  _board: BoardSize,
+  board: BoardSize,
   result: RoutingState,
   endpoints: RoutedNetEndpoint[],
   components: PlacedComponent[]
 ): RoutingValidationResult {
+  const boardModel = getBoardModel(board);
   const issues: DrcIssue[] = [];
   const endpointByRefPin = new Map(endpoints.map((endpoint) => [`${endpoint.ref}:${endpoint.pin}`, endpoint]));
   const requiredByNet = new Map<string, RoutedNetEndpoint[]>();
@@ -812,6 +985,73 @@ export function validateRoutingResult(
   const edgeNetByKey = new Map<string, { net: string; segment: [[number, number], [number, number]] }>();
   const physicalDsu = new DisjointSet();
   const conductiveCells = new Set<string>();
+  const pinsByCell = new Map<string, Array<{ ref: string; pin: number; grid: GridPoint }>>();
+
+  components.forEach((component) => {
+    const pinNets = Object.fromEntries(component.pinOffsets.map((_, index) => [
+      index + 1,
+      endpointByRefPin.get(`${component.name}:${index + 1}`)?.net
+    ]));
+    const placement = boardModel.validatePlacement(component, pinNets);
+    placement.issues.forEach((issue) => {
+      if (issue.code !== "power_rail_requires_power_net" &&
+        issue.code !== "two_pin_horizontal_must_bridge_center" &&
+        issue.code !== "chip_must_bridge_center") return;
+      const code = issue.code === "power_rail_requires_power_net"
+        ? "POWER_RAIL_NET_REQUIRED"
+        : issue.code === "two_pin_horizontal_must_bridge_center"
+          ? "TWO_PIN_HORIZONTAL_CENTER_REQUIRED"
+          : "CHIP_CENTER_GAP_REQUIRED";
+      issues.push({
+        code,
+        severity: "error",
+        message: issue.message,
+        ref: component.name,
+        pin: issue.pins?.length === 1 ? issue.pins[0] : undefined,
+        grid: issue.holes?.[0]
+      });
+    });
+    component.pinOffsets.forEach((_, index) => {
+      const grid = pinGridPosition(component, index + 1);
+      const cell = key(grid[0], grid[1]);
+      const pins = pinsByCell.get(cell) ?? [];
+      pins.push({ ref: component.name, pin: index + 1, grid });
+      pinsByCell.set(cell, pins);
+      if (!boardModel.isValidHole(grid)) {
+        issues.push({
+          code: "INVALID_BOARD_HOLE",
+          severity: "error",
+          message: `${component.name}.${index + 1} is not placed in a usable board hole`,
+          ref: component.name,
+          pin: index + 1,
+          grid
+        });
+      }
+    });
+  });
+  pinsByCell.forEach((pins, cell) => {
+    if (pins.length < 2) return;
+    issues.push({
+      code: "HOLE_OCCUPIED",
+      severity: "error",
+      message: `Multiple component pins occupy hole ${cell}: ${pins.map((pin) => `${pin.ref}.${pin.pin}`).join(", ")}`,
+      grid: pins[0].grid
+    });
+  });
+
+  if (boardModel.capabilities.hasInternalConnections) {
+    const firstCellByGroup = new Map<string, string>();
+    boardModel.getAllHoles().forEach((hole) => {
+      const group = boardModel.getElectricalNode(hole.id);
+      if (!group) return;
+      const cell = key(hole.grid[0], hole.grid[1]);
+      physicalDsu.add(cell);
+      conductiveCells.add(cell);
+      const first = firstCellByGroup.get(group);
+      if (first) physicalDsu.union(first, cell);
+      else firstCellByGroup.set(group, cell);
+    });
+  }
 
   endpoints.forEach((endpoint) => {
     const list = requiredByNet.get(endpoint.net) ?? [];
@@ -821,6 +1061,17 @@ export function validateRoutingResult(
     const expected = expectedNetByCell.get(cell) ?? new Set<string>();
     expected.add(endpoint.net);
     expectedNetByCell.set(cell, expected);
+    if (!boardModel.isValidHole(endpoint.grid)) {
+      issues.push({
+        code: "INVALID_BOARD_HOLE",
+        severity: "error",
+        message: `${endpoint.ref}.${endpoint.pin} is not placed in a usable board hole`,
+        ref: endpoint.ref,
+        pin: endpoint.pin,
+        net: endpoint.net,
+        grid: endpoint.grid
+      });
+    }
   });
 
   result.traces.forEach((trace) => {
@@ -867,10 +1118,93 @@ export function validateRoutingResult(
     }
   });
 
+  const jumperEndpointCount = new Map<string, number>();
+  result.jumpers.forEach((jumper) => {
+    [jumper.from, jumper.to].forEach((point) => {
+      const cell = key(point[0], point[1]);
+      jumperEndpointCount.set(cell, (jumperEndpointCount.get(cell) ?? 0) + 1);
+    });
+  });
+
   result.jumpers.forEach((jumper) => {
     const fromCell = key(jumper.from[0], jumper.from[1]);
     const toCell = key(jumper.to[0], jumper.to[1]);
     const net = resolveManualRouteNet(jumper.net, [jumper.from, jumper.to], expectedNetByCell, routeNetsByCell);
+
+    if (!boardModel.isValidHole(jumper.from)) {
+      issues.push({
+        code: "JUMPER_ENDPOINT_INVALID_HOLE",
+        severity: "error",
+        message: `Jumper ${net} from endpoint (${jumper.from[0]},${jumper.from[1]}) is not a usable board hole`,
+        net,
+        grid: jumper.from
+      });
+    }
+    if (!boardModel.isValidHole(jumper.to)) {
+      issues.push({
+        code: "JUMPER_ENDPOINT_INVALID_HOLE",
+        severity: "error",
+        message: `Jumper ${net} to endpoint (${jumper.to[0]},${jumper.to[1]}) is not a usable board hole`,
+        net,
+        grid: jumper.to
+      });
+    }
+    if ((board.kind ?? "perfboard") === "breadboard") {
+      // One hole takes one wire on a breadboard: a DuPont jumper can never
+      // share a hole with a component pin or with another jumper.
+      const fromPins = pinsByCell.get(fromCell);
+      if (fromPins) {
+        issues.push({
+          code: "JUMPER_ENDPOINT_OCCUPIED",
+          severity: "error",
+          message: `Jumper ${net} from endpoint shares hole ${jumper.from[0]},${jumper.from[1]} with component pin(s) ${fromPins.map((pin) => `${pin.ref}.${pin.pin}`).join(", ")}; one hole takes one wire`,
+          net,
+          grid: jumper.from
+        });
+      }
+      const toPins = pinsByCell.get(toCell);
+      if (toPins) {
+        issues.push({
+          code: "JUMPER_ENDPOINT_OCCUPIED",
+          severity: "error",
+          message: `Jumper ${net} to endpoint shares hole ${jumper.to[0]},${jumper.to[1]} with component pin(s) ${toPins.map((pin) => `${pin.ref}.${pin.pin}`).join(", ")}; one hole takes one wire`,
+          net,
+          grid: jumper.to
+        });
+      }
+      if ((jumperEndpointCount.get(fromCell) ?? 0) > 1) {
+        issues.push({
+          code: "JUMPER_ENDPOINT_OCCUPIED",
+          severity: "error",
+          message: `Jumper ${net} from endpoint shares hole ${jumper.from[0]},${jumper.from[1]} with another jumper; one hole takes one wire`,
+          net,
+          grid: jumper.from
+        });
+      }
+      if ((jumperEndpointCount.get(toCell) ?? 0) > 1) {
+        issues.push({
+          code: "JUMPER_ENDPOINT_OCCUPIED",
+          severity: "error",
+          message: `Jumper ${net} to endpoint shares hole ${jumper.to[0]},${jumper.to[1]} with another jumper; one hole takes one wire`,
+          net,
+          grid: jumper.to
+        });
+      }
+    }
+    if (boardModel.capabilities.hasInternalConnections) {
+      const fromNode = boardModel.getElectricalNode(jumper.from);
+      const toNode = boardModel.getElectricalNode(jumper.to);
+      if (fromNode && toNode && fromNode === toNode) {
+        issues.push({
+          code: "JUMPER_SAME_ELECTRICAL_NODE",
+          severity: "warning",
+          message: `Jumper ${net} connects two holes of the same electrical node (${fromNode}); no jumper is needed here`,
+          net,
+          grid: jumper.from
+        });
+      }
+    }
+
     addRouteNet(routeNetsByCell, fromCell, net);
     addRouteNet(routeNetsByCell, toCell, net);
     conductiveCells.add(fromCell);
@@ -880,15 +1214,25 @@ export function validateRoutingResult(
     physicalDsu.union(fromCell, toCell);
   });
 
+  if (boardModel.capabilities.hasInternalConnections) {
+    propagateBreadboardNets(endpoints, routeNetsByCell, physicalDsu, conductiveCells);
+  }
+
+  const reportedShortGroups = new Set<string>();
   routeNetsByCell.forEach((actualNets, cell) => {
     if (actualNets.size > 1) {
-      issues.push({
-        code: "SHORT_BETWEEN_NETS",
-        severity: "error",
-        message: `Different nets share hole ${cell}: ${[...actualNets].join(", ")}`,
-        actualNets: [...actualNets],
-        grid: parseKey(cell)
-      });
+      const point = parseKey(cell);
+      const shortGroup = boardModel.getElectricalNode(point) ?? cell;
+      if (!reportedShortGroups.has(shortGroup)) {
+        reportedShortGroups.add(shortGroup);
+        issues.push({
+          code: "SHORT_BETWEEN_NETS",
+          severity: "error",
+          message: `Different nets share conductive group ${shortGroup}: ${[...actualNets].join(", ")}`,
+          actualNets: [...actualNets],
+          grid: point
+        });
+      }
     }
 
     const expectedNets = expectedNetByCell.get(cell);
@@ -930,8 +1274,13 @@ export function validateRoutingResult(
     });
   });
 
-  issues.push(...detectSuspiciousAdjacentPinIssues(endpoints, components));
-  issues.push(...detectDipGeometryIssues(components));
+  // Solder-bridge heuristics only apply to perfboard bottom routing; on a
+  // breadboard adjacent DIP pins live on separate rows and DIP geometry is
+  // fixed by the straddle rule, so these warnings would be noise.
+  if (boardModel.capabilities.routePrimitives.has("bottom_trace")) {
+    issues.push(...detectSuspiciousAdjacentPinIssues(endpoints, components));
+    issues.push(...detectDipGeometryIssues(components));
+  }
 
   const failedNetDetails = buildFailedNetDetails(requiredByNet, physicalDsu, conductiveCells);
   const errors = dedupeIssues(issues.filter((issue) => issue.severity === "error"));
@@ -957,12 +1306,10 @@ function buildPinStatuses(
   conductiveCells: Set<string>
 ): PinRouteStatus[] {
   return components.flatMap((component) => {
-    const anchor = component.pinOffsets[0] ?? [0, 0];
-    return component.pinOffsets.map((offset, index) => {
+    return component.pinOffsets.map((_, index) => {
       const pin = index + 1;
       const endpoint = endpointByRefPin.get(`${component.name}:${pin}`);
-      const [rx, ry] = rotateOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
-      const grid: [number, number] = endpoint?.grid ?? [component.position[0] + rx, component.position[1] + ry];
+      const grid = endpoint?.grid ?? pinGridPosition(component, pin);
       const cell = key(grid[0], grid[1]);
       const actualNets = [...(routeNetsByCell.get(cell) ?? new Set<string>())];
 
@@ -1538,12 +1885,10 @@ function buildPadOwner(components: PlacedComponent[], endpoints: RoutedNetEndpoi
   const pads = new Map<string, PadOwner>();
 
   components.forEach((component) => {
-    const anchor = component.pinOffsets[0] ?? [0, 0];
-    component.pinOffsets.forEach((offset, index) => {
+    component.pinOffsets.forEach((_, index) => {
       const pin = index + 1;
       const endpoint = endpointByRefPin.get(`${component.name}:${pin}`);
-      const [rx, ry] = rotateOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
-      const grid: GridPoint = endpoint?.grid ?? [component.position[0] + rx, component.position[1] + ry];
+      const grid = endpoint?.grid ?? pinGridPosition(component, pin);
       pads.set(key(grid[0], grid[1]), {
         ref: component.name,
         pin,
@@ -1568,10 +1913,6 @@ function groupEndpointsByNet(endpoints: RoutedNetEndpoint[]): Array<Omit<NetPlan
 
 function priorityNet(endpointCount: number, span: number) {
   return endpointCount * 180 + span * 22;
-}
-
-function isPowerNet(net: string) {
-  return /^(0|GND|VCC|VDD|VEE|VSS|VDC|VDC\d+|\+?\d+V)$/i.test(net);
 }
 
 function netBias(plan: NetPlan, map: CongestionMap) {
@@ -1629,21 +1970,7 @@ function directionsTowardOpenBoard(point: [number, number], board: BoardSize): A
 }
 
 function rotateDirections(directions: Array<[number, number]>, rotation: number) {
-  return directions.map((direction) => rotateOffset(direction, rotation));
-}
-
-function rotateOffset([x, y]: [number, number], rotation: number): [number, number] {
-  const quarterTurns = ((Math.round(rotation / (Math.PI / 2)) % 4) + 4) % 4;
-  if (quarterTurns === 1) {
-    return [y, -x];
-  }
-  if (quarterTurns === 2) {
-    return [-x, -y];
-  }
-  if (quarterTurns === 3) {
-    return [-y, x];
-  }
-  return [x, y];
+  return directions.map((direction) => rotateGridOffset(direction, rotation));
 }
 
 function dedupePoints(points: Array<[number, number]>) {
@@ -1683,6 +2010,29 @@ function pathLength(points: Array<[number, number]>) {
     length += manhattan(points[index - 1], points[index]);
   }
   return length;
+}
+
+function propagateBreadboardNets(
+  endpoints: RoutedNetEndpoint[],
+  routeNetsByCell: Map<string, Set<string>>,
+  physicalDsu: DisjointSet,
+  conductiveCells: Set<string>
+) {
+  const netsByRoot = new Map<string, Set<string>>();
+  const recordNet = (cell: string, net: string) => {
+    if (!conductiveCells.has(cell)) return;
+    const root = physicalDsu.find(cell);
+    const nets = netsByRoot.get(root) ?? new Set<string>();
+    nets.add(net);
+    netsByRoot.set(root, nets);
+  };
+
+  endpoints.forEach((endpoint) => recordNet(key(endpoint.grid[0], endpoint.grid[1]), endpoint.net));
+  routeNetsByCell.forEach((nets, cell) => nets.forEach((net) => recordNet(cell, net)));
+  conductiveCells.forEach((cell) => {
+    const nets = netsByRoot.get(physicalDsu.find(cell));
+    if (nets) routeNetsByCell.set(cell, new Set(nets));
+  });
 }
 
 function countRouteBends(points: Array<[number, number]>) {

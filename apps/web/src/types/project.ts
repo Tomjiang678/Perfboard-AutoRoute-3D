@@ -1,5 +1,6 @@
 export type ImportKind = "netlist" | "bom";
 export type DragMoveModifier = "shift" | "alt" | "ctrl" | "none";
+export type ThemeMode = "light" | "dark";
 export type ShortcutAction =
   | "refresh"
   | "select"
@@ -131,6 +132,14 @@ export type DrcIssueCode =
   | "SHORT_BETWEEN_NETS"
   | "BOTTOM_ROUTE_CROSSING"
   | "BOTTOM_ROUTE_OVERLAP"
+  | "INVALID_BOARD_HOLE"
+  | "HOLE_OCCUPIED"
+  | "JUMPER_ENDPOINT_INVALID_HOLE"
+  | "JUMPER_ENDPOINT_OCCUPIED"
+  | "JUMPER_SAME_ELECTRICAL_NODE"
+  | "POWER_RAIL_NET_REQUIRED"
+  | "TWO_PIN_HORIZONTAL_CENTER_REQUIRED"
+  | "CHIP_CENTER_GAP_REQUIRED"
   | "SUSPICIOUS_ADJACENT_IC_PINS"
   | "DIP_PIN_GEOMETRY";
 
@@ -187,6 +196,8 @@ export interface PlacedComponent {
   leadSpacing: number;
   rowSpacing: number;
   sameSidePitch: number;
+  pinHeaderRows?: number;
+  pinHeaderColumns?: number;
   pinOffsets: Array<[number, number]>;
   position: [number, number];
   rotation: number;
@@ -199,6 +210,20 @@ export interface PlacedComponent {
 export interface BoardSize {
   width: number;
   height: number;
+  /** Missing on legacy projects; legacy boards are migrated to perfboard. */
+  kind?: BoardKind;
+  breadboard?: BreadboardLayout;
+}
+
+export type BoardKind = "perfboard" | "breadboard";
+
+export interface BreadboardLayout {
+  /** Number of terminal-strip modules placed next to each other. */
+  modules: number;
+  /** Number of numbered terminal rows along the long edge. */
+  terminalRows: number;
+  /** Standalone boards have red/blue rails on each side; combined boards have one outer rail per side. */
+  powerRailsPerSide: 1 | 2;
 }
 
 export type ConstraintStrength = "hard" | "soft";
