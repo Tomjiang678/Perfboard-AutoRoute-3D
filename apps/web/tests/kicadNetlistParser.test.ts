@@ -52,29 +52,29 @@ test("parses KiCad components, nets and pin info; filters unconnected nets", () 
   assert.equal(bundle.warnings.length, 0);
 });
 
-test("LM358 symbol pins are enriched from device pin models", () => {
+test("74HC595 symbol pins are enriched from the generated device library", () => {
   const text = `(export
 	(version "E")
 	(components
-		(comp (ref "U1") (value "LM358") (libsource (lib "Amplifier_Operational") (part "LM358")))
+		(comp (ref "U1") (value "74HC595") (libsource (lib "74xx") (part "74HC595")))
 	)
 	(libparts
 		(libpart
-			(lib "Amplifier_Operational")
-			(part "LM358")
+			(lib "74xx")
+			(part "74HC595")
 			(pins
 				(pin (num "1") (name "") (type "output"))
-				(pin (num "4") (name "V-") (type "power_in"))
-				(pin (num "8") (name "V+") (type "power_in"))
+				(pin (num "8") (name "GND") (type "power_in"))
+				(pin (num "16") (name "VCC") (type "power_in"))
 			)
 		)
 	)
 	(nets)
 )`;
-  const bundle = parseKicadNetlist(text, "opamp.net");
+  const bundle = parseKicadNetlist(text, "shift.net");
   assert.equal(bundle.components.length, 1);
   const pin = bundle.pinInfo!.U1!;
-  assert.ok((pin["1"].name ?? "").length > 0, "pin 1 gets a name from the device model");
-  assert.equal(pin["4"].type, "power");
+  assert.equal(pin["1"].name, "QB");
   assert.equal(pin["8"].type, "power");
+  assert.equal(pin["16"].type, "power");
 });

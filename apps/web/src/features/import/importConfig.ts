@@ -1,7 +1,6 @@
 import type { LibraryComponentKind, ParsedComponent } from "../../types/project.ts";
 import behaviorData from "./importBehaviorData.json" with { type: "json" };
 import configData from "./importConfigData.json" with { type: "json" };
-import pinLibraryOverrides from "./pinLibraryOverrides.json" with { type: "json" };
 import pinLibraryGenerated from "./pinLibraryGenerated.json" with { type: "json" };
 
 export interface DevicePinModel {
@@ -34,7 +33,6 @@ export interface IgnoredComponentRule {
 interface RawDevicePinModel {
   match: string;
   flags?: string;
-  template?: string;
   units?: Record<string, Record<string, number>>;
   powerPins?: Record<string, number>;
 }
@@ -56,10 +54,6 @@ interface RawBehaviorRule {
 
 interface RawPinLibraryData {
   source?: string;
-  pinModelTemplates?: Record<string, {
-    units: Record<string, Record<string, number>>;
-    powerPins: Record<string, number>;
-  }>;
   devicePinModels?: RawDevicePinModel[];
 }
 
@@ -82,7 +76,6 @@ const rawBehavior = behaviorData as unknown as {
   ignoredComponentRules: RawBehaviorRule[];
 };
 
-const rawOverrides = pinLibraryOverrides as unknown as RawPinLibraryData;
 const rawGenerated = pinLibraryGenerated as unknown as RawPinLibraryData;
 
 const pinCountResolvers: Record<NonNullable<RawComponentMappingRule["pinCountStrategy"]>, (component: ParsedComponent, pinsFromNetlist?: number) => number> = {
@@ -93,12 +86,9 @@ const pinCountResolvers: Record<NonNullable<RawComponentMappingRule["pinCountStr
   fixed8: () => 8
 };
 
-// Hand-tuned overrides win; the 867 models generated from the KiCad symbol
-// libraries act as the broad fallback (pin name enrichment, power pins).
-export const devicePinModels: DevicePinModel[] = [
-  ...(rawOverrides.devicePinModels ?? []).map((model) => buildDevicePinModel(model, rawOverrides)),
-  ...(rawGenerated.devicePinModels ?? []).map((model) => buildDevicePinModel(model, rawGenerated))
-];
+// Single pin-model source: the library generated from the KiCad symbol
+// libraries. pinLibraryOverrides.json is deprecated and no longer loaded.
+export const devicePinModels: DevicePinModel[] = (rawGenerated.devicePinModels ?? []).map(buildDevicePinModel);
 
 export const componentMappingRules: ComponentMappingRule[] = rawConfig.componentMappingRules.map((rule) => ({
   kind: rule.kind,
@@ -127,15 +117,11 @@ function buildPinCountResolver(strategy: RawComponentMappingRule["pinCountStrate
   return strategy ? pinCountResolvers[strategy] : undefined;
 }
 
-function buildDevicePinModel(model: RawDevicePinModel, library: RawPinLibraryData): DevicePinModel {
-  const template = model.template ? library.pinModelTemplates?.[model.template] : undefined;
+function buildDevicePinModel(model: RawDevicePinModel): DevicePinModel {
   return {
     match: new RegExp(model.match, model.flags),
-    units: mergeUnitMaps(template?.units, model.units),
-    powerPins: {
-      ...(template?.powerPins ?? {}),
-      ...(model.powerPins ?? {})
-    }
+    units: model.units ?? {},
+    powerPins: model.powerPins ?? {}
   };
 }
 
@@ -143,23 +129,6 @@ function buildBehaviorRule(rule: RawBehaviorRule): IgnoredComponentRule {
   return {
     match: (component: NormalizedComponentFields) => evaluateMatchList(rule.match, component, rule.matchMode ?? "any")
   };
-}
-
-function mergeUnitMaps(
-  base: Record<string, Record<string, number>> | undefined,
-  override: Record<string, Record<string, number>> | undefined
-) {
-  const result: Record<string, Record<string, number>> = {};
-  for (const [unit, pins] of Object.entries(base ?? {})) {
-    result[unit] = { ...pins };
-  }
-  for (const [unit, pins] of Object.entries(override ?? {})) {
-    result[unit] = {
-      ...(result[unit] ?? {}),
-      ...pins
-    };
-  }
-  return result;
 }
 
 function inferPinCountFromDevicePinModels(value: string) {

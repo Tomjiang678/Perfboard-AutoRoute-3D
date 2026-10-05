@@ -65,11 +65,11 @@ test("generated circuit yields 4 real nets plus chain nets", () => {
   assert.equal(bundle.components.length, 9);
 });
 
-test("generated op-amps resolve to DIP-8 with enriched pin names", () => {
+test("generated op-amps resolve to DIP-8 with libpart pin names", () => {
   const circuit = generateCircuit(5);
   const bundle = parseKicadNetlist(circuit.text, "x.net");
-  assert.equal(bundle.pinInfo.U1["1"].name, "1OUT");
   assert.equal(bundle.pinInfo.U1["4"].type, "power");
+  assert.equal(bundle.pinInfo.U1["8"].name, "V+");
   const board = createBreadboardDefinition(40, 1);
   const importState: ImportState = { components: bundle.components, nets: bundle.nets, warnings: bundle.warnings, pinInfo: bundle.pinInfo };
   const components = createPlacedComponentsFromParsed(importState, [], board.width);
@@ -77,7 +77,7 @@ test("generated op-amps resolve to DIP-8 with enriched pin names", () => {
   assert.equal(u1?.kind, "dip");
   assert.equal(u1?.pinOffsets.length, 8);
   const endpoints = resolveNetEndpoints(importState, components);
-  assert.ok(endpoints.some((item) => item.ref === "U1" && item.role === "1OUT"));
+  assert.ok(endpoints.some((item) => item.ref === "U1" && item.role === "V+"));
 });
 
 test("generated circuit uses no fallback placeholders", () => {

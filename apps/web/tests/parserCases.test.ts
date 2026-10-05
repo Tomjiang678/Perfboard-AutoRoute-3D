@@ -147,29 +147,29 @@ test("escaped quotes inside strings round-trip", () => {
 
 /* ── device model enrichment ──────────────────────────────────────────── */
 
-test("LM358 pin 1 name is enriched from the device model", () => {
+test("74HC595 pin 1 name is enriched from the generated device library", () => {
   const spec: FactoryNetlist = {
-    components: [{ ref: "U1", lib: "Amplifier_Operational", part: "LM358", value: "LM358", pins: [
+    components: [{ ref: "U1", lib: "74xx", part: "74HC595", value: "74HC595", pins: [
       { num: 1, name: "", type: "output" },
-      { num: 4, name: "V-", type: "power_in" }
+      { num: 8, name: "GND", type: "power_in" }
     ] }],
     nets: []
   };
   const bundle = parseKicadNetlist(buildNetlistText(spec), "a.net");
-  assert.ok((bundle.pinInfo!["U1"]!["1"].name ?? "").length > 0);
+  assert.equal(bundle.pinInfo!["U1"]!["1"].name, "QB");
 });
 
 test("power pins are marked via libpart type and device model powerPins", () => {
   const spec: FactoryNetlist = {
-    components: [{ ref: "U1", lib: "Amplifier_Operational", part: "LM358", value: "LM358", pins: [
-      { num: 4, name: "V-", type: "passive" },
-      { num: 8, name: "V+", type: "power_in" }
+    components: [{ ref: "U1", lib: "74xx", part: "74HC595", value: "74HC595", pins: [
+      { num: 8, name: "GND", type: "passive" },
+      { num: 16, name: "VCC", type: "power_in" }
     ] }],
     nets: []
   };
   const bundle = parseKicadNetlist(buildNetlistText(spec), "a.net");
-  assert.equal(bundle.pinInfo.U1["4"].type, "power");
-  assert.equal(bundle.pinInfo.U1["8"].type, "power");
+  assert.equal(bundle.pinInfo!["U1"]!["8"].type, "power");
+  assert.equal(bundle.pinInfo!["U1"]!["16"].type, "power");
 });
 
 /* ── bundle merging ───────────────────────────────────────────────────── */

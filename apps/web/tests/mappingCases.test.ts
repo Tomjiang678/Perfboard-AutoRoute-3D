@@ -98,12 +98,12 @@ test("connector pin count comes from the netlist pin info", () => {
   assert.equal(placed[0].pinOffsets.length, 3);
 });
 
-test("LM358 without pinInfo still resolves 8 pins from the device model", () => {
+test("74HC595 without pinInfo still resolves 16 pins from the device library", () => {
   const state = importStateWith([
-    { ref: "U1", value: "LM358", category: "Amplifier_Operational:LM358", packageName: "", sourceFile: "x.net" }
+    { ref: "U1", value: "74HC595", category: "74xx:74HC595", packageName: "", sourceFile: "x.net" }
   ]);
   const placed = createPlacedComponentsFromParsed(state, [], 30);
-  assert.equal(placed[0].pinOffsets.length, 8);
+  assert.equal(placed[0].pinOffsets.length, 16);
 });
 
 test("unknown component falls back to a pin header with the netlist pin count", () => {
