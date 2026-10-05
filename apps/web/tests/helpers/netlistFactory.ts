@@ -23,7 +23,7 @@ export interface FactoryNetlist {
   nets: Array<{ name: string; nodes: Array<{ ref: string; pin: number }> }>;
 }
 
-export function escapeNetlistString(value: string): string {
+function escapeNetlistString(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 

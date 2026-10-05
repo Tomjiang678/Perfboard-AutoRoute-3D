@@ -44,7 +44,7 @@ interface RawComponentMappingRule {
   label: string;
   match: MatchExpression[];
   matchMode?: "any" | "all";
-  pinCountStrategy?: "fromPins" | "fixed2" | "fixed3" | "fixed4" | "fixed8" | "fixed10" | "fixed18";
+  pinCountStrategy?: "fromPins" | "fixed2" | "fixed3" | "fixed4" | "fixed8";
   leadSpacing?: number;
   rowSpacing?: number;
 }
@@ -90,9 +90,7 @@ const pinCountResolvers: Record<NonNullable<RawComponentMappingRule["pinCountStr
   fixed2: () => 2,
   fixed3: () => 3,
   fixed4: () => 4,
-  fixed8: () => 8,
-  fixed10: () => 10,
-  fixed18: () => 18
+  fixed8: () => 8
 };
 
 // Hand-tuned overrides win; the 867 models generated from the KiCad symbol
