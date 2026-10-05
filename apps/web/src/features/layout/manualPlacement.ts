@@ -1,8 +1,8 @@
-import type { PlacedComponent } from "../../types/project";
-import { pinGridPosition } from "../board/placement";
-import { isBendableTwoPin, maximumLeadSpan } from "../project/componentTraits";
+import type { PlacedComponent } from "../../types/project.ts";
+import { pinGridPosition } from "../board/placement.ts";
+import { isBendableTwoPin, maximumLeadSpan } from "../project/componentTraits.ts";
 
-export { pinGridPosition } from "../board/placement";
+export { pinGridPosition } from "../board/placement.ts";
 
 export function isManuallyBendable(component: PlacedComponent) {
   return isBendableTwoPin(component);

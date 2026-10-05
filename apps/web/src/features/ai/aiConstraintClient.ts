@@ -1,7 +1,7 @@
-import type { PerfboardProject } from "../../types/project";
-import { AI_PROVIDER_OPTIONS, type AiApiConfiguration } from "./aiProvider";
-import { buildConstraintPrompt, buildConstraintRepairPrompt } from "./constraintPrompt";
-import { parseAiConstraintResponse } from "../constraints/schema";
+import type { PerfboardProject } from "../../types/project.ts";
+import { AI_PROVIDER_OPTIONS, type AiApiConfiguration } from "./aiProvider.ts";
+import { buildConstraintPrompt, buildConstraintRepairPrompt } from "./constraintPrompt.ts";
+import { parseAiConstraintResponse } from "../constraints/schema.ts";
 
 export async function requestConstraintDrafts(
   configuration: AiApiConfiguration,

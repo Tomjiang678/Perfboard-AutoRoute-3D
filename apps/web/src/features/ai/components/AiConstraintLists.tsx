@@ -1,5 +1,5 @@
-import type { AiConstraintAssistantController } from "../useAiConstraintAssistant";
-import type { DesignConstraint } from "../../../types/project";
+import type { AiConstraintAssistantController } from "../useAiConstraintAssistant.ts";
+import type { DesignConstraint } from "../../../types/project.ts";
 
 export function AiConstraintLists({ controller }: { controller: AiConstraintAssistantController }) {
   return (

@@ -1,4 +1,4 @@
-import type { ConstraintRegion, ConstraintStrength } from "../../types/project";
+import type { ConstraintRegion, ConstraintStrength } from "../../types/project.ts";
 
 export type ConstraintDraft =
   | {

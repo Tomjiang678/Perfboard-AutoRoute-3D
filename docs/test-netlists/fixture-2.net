@@ -1,0 +1,147 @@
+(export
+	(version "E")
+	(components
+		(comp
+			(ref "LED1")
+			(value "LED")
+			(libsource (lib "Device") (part "LED"))
+		)
+		(comp
+			(ref "C2")
+			(value "C")
+			(libsource (lib "Device") (part "C"))
+		)
+		(comp
+			(ref "C3")
+			(value "C")
+			(libsource (lib "Device") (part "C"))
+		)
+		(comp
+			(ref "LED4")
+			(value "LED")
+			(libsource (lib "Device") (part "LED"))
+		)
+		(comp
+			(ref "D5")
+			(value "D")
+			(libsource (lib "Device") (part "D"))
+		)
+		(comp
+			(ref "LED6")
+			(value "LED")
+			(libsource (lib "Device") (part "LED"))
+		)
+		(comp
+			(ref "U1")
+			(value "LM358")
+			(libsource (lib "Amplifier_Operational") (part "LM358"))
+		)
+		(comp
+			(ref "U2")
+			(value "LM358")
+			(libsource (lib "Amplifier_Operational") (part "LM358"))
+		)
+		(comp
+			(ref "J1")
+			(value "Conn_01x02")
+			(libsource (lib "Connector") (part "Conn_01x02"))
+		)
+	)
+	(libparts
+		(libpart
+			(lib "Device")
+			(part "LED")
+			(pins
+				(pin (num "1") (name "K") (type "passive"))
+				(pin (num "2") (name "A") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "C")
+			(pins
+				(pin (num "1") (name "1") (type "passive"))
+				(pin (num "2") (name "2") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "D")
+			(pins
+				(pin (num "1") (name "K") (type "passive"))
+				(pin (num "2") (name "A") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Amplifier_Operational")
+			(part "LM358")
+			(pins
+				(pin (num "1") (name "") (type "output"))
+				(pin (num "2") (name "-") (type "input"))
+				(pin (num "3") (name "+") (type "input"))
+				(pin (num "4") (name "V-") (type "power_in"))
+				(pin (num "5") (name "+") (type "input"))
+				(pin (num "6") (name "-") (type "input"))
+				(pin (num "7") (name "") (type "output"))
+				(pin (num "8") (name "V+") (type "power_in"))
+			)
+		)
+		(libpart
+			(lib "Connector")
+			(part "Conn_01x02")
+			(pins
+				(pin (num "1") (name "Pin_1") (type "passive"))
+				(pin (num "2") (name "Pin_2") (type "passive"))
+			)
+		)
+	)
+	(nets
+		(net
+			(name "N1")
+			(node (ref "LED1") (pin "2"))
+			(node (ref "C2") (pin "1"))
+		)
+		(net
+			(name "N2")
+			(node (ref "C2") (pin "2"))
+			(node (ref "C3") (pin "1"))
+		)
+		(net
+			(name "N3")
+			(node (ref "C3") (pin "2"))
+			(node (ref "LED4") (pin "1"))
+		)
+		(net
+			(name "N4")
+			(node (ref "LED4") (pin "2"))
+			(node (ref "D5") (pin "1"))
+		)
+		(net
+			(name "N5")
+			(node (ref "D5") (pin "2"))
+			(node (ref "LED6") (pin "1"))
+		)
+		(net
+			(name "GND")
+			(node (ref "LED1") (pin "1"))
+			(node (ref "U1") (pin "4"))
+			(node (ref "U2") (pin "4"))
+			(node (ref "J1") (pin "2"))
+		)
+		(net
+			(name "VCC")
+			(node (ref "U1") (pin "8"))
+			(node (ref "LED6") (pin "2"))
+		)
+		(net
+			(name "VCC2")
+			(node (ref "U2") (pin "8"))
+			(node (ref "J1") (pin "1"))
+		)
+		(net
+			(name "SIG")
+			(node (ref "U1") (pin "1"))
+			(node (ref "U2") (pin "3"))
+		)
+	)
+)

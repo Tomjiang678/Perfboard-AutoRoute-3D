@@ -1,4 +1,4 @@
-import type { BoardSize, PlacedComponent } from "../../types/project";
+import type { BoardSize, PlacedComponent } from "../../types/project.ts";
 
 export type GridPoint = [number, number];
 export type HoleId = string;

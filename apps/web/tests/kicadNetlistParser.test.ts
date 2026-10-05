@@ -73,8 +73,8 @@ test("LM358 symbol pins are enriched from device pin models", () => {
 )`;
   const bundle = parseKicadNetlist(text, "opamp.net");
   assert.equal(bundle.components.length, 1);
-  const pin = bundle.pinInfo.U1;
-  assert.ok(pin["1"].name.length > 0, "pin 1 gets a name from the device model");
+  const pin = bundle.pinInfo!.U1!;
+  assert.ok((pin["1"].name ?? "").length > 0, "pin 1 gets a name from the device model");
   assert.equal(pin["4"].type, "power");
   assert.equal(pin["8"].type, "power");
 });

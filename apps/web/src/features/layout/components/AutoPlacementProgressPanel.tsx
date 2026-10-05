@@ -1,4 +1,4 @@
-import type { AutoPlacementProgress } from "../autoPlacement";
+import type { AutoPlacementProgress } from "../autoPlacement.ts";
 
 interface AutoPlacementProgressPanelProps {
   progress?: AutoPlacementProgress;

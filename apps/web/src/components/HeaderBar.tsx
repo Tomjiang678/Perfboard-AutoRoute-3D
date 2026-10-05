@@ -1,7 +1,7 @@
 import { Moon, RotateCcw, Save, Settings, Sun } from "lucide-react";
 import type { ChangeEvent } from "react";
-import type { ThemeMode } from "../types/project";
-import { WorkspaceToolbar, type WorkspaceToolbarProps } from "./WorkspaceToolbar";
+import type { ThemeMode } from "../types/project.ts";
+import { WorkspaceToolbar, type WorkspaceToolbarProps } from "./WorkspaceToolbar.tsx";
 
 interface HeaderBarProps {
   projectName?: string;

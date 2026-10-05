@@ -1,4 +1,4 @@
-import type { AiApiConfiguration } from "../features/ai/aiProvider";
+import type { AiApiConfiguration } from "../features/ai/aiProvider.ts";
 
 declare global {
   interface Window {

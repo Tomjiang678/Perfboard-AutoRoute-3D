@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { Check, Eye, Moon, MousePointer2, RefreshCw, RotateCw, ShieldCheck, Trash2, Undo2, XCircle } from "lucide-react";
-import type { LibraryComponentDefinition } from "../features/project/componentLibrary";
-import type { KeyboardShortcuts, PlacedComponent } from "../types/project";
-import { ComponentLibrary } from "./ComponentLibrary";
+import type { LibraryComponentDefinition } from "../features/project/componentLibrary.ts";
+import type { KeyboardShortcuts, PlacedComponent } from "../types/project.ts";
+import { ComponentLibrary } from "./ComponentLibrary.tsx";
 
 export type RouteEditMode = "select" | "solder" | "jumper" | "erase";
 

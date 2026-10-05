@@ -1,4 +1,4 @@
-import type { LibraryComponentKind, PlacedComponent } from "../../types/project";
+import type { LibraryComponentKind, PlacedComponent } from "../../types/project.ts";
 
 const kinds = <T extends LibraryComponentKind>(...values: T[]) => new Set<LibraryComponentKind>(values);
 

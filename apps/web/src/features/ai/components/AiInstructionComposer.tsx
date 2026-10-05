@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { AiConstraintAssistantController } from "../useAiConstraintAssistant";
+import type { AiConstraintAssistantController } from "../useAiConstraintAssistant.ts";
 
 interface AiInstructionComposerProps {
   controller: AiConstraintAssistantController;

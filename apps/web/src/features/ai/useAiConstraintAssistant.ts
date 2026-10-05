@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import type { AiApiConfiguration } from "./aiProvider";
-import { EMPTY_AI_API_CONFIGURATION } from "./aiProvider";
-import { loadAiApiConfiguration, saveAiApiConfiguration } from "./aiConfigStore";
-import { requestConstraintDrafts, testAiApiConnection } from "./aiConstraintClient";
-import { detectConstraintConflicts } from "../constraints/conflictDetector";
-import { projectConstraints } from "../constraints/model";
-import { resolveConstraintDrafts } from "../constraints/resolveDrafts";
-import type { DesignConstraint, PerfboardProject } from "../../types/project";
+import type { AiApiConfiguration } from "./aiProvider.ts";
+import { EMPTY_AI_API_CONFIGURATION } from "./aiProvider.ts";
+import { loadAiApiConfiguration, saveAiApiConfiguration } from "./aiConfigStore.ts";
+import { requestConstraintDrafts, testAiApiConnection } from "./aiConstraintClient.ts";
+import { detectConstraintConflicts } from "../constraints/conflictDetector.ts";
+import { projectConstraints } from "../constraints/model.ts";
+import { resolveConstraintDrafts } from "../constraints/resolveDrafts.ts";
+import type { DesignConstraint, PerfboardProject } from "../../types/project.ts";
 
 type ProjectCommitter = (updater: (current: PerfboardProject) => PerfboardProject) => void;
 

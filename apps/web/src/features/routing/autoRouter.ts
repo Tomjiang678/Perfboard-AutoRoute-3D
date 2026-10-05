@@ -10,7 +10,7 @@ import type {
   PinRouteStatus,
   RoutedNetEndpoint,
   RoutingState
-} from "../../types/project";
+} from "../../types/project.ts";
 import {
   adjacentCells,
   edgeKey,
@@ -26,10 +26,10 @@ import {
   traceEdges,
   type GridPoint,
   type RouterCell
-} from "./routingGeometry";
-import { getBoardModel } from "../board/factory";
-import { componentPinHoles, isPowerNet, pinGridPosition, rotateGridOffset } from "../board/placement";
-import type { BoardModel } from "../board/types";
+} from "./routingGeometry.ts";
+import { getBoardModel } from "../board/factory.ts";
+import { componentPinHoles, isPowerNet, pinGridPosition, rotateGridOffset } from "../board/placement.ts";
+import type { BoardModel } from "../board/types.ts";
 
 interface NetPlan {
   net: string;

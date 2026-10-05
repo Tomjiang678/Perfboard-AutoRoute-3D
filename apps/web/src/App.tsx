@@ -1,35 +1,35 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { HeaderBar } from "./components/HeaderBar";
-import { NewProjectDialog } from "./components/NewProjectDialog";
-import { ProjectSidebar } from "./components/ProjectSidebar";
-import { Workspace } from "./components/Workspace";
-import { AutoPlacementDialog } from "./components/AutoPlacementDialog";
-import { SettingsDialog } from "./components/SettingsDialog";
+import { HeaderBar } from "./components/HeaderBar.tsx";
+import { NewProjectDialog } from "./components/NewProjectDialog.tsx";
+import { ProjectSidebar } from "./components/ProjectSidebar.tsx";
+import { Workspace } from "./components/Workspace.tsx";
+import { AutoPlacementDialog } from "./components/AutoPlacementDialog.tsx";
+import { SettingsDialog } from "./components/SettingsDialog.tsx";
 import {
   buildPinOffsetsForComponent,
   type LibraryComponentDefinition
-} from "./features/project/componentLibrary";
-import { mergeImportState, parseImportFiles } from "./features/import/kicadNetlistParser";
-import { createPlacedComponentsFromParsed } from "./features/import/componentMapping";
-import { useAutoPlacement } from "./features/layout/useAutoPlacement";
-import { useAiConstraintAssistant } from "./features/ai/useAiConstraintAssistant";
-import { projectConstraints, withMigratedConstraints } from "./features/constraints/model";
+} from "./features/project/componentLibrary.ts";
+import { mergeImportState, parseImportFiles } from "./features/import/kicadNetlistParser.ts";
+import { createPlacedComponentsFromParsed } from "./features/import/componentMapping.ts";
+import { useAutoPlacement } from "./features/layout/useAutoPlacement.ts";
+import { useAiConstraintAssistant } from "./features/ai/useAiConstraintAssistant.ts";
+import { projectConstraints, withMigratedConstraints } from "./features/constraints/model.ts";
 import {
   applyRoutingConstraintReport,
   buildPowerRailTraces
-} from "./features/constraints/execution";
-import { bendComponentPin, pinGridPosition } from "./features/layout/manualPlacement";
-import { resolveNetEndpoints } from "./features/import/netEndpointResolver";
-import { autoRouteBoard, validateRoutingResult } from "./features/routing/autoRouter";
-import { expandOrthogonalPath } from "./features/routing/routingGeometry";
-import { removeRoutesToComponent } from "./features/routing/removeComponentRoutes";
-import { createProject } from "./features/project/projectFactory";
-import { getBoardModel, normalizeBoardDefinition } from "./features/board/factory";
-import { componentPinHoles } from "./features/board/placement";
-import type { PinNetAssignments } from "./features/board/types";
-import type { BoardSize, DragMoveModifier, ImportState, KeyboardShortcuts, PerfboardProject, PlacedComponent, RoutedNetEndpoint, ThemeMode } from "./types/project";
-import type { SelectedPin } from "./components/Perfboard3DViewport";
-import type { RouteEditMode, WorkspaceToolbarProps } from "./components/WorkspaceToolbar";
+} from "./features/constraints/execution.ts";
+import { bendComponentPin, pinGridPosition } from "./features/layout/manualPlacement.ts";
+import { resolveNetEndpoints } from "./features/import/netEndpointResolver.ts";
+import { autoRouteBoard, validateRoutingResult } from "./features/routing/autoRouter.ts";
+import { expandOrthogonalPath } from "./features/routing/routingGeometry.ts";
+import { removeRoutesToComponent } from "./features/routing/removeComponentRoutes.ts";
+import { createProject } from "./features/project/projectFactory.ts";
+import { getBoardModel, normalizeBoardDefinition } from "./features/board/factory.ts";
+import { componentPinHoles } from "./features/board/placement.ts";
+import type { PinNetAssignments } from "./features/board/types.ts";
+import type { BoardSize, DragMoveModifier, ImportState, KeyboardShortcuts, PerfboardProject, PlacedComponent, RoutedNetEndpoint, ThemeMode } from "./types/project.ts";
+import type { SelectedPin } from "./components/Perfboard3DViewport.tsx";
+import type { RouteEditMode, WorkspaceToolbarProps } from "./components/WorkspaceToolbar.tsx";
 
 const STORAGE_KEY = "perfboard-autoroute-project";
 const SETTINGS_KEY = "perfboard-autoroute-settings";

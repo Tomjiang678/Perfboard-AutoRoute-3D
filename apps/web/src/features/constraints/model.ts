@@ -1,5 +1,5 @@
-import type { DesignConstraint, PerfboardProject } from "../../types/project";
-import { normalizeBoardDefinition } from "../board/factory";
+import type { DesignConstraint, PerfboardProject } from "../../types/project.ts";
+import { normalizeBoardDefinition } from "../board/factory.ts";
 
 export const CONSTRAINT_SCHEMA_VERSION = 1;
 

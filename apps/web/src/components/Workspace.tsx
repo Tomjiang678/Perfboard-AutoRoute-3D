@@ -1,9 +1,9 @@
 import { Layers3 } from "lucide-react";
-import type { LibraryComponentDefinition } from "../features/project/componentLibrary";
-import type { BoardSize, DragMoveModifier, PerfboardProject, RoutedNetEndpoint, ThemeMode } from "../types/project";
-import { getBoardModel } from "../features/board/factory";
-import { Perfboard3DViewport, type SelectedPin } from "./Perfboard3DViewport";
-import type { RouteEditMode } from "./WorkspaceToolbar";
+import type { LibraryComponentDefinition } from "../features/project/componentLibrary.ts";
+import type { BoardSize, DragMoveModifier, PerfboardProject, RoutedNetEndpoint, ThemeMode } from "../types/project.ts";
+import { getBoardModel } from "../features/board/factory.ts";
+import { Perfboard3DViewport, type SelectedPin } from "./Perfboard3DViewport.tsx";
+import type { RouteEditMode } from "./WorkspaceToolbar.tsx";
 
 interface WorkspaceProps {
   project?: PerfboardProject;

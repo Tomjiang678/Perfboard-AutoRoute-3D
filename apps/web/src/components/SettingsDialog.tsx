@@ -1,6 +1,6 @@
 import { useState, type KeyboardEvent } from "react";
 import { X } from "lucide-react";
-import type { DragMoveModifier, KeyboardShortcuts, ShortcutAction } from "../types/project";
+import type { DragMoveModifier, KeyboardShortcuts, ShortcutAction } from "../types/project.ts";
 
 interface SettingsDialogProps {
   dragMoveModifier: DragMoveModifier;

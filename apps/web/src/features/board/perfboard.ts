@@ -1,4 +1,4 @@
-import type { BoardSize } from "../../types/project";
+import type { BoardSize } from "../../types/project.ts";
 import { gridHoleId, parseGridHoleId, type BoardHole, type BoardModel, type GridPoint, type HoleId } from "./types.ts";
 import { validateBasicPlacement } from "./placement.ts";
 

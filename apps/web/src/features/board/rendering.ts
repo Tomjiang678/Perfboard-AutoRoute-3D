@@ -1,7 +1,7 @@
 import * as THREE from "three";
-import type { BoardSize, ThemeMode } from "../../types/project";
-import { getBreadboardColumnRole } from "./breadboard";
-import { getBoardModel } from "./factory";
+import type { BoardSize, ThemeMode } from "../../types/project.ts";
+import { getBreadboardColumnRole } from "./breadboard.ts";
+import { getBoardModel } from "./factory.ts";
 
 const styles = {
   perfboard: { side: 0x0d6b48, edge: 0x08432f, top: "#0f7c53", bottom: "#0f7c53", hole: "#111918" },

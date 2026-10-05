@@ -1,10 +1,10 @@
 import { useState } from "react";
-import type { AutoPlacementProgress, PlacementRegion } from "./autoPlacement";
-import { runAutoPlacementInWorker } from "./autoPlacementWorkerClient";
-import { projectConstraints } from "../constraints/model";
-import { evaluatePlacementConstraints, prepareComponentsForConstraints } from "../constraints/execution";
-import { resolveNetEndpoints } from "../import/netEndpointResolver";
-import type { PerfboardProject } from "../../types/project";
+import type { AutoPlacementProgress, PlacementRegion } from "./autoPlacement.ts";
+import { runAutoPlacementInWorker } from "./autoPlacementWorkerClient.ts";
+import { projectConstraints } from "../constraints/model.ts";
+import { evaluatePlacementConstraints, prepareComponentsForConstraints } from "../constraints/execution.ts";
+import { resolveNetEndpoints } from "../import/netEndpointResolver.ts";
+import type { PerfboardProject } from "../../types/project.ts";
 
 type ProjectCommitter = (updater: (current: PerfboardProject) => PerfboardProject) => void;
 

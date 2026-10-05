@@ -1,7 +1,7 @@
 import { FormEvent, useState } from "react";
 import { X } from "lucide-react";
-import { createBreadboardDefinition } from "../features/board/breadboard";
-import type { BoardKind, BoardSize } from "../types/project";
+import { createBreadboardDefinition } from "../features/board/breadboard.ts";
+import type { BoardKind, BoardSize } from "../types/project.ts";
 
 interface NewProjectDialogProps {
   onCancel: () => void;

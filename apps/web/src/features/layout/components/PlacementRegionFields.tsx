@@ -1,5 +1,5 @@
-import type { PlacementRegion } from "../autoPlacement";
-import type { BoardKind } from "../../../types/project";
+import type { PlacementRegion } from "../autoPlacement.ts";
+import type { BoardKind } from "../../../types/project.ts";
 
 interface PlacementRegionFieldsProps {
   boardWidth: number;

@@ -1,11 +1,11 @@
 import { Box, Grid3X3 } from "lucide-react";
 import { useState } from "react";
-import { resolveImportPins } from "../features/import/pinResolver";
-import { resolveNetEndpoints } from "../features/import/netEndpointResolver";
-import { pinGridPosition } from "../features/board/placement";
-import type { DrcIssue, ImportedFile, PerfboardProject, PlacedComponent, RoutedNetEndpoint } from "../types/project";
-import { FileDropZone } from "./FileDropZone";
-import { getBoardModel } from "../features/board/factory";
+import { resolveImportPins } from "../features/import/pinResolver.ts";
+import { resolveNetEndpoints } from "../features/import/netEndpointResolver.ts";
+import { pinGridPosition } from "../features/board/placement.ts";
+import type { DrcIssue, ImportedFile, PerfboardProject, PlacedComponent, RoutedNetEndpoint } from "../types/project.ts";
+import { FileDropZone } from "./FileDropZone.tsx";
+import { getBoardModel } from "../features/board/factory.ts";
 
 interface ProjectSidebarProps {
   project: PerfboardProject;

@@ -1,4 +1,4 @@
-import type { BoardSize } from "../../types/project";
+import type { BoardSize } from "../../types/project.ts";
 
 export interface RouterCell {
   x: number;

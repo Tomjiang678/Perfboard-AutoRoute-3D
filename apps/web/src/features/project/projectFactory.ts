@@ -1,4 +1,4 @@
-import type { BoardSize, PerfboardProject } from "../../types/project";
+import type { BoardSize, PerfboardProject } from "../../types/project.ts";
 
 export function createProject(name: string, board: BoardSize): PerfboardProject {
   const kind = board.kind ?? "perfboard";

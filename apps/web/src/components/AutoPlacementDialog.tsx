@@ -1,11 +1,11 @@
 import { FormEvent, useState } from "react";
 import { X } from "lucide-react";
-import type { AiConstraintAssistantController } from "../features/ai/useAiConstraintAssistant";
-import { AiConstraintAssistantPanel } from "../features/ai/components/AiConstraintAssistantPanel";
-import type { AutoPlacementProgress, PlacementRegion } from "../features/layout/autoPlacement";
-import { AutoPlacementProgressPanel } from "../features/layout/components/AutoPlacementProgressPanel";
-import { PlacementRegionFields } from "../features/layout/components/PlacementRegionFields";
-import type { BoardKind } from "../types/project";
+import type { AiConstraintAssistantController } from "../features/ai/useAiConstraintAssistant.ts";
+import { AiConstraintAssistantPanel } from "../features/ai/components/AiConstraintAssistantPanel.tsx";
+import type { AutoPlacementProgress, PlacementRegion } from "../features/layout/autoPlacement.ts";
+import { AutoPlacementProgressPanel } from "../features/layout/components/AutoPlacementProgressPanel.tsx";
+import { PlacementRegionFields } from "../features/layout/components/PlacementRegionFields.tsx";
+import type { BoardKind } from "../types/project.ts";
 
 interface AutoPlacementDialogProps {
   boardWidth: number;

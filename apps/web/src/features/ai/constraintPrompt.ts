@@ -1,6 +1,6 @@
-import type { PerfboardProject } from "../../types/project";
-import { constraintCatalogForPrompt, constraintResponseSchema } from "../constraints/catalog";
-import { resolveNetEndpoints } from "../import/netEndpointResolver";
+import type { PerfboardProject } from "../../types/project.ts";
+import { constraintCatalogForPrompt, constraintResponseSchema } from "../constraints/catalog.ts";
+import { resolveNetEndpoints } from "../import/netEndpointResolver.ts";
 
 export function buildConstraintPrompt(userText: string, project: PerfboardProject) {
   const physicalEndpoints = resolveNetEndpoints(project.importState, project.components);

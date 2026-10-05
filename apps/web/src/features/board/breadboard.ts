@@ -1,4 +1,4 @@
-import type { BoardSize, BreadboardLayout } from "../../types/project";
+import type { BoardSize, BreadboardLayout } from "../../types/project.ts";
 import { gridHoleId, parseGridHoleId, type BoardHole, type BoardModel, type ElectricalNodeId, type GridPoint, type HoleId } from "./types.ts";
 import { isCenterBridgeComponent, isPowerNet, validateBasicPlacement } from "./placement.ts";
 

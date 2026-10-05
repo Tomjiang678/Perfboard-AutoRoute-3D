@@ -1,5 +1,5 @@
-import { autoPlaceComponents, type AutoPlacementProgress, type AutoPlacementResult, type PlacementRegion } from "./autoPlacement";
-import type { BoardSize, DesignConstraint, PlacedComponent, RoutedNetEndpoint } from "../../types/project";
+import { autoPlaceComponents, type AutoPlacementProgress, type AutoPlacementResult, type PlacementRegion } from "./autoPlacement.ts";
+import type { BoardSize, DesignConstraint, PlacedComponent, RoutedNetEndpoint } from "../../types/project.ts";
 
 interface AutoPlacementWorkerRequest {
   components: PlacedComponent[];

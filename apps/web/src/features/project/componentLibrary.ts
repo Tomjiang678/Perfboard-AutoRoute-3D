@@ -1,6 +1,6 @@
-import type { LibraryComponentKind } from "../../types/project";
-import { createPinHeaderDefinition, createPinHeaderOffsets } from "./pinHeader";
-import { centerBridgeKinds, threeInlinePinKinds } from "./componentTraits";
+import type { LibraryComponentKind } from "../../types/project.ts";
+import { createPinHeaderDefinition, createPinHeaderOffsets } from "./pinHeader.ts";
+import { centerBridgeKinds, threeInlinePinKinds } from "./componentTraits.ts";
 
 export interface LibraryComponentDefinition {
   kind: LibraryComponentKind;

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Eye, EyeOff } from "lucide-react";
-import { AI_PROVIDER_OPTIONS, isAiApiConfigurationComplete, type AiProviderPreset } from "../aiProvider";
-import type { AiConstraintAssistantController } from "../useAiConstraintAssistant";
+import { AI_PROVIDER_OPTIONS, isAiApiConfigurationComplete, type AiProviderPreset } from "../aiProvider.ts";
+import type { AiConstraintAssistantController } from "../useAiConstraintAssistant.ts";
 
 interface AiProviderConfigurationPanelProps {
   controller: AiConstraintAssistantController;

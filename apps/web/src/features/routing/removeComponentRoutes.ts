@@ -1,5 +1,5 @@
-import type { BottomTrace, JumperRoute, RoutingState } from "../../types/project";
-import { expandOrthogonalPath, key, type GridPoint } from "./routingGeometry";
+import type { BottomTrace, JumperRoute, RoutingState } from "../../types/project.ts";
+import { expandOrthogonalPath, key, type GridPoint } from "./routingGeometry.ts";
 
 interface GraphEdge {
   id: string;

@@ -4,9 +4,9 @@ import type {
   PlacedComponent,
   RoutedNetEndpoint,
   RoutingState
-} from "../../types/project";
-import { activeConstraints } from "./model";
-import { pinGridPosition } from "../layout/manualPlacement";
+} from "../../types/project.ts";
+import { activeConstraints } from "./model.ts";
+import { pinGridPosition } from "../layout/manualPlacement.ts";
 
 export function prepareComponentsForConstraints(components: PlacedComponent[], constraints: DesignConstraint[]) {
   const active = activeConstraints(constraints);

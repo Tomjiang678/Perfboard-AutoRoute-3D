@@ -1,7 +1,7 @@
-import type { AiConstraintAssistantController } from "../useAiConstraintAssistant";
-import { AiConstraintLists } from "./AiConstraintLists";
-import { AiInstructionComposer } from "./AiInstructionComposer";
-import { AiProviderConfigurationPanel } from "./AiProviderConfigurationPanel";
+import type { AiConstraintAssistantController } from "../useAiConstraintAssistant.ts";
+import { AiConstraintLists } from "./AiConstraintLists.tsx";
+import { AiInstructionComposer } from "./AiInstructionComposer.tsx";
+import { AiProviderConfigurationPanel } from "./AiProviderConfigurationPanel.tsx";
 
 interface AiConstraintAssistantPanelProps {
   controller: AiConstraintAssistantController;

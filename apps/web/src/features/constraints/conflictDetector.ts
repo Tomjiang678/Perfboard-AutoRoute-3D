@@ -1,5 +1,5 @@
-import type { DesignConstraint } from "../../types/project";
-import { activeConstraints } from "./model";
+import type { DesignConstraint } from "../../types/project.ts";
+import { activeConstraints } from "./model.ts";
 
 export function detectConstraintConflicts(constraints: DesignConstraint[]) {
   const active = activeConstraints(constraints);

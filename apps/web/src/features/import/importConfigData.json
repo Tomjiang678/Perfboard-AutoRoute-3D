@@ -6,7 +6,8 @@
       "leadSpacing": 3,
       "pinCountStrategy": "fromPins",
       "match": [
-        { "field": "category", "matches": "^DEVICE:R" },
+        { "field": "category", "matches": "^DEVICE:R$" },
+        { "field": "category", "matches": "^DEVICE:R_SMALL$" },
         { "field": "category", "matches": "^DEVICE:R_NETWORK" }
       ]
     },
@@ -35,7 +36,7 @@
       "leadSpacing": 3,
       "pinCountStrategy": "fromPins",
       "match": [
-        { "field": "category", "matches": "^DEVICE:L" },
+        { "field": "category", "matches": "^DEVICE:L$" },
         { "field": "category", "matches": "^INDUCTOR:" }
       ]
     },

@@ -157,6 +157,9 @@ function parseSExpr(text: string): SExprNode {
   if (typeof value === "string") {
     throw new Error("网表顶层不是列表结构");
   }
+  if (position.index !== tokens.length) {
+    throw new Error("网表存在多余的顶层内容");
+  }
   return value;
 }
 
@@ -165,6 +168,10 @@ function tokenize(text: string): string[] {
   let index = 0;
   while (index < text.length) {
     const char = text[index];
+    if (char === "\uFEFF") {
+      index += 1;
+      continue;
+    }
     if (char === " " || char === "\t" || char === "\n" || char === "\r") {
       index += 1;
       continue;
@@ -240,7 +247,7 @@ function componentFootprint(comp: SExprNode): string {
   for (const fields of children(comp, "fields")) {
     for (const field of children(fields, "field")) {
       if (childText(field, "name") === "Footprint") {
-        return field.args.filter((arg): arg is string => typeof arg === "string").slice(1).join(" ") || "";
+        return field.args.filter((arg): arg is string => typeof arg === "string").join(" ");
       }
     }
   }

@@ -4,21 +4,21 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import {
   componentLibraryByKey,
   type LibraryComponentDefinition
-} from "../features/project/componentLibrary";
-import type { BoardSize } from "../types/project";
-import type { DragMoveModifier } from "../types/project";
-import type { JumperRoute } from "../types/project";
-import type { PlacedComponent } from "../types/project";
-import type { RoutedNetEndpoint } from "../types/project";
-import type { RoutingState } from "../types/project";
-import type { ThemeMode } from "../types/project";
-import { createParametricComponent, setComponentTheme } from "../renderer3d/parametricComponents";
-import { bendComponentPin, isManuallyBendable, pinGridPosition } from "../features/layout/manualPlacement";
-import { createBreadboardDefinition } from "../features/board/breadboard";
-import { getBoardModel } from "../features/board/factory";
-import { rotateGridOffset } from "../features/board/placement";
-import { segmentsIntersect, shareEndpoint } from "../features/routing/routingGeometry";
-import { createBoardObject } from "../features/board/rendering";
+} from "../features/project/componentLibrary.ts";
+import type { BoardSize } from "../types/project.ts";
+import type { DragMoveModifier } from "../types/project.ts";
+import type { JumperRoute } from "../types/project.ts";
+import type { PlacedComponent } from "../types/project.ts";
+import type { RoutedNetEndpoint } from "../types/project.ts";
+import type { RoutingState } from "../types/project.ts";
+import type { ThemeMode } from "../types/project.ts";
+import { createParametricComponent, setComponentTheme } from "../renderer3d/parametricComponents.ts";
+import { bendComponentPin, isManuallyBendable, pinGridPosition } from "../features/layout/manualPlacement.ts";
+import { createBreadboardDefinition } from "../features/board/breadboard.ts";
+import { getBoardModel } from "../features/board/factory.ts";
+import { rotateGridOffset } from "../features/board/placement.ts";
+import { segmentsIntersect, shareEndpoint } from "../features/routing/routingGeometry.ts";
+import { createBoardObject } from "../features/board/rendering.ts";
 
 interface Perfboard3DViewportProps {
   board: BoardSize;

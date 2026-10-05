@@ -1,10 +1,10 @@
-import type { BoardSize, ConstraintRegion, DesignConstraint, PlacedComponent, RoutedNetEndpoint, RoutingState } from "../../types/project";
-import { activeConstraints } from "../constraints/model";
-import { autoRouteBoard } from "../routing/autoRouter";
-import { getBoardModel } from "../board/factory";
-import { componentPinHoles, isPowerNet, rotateGridOffset } from "../board/placement";
-import { key, manhattan } from "../routing/routingGeometry";
-import { isBendableTwoPin, maximumLeadSpan, preferredLeadSpan } from "../project/componentTraits";
+import type { BoardSize, ConstraintRegion, DesignConstraint, PlacedComponent, RoutedNetEndpoint, RoutingState } from "../../types/project.ts";
+import { activeConstraints } from "../constraints/model.ts";
+import { autoRouteBoard } from "../routing/autoRouter.ts";
+import { getBoardModel } from "../board/factory.ts";
+import { componentPinHoles, isPowerNet, rotateGridOffset } from "../board/placement.ts";
+import { key, manhattan } from "../routing/routingGeometry.ts";
+import { isBendableTwoPin, maximumLeadSpan, preferredLeadSpan } from "../project/componentTraits.ts";
 
 export interface PlacementRegion {
   x: number;

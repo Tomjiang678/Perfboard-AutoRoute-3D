@@ -1,4 +1,4 @@
-import type { AiConstraintResponse, ConstraintDraft } from "./drafts";
+import type { AiConstraintResponse, ConstraintDraft } from "./drafts.ts";
 
 const DRAFT_KINDS = new Set([
   "component_in_region",

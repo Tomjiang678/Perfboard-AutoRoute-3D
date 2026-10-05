@@ -1,4 +1,4 @@
-import type { PlacedComponent } from "../../types/project";
+import type { PlacedComponent } from "../../types/project.ts";
 import type { BoardModel, GridPoint, PinNetAssignments, PlacementIssue, PlacementValidation } from "./types.ts";
 export { isCenterBridgeComponent } from "../project/componentTraits.ts";
 
@@ -56,7 +56,7 @@ export function validateBasicPlacement(
 
 export function isPowerNet(net: string | undefined) {
   if (!net) return false;
-  return /(^|[^A-Z0-9])(0|GND|GROUND|VCC|VDD|VEE|VSS|VPP|VBAT|VIN|VOUT|VDC\d*|3V3|3\.3V|[+-]?\d+(?:\.\d+)?V|[+-]V)([^A-Z0-9]|$)/i.test(net);
+  return /(^|[^A-Z0-9])(0|GND|GROUND|VCC|VDD|VEE|VSS|VPP|VBAT|VIN|VOUT|VDC\d*|3V3|3\.3V|[+-]?\d+(?:\.\d+)?V|[+-]V|[AD]GND)((?:\d*)(?:[^A-Z0-9]|$))/i.test(net);
 }
 
 export function rotateGridOffset([x, y]: GridPoint, rotation: number): GridPoint {

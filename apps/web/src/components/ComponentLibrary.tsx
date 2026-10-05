@@ -1,13 +1,13 @@
 import { Component } from "lucide-react";
 import { useState } from "react";
-import { componentLibrary, type LibraryComponentDefinition } from "../features/project/componentLibrary";
+import { componentLibrary, type LibraryComponentDefinition } from "../features/project/componentLibrary.ts";
 import {
   createPinHeaderDefinition,
   DEFAULT_PIN_HEADER_COLUMNS,
   DEFAULT_PIN_HEADER_ROWS,
   MAX_PIN_HEADER_DIMENSION,
   MAX_PIN_HEADER_PINS
-} from "../features/project/pinHeader";
+} from "../features/project/pinHeader.ts";
 
 interface ComponentLibraryProps {
   onPickComponent: (component: LibraryComponentDefinition) => void;

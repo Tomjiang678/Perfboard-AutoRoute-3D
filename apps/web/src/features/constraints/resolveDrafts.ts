@@ -1,5 +1,5 @@
-import type { DesignConstraint, PerfboardProject, PlacedComponent } from "../../types/project";
-import type { ConstraintDraft } from "./drafts";
+import type { DesignConstraint, PerfboardProject, PlacedComponent } from "../../types/project.ts";
+import type { ConstraintDraft } from "./drafts.ts";
 
 export interface ResolveDraftsResult {
   constraints: DesignConstraint[];
