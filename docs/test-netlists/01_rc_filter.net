@@ -1,0 +1,56 @@
+(export
+	(version "E")
+	(components
+		(comp
+			(ref "R1")
+			(value "10k")
+			(libsource (lib "Device") (part "R"))
+		)
+		(comp
+			(ref "C1")
+			(value "100nF")
+			(libsource (lib "Device") (part "C"))
+		)
+		(comp
+			(ref "R2")
+			(value "1k")
+			(libsource (lib "Device") (part "R"))
+		)
+	)
+	(libparts
+		(libpart
+			(lib "Device")
+			(part "R")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "C")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+			)
+		)
+	)
+	(nets
+		(net
+			(name "Net-(J1-Pin_1)")
+			(node (ref "J1") (pin "1"))
+			(node (ref "R1") (pin "1"))
+		)
+		(net
+			(name "Net-Filter")
+			(node (ref "R1") (pin "2"))
+			(node (ref "C1") (pin "1"))
+			(node (ref "R2") (pin "1"))
+		)
+		(net
+			(name "GND")
+			(node (ref "C1") (pin "2"))
+			(node (ref "R2") (pin "2"))
+		)
+	)
+)

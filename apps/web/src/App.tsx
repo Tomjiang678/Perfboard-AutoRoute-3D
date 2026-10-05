@@ -374,7 +374,15 @@ export function App() {
   }
 
   async function handleImportFiles(files: File[]) {
-    const parsed = await parseImportFiles(files);
+    let parsed;
+    try {
+      parsed = await parseImportFiles(files);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      window.alert(`网表导入失败：${message}`);
+      console.error("netlist import failed", error);
+      return;
+    }
     const fileNames = files.map((file) => file.name);
 
     commitProject((current) => {

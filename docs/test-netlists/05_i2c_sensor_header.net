@@ -1,0 +1,121 @@
+(export
+	(version "E")
+	(components
+		(comp
+			(ref "U1")
+			(value "BME280")
+			(libsource (lib "Sensor") (part "BME280"))
+		)
+		(comp
+			(ref "R1")
+			(value "4.7k")
+			(libsource (lib "Device") (part "R"))
+		)
+		(comp
+			(ref "R2")
+			(value "4.7k")
+			(libsource (lib "Device") (part "R"))
+		)
+		(comp
+			(ref "C1")
+			(value "100nF")
+			(libsource (lib "Device") (part "C"))
+		)
+		(comp
+			(ref "J1")
+			(value "Conn_01x04")
+			(libsource (lib "Connector_Generic") (part "Conn_01x04"))
+		)
+		(comp
+			(ref "J2")
+			(value "Conn_01x02")
+			(libsource (lib "Connector_Generic") (part "Conn_01x02"))
+		)
+	)
+	(libparts
+		(libpart
+			(lib "Sensor")
+			(part "BME280")
+			(pins
+				(pin (num "1") (name "VDD") (type "power"))
+				(pin (num "2") (name "GND") (type "power"))
+				(pin (num "3") (name "SCL") (type "input"))
+				(pin (num "4") (name "SDA") (type "bidirectional"))
+				(pin (num "5") (name "CSB") (type "input"))
+				(pin (num "6") (name "SDO") (type "input"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "R")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "C")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Connector_Generic")
+			(part "Conn_01x04")
+			(pins
+				(pin (num "1") (name "Pin_1") (type "passive"))
+				(pin (num "2") (name "Pin_2") (type "passive"))
+				(pin (num "3") (name "Pin_3") (type "passive"))
+				(pin (num "4") (name "Pin_4") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Connector_Generic")
+			(part "Conn_01x02")
+			(pins
+				(pin (num "1") (name "Pin_1") (type "passive"))
+				(pin (num "2") (name "Pin_2") (type "passive"))
+			)
+		)
+	)
+	(nets
+		(net
+			(name "+3V3")
+			(node (ref "U1") (pin "1"))
+			(node (ref "R1") (pin "1"))
+			(node (ref "R2") (pin "1"))
+			(node (ref "C1") (pin "1"))
+			(node (ref "J1") (pin "1"))
+		)
+		(net
+			(name "GND")
+			(node (ref "U1") (pin "2"))
+			(node (ref "C1") (pin "2"))
+			(node (ref "J1") (pin "2"))
+			(node (ref "J2") (pin "2"))
+		)
+		(net
+			(name "SCL")
+			(node (ref "U1") (pin "3"))
+			(node (ref "R1") (pin "2"))
+			(node (ref "J1") (pin "3"))
+		)
+		(net
+			(name "SDA")
+			(node (ref "U1") (pin "4"))
+			(node (ref "R2") (pin "2"))
+			(node (ref "J1") (pin "4"))
+		)
+		(net
+			(name "CSB")
+			(node (ref "U1") (pin "5"))
+			(node (ref "J2") (pin "1"))
+		)
+		(net
+			(name "SDO")
+			(node (ref "U1") (pin "6"))
+		)
+	)
+)

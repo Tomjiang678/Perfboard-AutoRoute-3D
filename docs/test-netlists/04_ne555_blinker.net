@@ -1,0 +1,130 @@
+(export
+	(version "E")
+	(components
+		(comp
+			(ref "U1")
+			(value "NE555")
+			(libsource (lib "Timer") (part "NE555"))
+		)
+		(comp
+			(ref "R1")
+			(value "1k")
+			(libsource (lib "Device") (part "R"))
+		)
+		(comp
+			(ref "R2")
+			(value "10k")
+			(libsource (lib "Device") (part "R"))
+		)
+		(comp
+			(ref "C1")
+			(value "10uF")
+			(libsource (lib "Device") (part "C_Polarized"))
+		)
+		(comp
+			(ref "C2")
+			(value "10nF")
+			(libsource (lib "Device") (part "C"))
+		)
+		(comp
+			(ref "D1")
+			(value "LED")
+			(libsource (lib "Device") (part "LED"))
+		)
+		(comp
+			(ref "R3")
+			(value "470")
+			(libsource (lib "Device") (part "R"))
+		)
+	)
+	(libparts
+		(libpart
+			(lib "Timer")
+			(part "NE555")
+			(pins
+				(pin (num "1") (name "GND") (type "power"))
+				(pin (num "2") (name "TR") (type "input"))
+				(pin (num "3") (name "Q") (type "output"))
+				(pin (num "4") (name "R") (type "input"))
+				(pin (num "5") (name "CV") (type "input"))
+				(pin (num "6") (name "THR") (type "input"))
+				(pin (num "7") (name "DIS") (type "input"))
+				(pin (num "8") (name "VCC") (type "power"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "R")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "C_Polarized")
+			(pins
+				(pin (num "1") (name "+") (type "passive"))
+				(pin (num "2") (name "-") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "C")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "LED")
+			(pins
+				(pin (num "1") (name "K") (type "passive"))
+				(pin (num "2") (name "A") (type "passive"))
+			)
+		)
+	)
+	(nets
+		(net
+			(name "+5V")
+			(node (ref "U1") (pin "8"))
+			(node (ref "U1") (pin "4"))
+			(node (ref "R1") (pin "1"))
+			(node (ref "C1") (pin "1"))
+		)
+		(net
+			(name "GND")
+			(node (ref "U1") (pin "1"))
+			(node (ref "C1") (pin "2"))
+			(node (ref "C2") (pin "2"))
+		)
+		(net
+			(name "TIMING")
+			(node (ref "R1") (pin "2"))
+			(node (ref "R2") (pin "1"))
+			(node (ref "U1") (pin "7"))
+		)
+		(net
+			(name "TRIG_THRESH")
+			(node (ref "R2") (pin "2"))
+			(node (ref "U1") (pin "2"))
+			(node (ref "U1") (pin "6"))
+		)
+		(net
+			(name "CTRL")
+			(node (ref "U1") (pin "5"))
+			(node (ref "C2") (pin "1"))
+		)
+		(net
+			(name "LED_OUT")
+			(node (ref "U1") (pin "3"))
+			(node (ref "R3") (pin "1"))
+		)
+		(net
+			(name "LED_K")
+			(node (ref "R3") (pin "2"))
+			(node (ref "D1") (pin "2"))
+		)
+	)
+)

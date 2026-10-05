@@ -1,0 +1,114 @@
+(export
+	(version "E")
+	(components
+		(comp
+			(ref "U1")
+			(value "LM358")
+			(libsource (lib "Amplifier_Operational") (part "LM358"))
+		)
+		(comp
+			(ref "R1")
+			(value "10k")
+			(libsource (lib "Device") (part "R"))
+		)
+		(comp
+			(ref "R2")
+			(value "100k")
+			(libsource (lib "Device") (part "R"))
+		)
+		(comp
+			(ref "R3")
+			(value "10k")
+			(libsource (lib "Device") (part "R"))
+		)
+		(comp
+			(ref "C1")
+			(value "1uF")
+			(libsource (lib "Device") (part "C"))
+		)
+		(comp
+			(ref "J1")
+			(value "Conn_01x03")
+			(libsource (lib "Connector_Generic") (part "Conn_01x03"))
+		)
+	)
+	(libparts
+		(libpart
+			(lib "Amplifier_Operational")
+			(part "LM358")
+			(pins
+				(pin (num "1") (name "OUTA") (type "output"))
+				(pin (num "2") (name "-") (type "input"))
+				(pin (num "3") (name "+") (type "input"))
+				(pin (num "4") (name "V-") (type "power"))
+				(pin (num "5") (name "+") (type "input"))
+				(pin (num "6") (name "-") (type "input"))
+				(pin (num "7") (name "OUTB") (type "output"))
+				(pin (num "8") (name "V+") (type "power"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "R")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "C")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Connector_Generic")
+			(part "Conn_01x03")
+			(pins
+				(pin (num "1") (name "Pin_1") (type "passive"))
+				(pin (num "2") (name "Pin_2") (type "passive"))
+				(pin (num "3") (name "Pin_3") (type "passive"))
+			)
+		)
+	)
+	(nets
+		(net
+			(name "+5V")
+			(node (ref "U1") (pin "8"))
+			(node (ref "J1") (pin "3"))
+		)
+		(net
+			(name "GND")
+			(node (ref "U1") (pin "4"))
+			(node (ref "C1") (pin "2"))
+			(node (ref "J1") (pin "1"))
+		)
+		(net
+			(name "IN")
+			(node (ref "J1") (pin "2"))
+			(node (ref "R1") (pin "1"))
+		)
+		(net
+			(name "SUM")
+			(node (ref "R1") (pin "2"))
+			(node (ref "U1") (pin "3"))
+			(node (ref "C1") (pin "1"))
+		)
+		(net
+			(name "FEEDBACK")
+			(node (ref "U1") (pin "1"))
+			(node (ref "R2") (pin "1"))
+			(node (ref "R3") (pin "1"))
+		)
+		(net
+			(name "GND_REF")
+			(node (ref "R2") (pin "2"))
+		)
+		(net
+			(name "OUT")
+			(node (ref "R3") (pin "2"))
+		)
+	)
+)

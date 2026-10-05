@@ -26,7 +26,8 @@
       "leadSpacing": 1,
       "pinCountStrategy": "fromPins",
       "match": [
-        { "field": "category", "matches": "^DEVICE:CP" }
+        { "field": "category", "matches": "^DEVICE:CP" },
+        { "field": "category", "matches": "^DEVICE:C_POLARIZED" }
       ]
     },
     {
@@ -149,12 +150,15 @@
         { "field": "category", "matches": "^COMPARATOR:" },
         { "field": "category", "matches": "^TIMER:" },
         { "field": "category", "matches": "^74XX:" },
+        { "field": "category", "matches": "^4XXX:" },
         { "field": "category", "matches": "^4XXX_IEEE:" },
         { "field": "category", "matches": "^AUDIO:" },
         { "field": "category", "matches": "^VIDEO:" },
         { "field": "category", "matches": "^OPTOCOUPLER:" },
         { "field": "category", "matches": "^ISOLATOR:" },
-        { "field": "category", "matches": "^SOCKET:" }
+        { "field": "category", "matches": "^SOCKET:" },
+        { "field": "category", "matches": "^MCU_" },
+        { "field": "category", "matches": "^SENSOR:" }
       ]
     },
     {
@@ -181,6 +185,7 @@
       "match": [
         { "field": "category", "matches": "^DEVICE:R_NETWORK" },
         { "field": "category", "matches": "^CONNECTOR:CONN_" },
+        { "field": "category", "matches": "^CONNECTOR_GENERIC:CONN_" },
         { "field": "category", "matches": "^CONNECTOR_PINHEADER:" },
         { "field": "category", "matches": "^PIN_HEADER:" },
         { "field": "category", "matches": "^TESTPOINT:TESTPAD" }

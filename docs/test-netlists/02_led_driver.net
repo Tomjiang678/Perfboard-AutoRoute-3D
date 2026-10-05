@@ -1,0 +1,93 @@
+(export
+	(version "E")
+	(components
+		(comp
+			(ref "J1")
+			(value "Conn_01x02")
+			(libsource (lib "Connector_Generic") (part "Conn_01x02"))
+		)
+		(comp
+			(ref "R1")
+			(value "330")
+			(libsource (lib "Device") (part "R"))
+		)
+		(comp
+			(ref "D1")
+			(value "LED")
+			(libsource (lib "Device") (part "LED"))
+		)
+		(comp
+			(ref "R2")
+			(value "10k")
+			(libsource (lib "Device") (part "R"))
+		)
+		(comp
+			(ref "Q1")
+			(value "2N3904")
+			(libsource (lib "Transistor_BJT") (part "Q_NPN_BCE"))
+		)
+	)
+	(libparts
+		(libpart
+			(lib "Connector_Generic")
+			(part "Conn_01x02")
+			(pins
+				(pin (num "1") (name "Pin_1") (type "passive"))
+				(pin (num "2") (name "Pin_2") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "R")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "LED")
+			(pins
+				(pin (num "1") (name "K") (type "passive"))
+				(pin (num "2") (name "A") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Transistor_BJT")
+			(part "Q_NPN_BCE")
+			(pins
+				(pin (num "1") (name "B") (type "input"))
+				(pin (num "2") (name "C") (type "passive"))
+				(pin (num "3") (name "E") (type "passive"))
+			)
+		)
+	)
+	(nets
+		(net
+			(name "+5V")
+			(node (ref "J1") (pin "1"))
+			(node (ref "R1") (pin "1"))
+			(node (ref "R2") (pin "1"))
+		)
+		(net
+			(name "LED_NODE")
+			(node (ref "R1") (pin "2"))
+			(node (ref "D1") (pin "2"))
+		)
+		(net
+			(name "Q_BASE")
+			(node (ref "R2") (pin "2"))
+			(node (ref "Q1") (pin "1"))
+		)
+		(net
+			(name "GND")
+			(node (ref "J1") (pin "2"))
+			(node (ref "D1") (pin "1"))
+			(node (ref "Q1") (pin "3"))
+		)
+		(net
+			(name "Q_COLLECTOR")
+			(node (ref "Q1") (pin "2"))
+		)
+	)
+)
