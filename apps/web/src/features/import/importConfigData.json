@@ -7,8 +7,7 @@
       "pinCountStrategy": "fromPins",
       "match": [
         { "field": "category", "matches": "^DEVICE:R$" },
-        { "field": "category", "matches": "^DEVICE:R_SMALL$" },
-        { "field": "category", "matches": "^DEVICE:R_NETWORK" }
+        { "field": "category", "matches": "^DEVICE:R_SMALL$" }
       ]
     },
     {
@@ -177,9 +176,10 @@
     },
     {
       "kind": "pin_header",
-      "label": "HDR",
+      "label": "RN",
       "pinCountStrategy": "fromPins",
       "match": [
+        { "field": "category", "matches": "^DEVICE:R_NETWORK" },
         { "field": "category", "matches": "^CONNECTOR:CONN_" },
         { "field": "category", "matches": "^CONNECTOR_PINHEADER:" },
         { "field": "category", "matches": "^PIN_HEADER:" },
@@ -206,7 +206,7 @@
     {
       "kind": "slide_switch",
       "label": "SW",
-      "pinCountStrategy": "fixed3",
+      "pinCountStrategy": "fromPins",
       "match": [
         { "field": "category", "matches": "^DEVICE:SW_SPDT" },
         { "field": "category", "matches": "^SWITCH:SW_" }

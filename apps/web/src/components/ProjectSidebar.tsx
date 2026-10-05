@@ -67,6 +67,10 @@ function ImportSummary({
   const resolvedNodeCount = resolvedPins.nets.reduce((sum, net) => sum + net.nodes.length, 0);
   const unresolvedNodeCount = resolvedPins.nets.reduce((sum, net) => sum + net.unresolved.length, 0);
   const endpoints = resolveNetEndpoints(project.importState, project.components);
+  // Mapped counts only pins that actually landed on a component pin hole; the
+  // rest are missing (unresolved names, unknown refs, or pins beyond the footprint).
+  const mappedCount = endpoints.length;
+  const missingCount = unresolvedNodeCount + (resolvedNodeCount - mappedCount);
   const endpointCountByNet = new Map<string, number>();
   endpoints.forEach((endpoint) => endpointCountByNet.set(endpoint.net, (endpointCountByNet.get(endpoint.net) ?? 0) + 1));
   const pinNetRows = buildPinNetRows(project.components, endpoints);
@@ -83,8 +87,8 @@ function ImportSummary({
         <Summary label="Parts" value={components.length} />
         <Summary label="Nets" value={nets.length} />
         <Summary label="Nodes" value={connectedNodes} />
-        <Summary label="Mapped" value={resolvedNodeCount} />
-        <Summary label="Missing" value={unresolvedNodeCount} />
+        <Summary label="Mapped" value={mappedCount} />
+        <Summary label="Missing" value={missingCount} />
       </div>
 
       {components.length > 0 && (

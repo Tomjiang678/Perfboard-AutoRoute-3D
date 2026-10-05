@@ -9,7 +9,7 @@ import {
   buildPinOffsetsForComponent,
   type LibraryComponentDefinition
 } from "./features/project/componentLibrary.ts";
-import { mergeImportState, parseImportFiles } from "./features/import/kicadNetlistParser.ts";
+import { mergeImportState, parseImportFiles, removeFileData } from "./features/import/kicadNetlistParser.ts";
 import { createPlacedComponentsFromParsed } from "./features/import/componentMapping.ts";
 import { useAutoPlacement } from "./features/layout/useAutoPlacement.ts";
 import { useAiConstraintAssistant } from "./features/ai/useAiConstraintAssistant.ts";
@@ -375,20 +375,23 @@ export function App() {
 
   async function handleImportFiles(files: File[]) {
     const parsed = await parseImportFiles(files);
+    const fileNames = files.map((file) => file.name);
 
     commitProject((current) => {
+      const importState = mergeImportState(removeFileData(current.importState, fileNames), parsed);
+      const newFiles = [
+        ...current.files.filter((file) => !fileNames.includes(file.name)),
+        ...files.map((file) => ({
+          id: crypto.randomUUID(),
+          name: file.name,
+          size: file.size,
+          importedAt: new Date().toISOString()
+        }))
+      ];
       return {
         ...current,
-        files: [
-          ...current.files,
-          ...files.map((file) => ({
-            id: crypto.randomUUID(),
-            name: file.name,
-            size: file.size,
-            importedAt: new Date().toISOString()
-          }))
-        ],
-        importState: mergeImportState(current.importState, parsed)
+        files: newFiles,
+        importState
       };
     });
   }

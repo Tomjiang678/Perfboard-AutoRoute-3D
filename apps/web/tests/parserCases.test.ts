@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseKicadNetlist, mergeImportState, parseImportFiles } from "../src/features/import/kicadNetlistParser.ts";
+import { parseKicadNetlist, mergeImportState, parseImportFiles, removeFileData } from "../src/features/import/kicadNetlistParser.ts";
 import { buildNetlistText, type FactoryNetlist } from "./helpers/netlistFactory.ts";
 import type { ImportState } from "../src/types/project.ts";
 
@@ -196,6 +196,44 @@ test("mergeImportState merges components by ref and dedupes net nodes", () => {
   assert.deepEqual(merged.nets[0].nodes.map((n) => `${n.ref}.${n.pin}`), ["R1.1", "C1.1"]);
   assert.equal(merged.warnings.length, 2);
   assert.ok(merged.pinInfo?.R1 && merged.pinInfo?.C1);
+});
+
+test("removeFileData strips a re-imported file's components, nets and pinInfo", () => {
+  const state: ImportState = {
+    components: [
+      { ref: "R1", value: "R", category: "Device:R", packageName: "", sourceFile: "old.net" },
+      { ref: "C1", value: "C", category: "Device:C", packageName: "", sourceFile: "keep.net" }
+    ],
+    nets: [
+      { name: "N1", nodes: [{ ref: "R1", pin: "1", sourceFile: "old.net" }, { ref: "C1", pin: "1", sourceFile: "keep.net" }] },
+      { name: "N2", nodes: [{ ref: "R1", pin: "2", sourceFile: "old.net" }] }
+    ],
+    warnings: [{ fileName: "old.net", message: "old" }, { fileName: "keep.net", message: "keep" }],
+    pinInfo: { R1: { "1": { name: "1" } }, C1: { "1": { name: "1" } } }
+  };
+  const stripped = removeFileData(state, ["old.net"]);
+  assert.deepEqual(stripped.components.map((component) => component.ref), ["C1"]);
+  assert.deepEqual(stripped.nets[0].nodes.map((node) => `${node.ref}.${node.pin}`), ["C1.1"]);
+  assert.equal(stripped.nets.length, 1);
+  assert.deepEqual(stripped.warnings.map((warning) => warning.fileName), ["keep.net"]);
+  assert.equal(stripped.pinInfo?.R1, undefined);
+  assert.ok(stripped.pinInfo?.C1);
+});
+
+test("re-importing an updated netlist replaces old nodes instead of keeping both", async () => {
+  const oldSpec: FactoryNetlist = {
+    components: [{ ref: "R1", lib: "Device", part: "R", value: "R", pins: [] }],
+    nets: [{ name: "SIG", nodes: [{ ref: "R1", pin: 1 }, { ref: "R1", pin: 2 }] }]
+  };
+  const newSpec: FactoryNetlist = {
+    components: [{ ref: "R1", lib: "Device", part: "R", value: "R", pins: [] }],
+    nets: [{ name: "SIG", nodes: [{ ref: "R1", pin: 1 }] }]
+  };
+  const oldBundle = parseKicadNetlist(buildNetlistText(oldSpec), "proj.net");
+  const newBundle = parseKicadNetlist(buildNetlistText(newSpec), "proj.net");
+  const mergedOnce = mergeImportState({ components: [], nets: [], warnings: [], pinInfo: {} }, oldBundle);
+  const mergedTwice = mergeImportState(removeFileData(mergedOnce, ["proj.net"]), newBundle);
+  assert.deepEqual(mergedTwice.nets[0].nodes.map((node) => node.pin), ["1"]);
 });
 
 test("parseImportFiles combines multiple files", async () => {

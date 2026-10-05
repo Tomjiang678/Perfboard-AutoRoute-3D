@@ -209,6 +209,27 @@ test("crystal and fuse become two-pin axial parts", () => {
   assert.deepEqual(f1.pinOffsets, [[0, 0], [5, 0]]);
 });
 
+test("8-pin resistor networks become SIP pin headers with all 8 holes", () => {
+  const state = importStateWith(
+    [{ ref: "RN1", value: "R_Pack08", category: "Device:R_NETWORK", packageName: "", sourceFile: "x.net" }],
+    { RN1: Object.fromEntries(Array.from({ length: 8 }, (_, i) => [String(i + 1), { name: "", type: "" }])) }
+  );
+  const placed = createPlacedComponentsFromParsed(state, [], 30)[0];
+  assert.equal(placed.kind, "pin_header");
+  assert.equal(placed.pinOffsets.length, 8);
+});
+
+test("2-pin SPST slide switches stay 2-pin", () => {
+  const state = importStateWith(
+    [{ ref: "SW1", value: "SW_SPST", category: "Switch:SW_SPST", packageName: "", sourceFile: "x.net" }],
+    { SW1: { "1": {}, "2": {} } }
+  );
+  const placed = createPlacedComponentsFromParsed(state, [], 30)[0];
+  assert.equal(placed.kind, "slide_switch");
+  assert.equal(placed.pinOffsets.length, 2);
+  assert.deepEqual(placed.pinOffsets, [[-1, 0], [0, 0]]);
+});
+
 test("unknown component falls back to a pin header with the netlist pin count", () => {
   const state = importStateWith(
     [{ ref: "X1", value: "Widget", category: "Mystery_Lib:Widget", packageName: "", sourceFile: "x.net" }],

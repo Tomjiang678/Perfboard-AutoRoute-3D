@@ -52,6 +52,32 @@ export function mergeImportState(current: ImportState, next: ParsedImportBundle)
   };
 }
 
+/**
+ * Removes everything a re-imported file previously contributed, so merging the
+ * updated version of the same file replaces its data instead of leaving stale
+ * nodes behind (which could make one pin belong to old and new nets at once).
+ */
+export function removeFileData(importState: ImportState, fileNames: string[]): ImportState {
+  const names = new Set(fileNames);
+  const nets = importState.nets
+    .map((net) => ({
+      ...net,
+      nodes: net.nodes.filter((node) => !names.has(node.sourceFile ?? ""))
+    }))
+    .filter((net) => net.nodes.length > 0);
+  const components = importState.components.filter((component) => !names.has(component.sourceFile ?? ""));
+  const liveRefs = new Set(components.map((component) => component.ref));
+  const pinInfo = Object.fromEntries(
+    Object.entries(importState.pinInfo ?? {}).filter(([ref]) => liveRefs.has(ref))
+  );
+  return {
+    components,
+    nets,
+    warnings: importState.warnings.filter((warning) => !names.has(warning.fileName)),
+    pinInfo
+  };
+}
+
 function mergeBundle(target: ParsedImportBundle, source: ParsedImportBundle) {
   target.components.push(...source.components);
   target.nets.push(...source.nets);
