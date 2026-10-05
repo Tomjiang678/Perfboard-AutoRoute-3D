@@ -1,92 +1,81 @@
 {
   "componentMappingRules": [
     {
-      "kind": "led",
-      "label": "LED",
-      "leadSpacing": 1,
-      "match": [
-        { "field": "refPrefix", "equals": "LED" },
-        { "field": "category", "includes": "LED" }
-      ]
-    },
-    {
-      "kind": "potentiometer",
-      "label": "RV",
-      "match": [
-        { "field": "refPrefix", "equals": "RV" },
-        { "field": "value", "includes": "POT" },
-        { "field": "category", "includes": "POT" },
-        { "field": "value", "includes": "POTENTIOMETER" },
-        { "field": "category", "includes": "POTENTIOMETER" },
-        { "field": "value", "includes": "VARIABLE_RESISTOR" },
-        { "field": "category", "includes": "VARIABLE_RESISTOR" }
-      ]
-    },
-    {
       "kind": "resistor",
       "label": "R",
       "leadSpacing": 3,
+      "pinCountStrategy": "fromPins",
       "match": [
-        { "field": "refPrefix", "equals": "R" },
-        { "field": "category", "includes": "RESISTOR" }
+        { "field": "category", "matches": "^DEVICE:R" },
+        { "field": "category", "matches": "^DEVICE:R_NETWORK" }
+      ]
+    },
+    {
+      "kind": "radial_capacitor",
+      "label": "C",
+      "leadSpacing": 1,
+      "pinCountStrategy": "fromPins",
+      "match": [
+        { "field": "category", "matches": "^DEVICE:C$" },
+        { "field": "category", "matches": "^CAPACITOR:" }
+      ]
+    },
+    {
+      "kind": "electrolytic_capacitor",
+      "label": "EC",
+      "leadSpacing": 1,
+      "pinCountStrategy": "fromPins",
+      "match": [
+        { "field": "category", "matches": "^DEVICE:CP" }
       ]
     },
     {
       "kind": "inductor",
       "label": "L",
       "leadSpacing": 3,
+      "pinCountStrategy": "fromPins",
       "match": [
-        { "field": "refPrefix", "equals": "L" },
-        { "field": "category", "includes": "INDUCTOR" }
+        { "field": "category", "matches": "^DEVICE:L" },
+        { "field": "category", "matches": "^INDUCTOR:" }
       ]
     },
     {
       "kind": "diode",
       "label": "D",
       "leadSpacing": 3,
+      "pinCountStrategy": "fromPins",
       "match": [
-        { "field": "refPrefix", "equals": "D" },
-        { "field": "category", "includes": "DIODE" },
-        { "field": "category", "includes": "ZENER" },
-        { "field": "value", "includes": "PHOTO_DIODE" }
+        { "field": "category", "matches": "^DEVICE:D" },
+        { "field": "category", "matches": "^DIODE:" }
       ]
     },
     {
-      "kind": "dip",
-      "label": "DIP",
-      "rowSpacing": 3,
-      "pinCountStrategy": "fixed8",
+      "kind": "led",
+      "label": "LED",
+      "leadSpacing": 1,
+      "pinCountStrategy": "fromPins",
       "match": [
-        { "field": "value", "matches": "^LM358(?:[A-Z0-9_+-]*)" }
+        { "field": "category", "matches": "^DEVICE:LED" },
+        { "field": "category", "matches": "^LED:" }
       ]
     },
     {
-      "kind": "dip_switch",
-      "label": "DIPSW",
-      "rowSpacing": 3,
-      "pinCountStrategy": "dipSwitch",
+      "kind": "potentiometer",
+      "label": "RV",
+      "leadSpacing": 1,
+      "pinCountStrategy": "fixed3",
       "match": [
-        { "field": "value", "includes": "DIPSW" },
-        { "field": "packageName", "includes": "DIPSW" }
+        { "field": "category", "matches": "^DEVICE:R_POTENTIOMETER" },
+        { "field": "category", "matches": "^POTENTIOMETER:" }
       ]
     },
     {
-      "kind": "dip",
-      "label": "DIP",
-      "rowSpacing": 3,
-      "pinCountStrategy": "dipPackage",
-      "matchMode": "all",
+      "kind": "to92",
+      "label": "Q",
+      "pinCountStrategy": "fixed3",
       "match": [
-        { "field": "value", "matches": "(^|[^A-Z0-9])(?:NE|LM|TLC)?555[A-Z0-9_-]*(?:[^A-Z0-9]|$)" },
-        {
-          "any": [
-            { "field": "refPrefix", "equals": "U" },
-            { "field": "refPrefix", "equals": "A" },
-            { "field": "category", "includes": "TIMER" },
-            { "field": "category", "includes": "IC" },
-            { "field": "category", "includes": "MIXED_VIRTUAL" }
-          ]
-        }
+        { "field": "category", "matches": "^TRANSISTOR_BJT:" },
+        { "field": "category", "matches": "^DEVICE:Q_" }
       ]
     },
     {
@@ -94,134 +83,69 @@
       "label": "Q",
       "pinCountStrategy": "fixed3",
       "match": [
-        { "field": "packageName", "includes": "TO-220" },
-        { "field": "packageName", "includes": "TO220" }
-      ]
-    },
-    {
-      "kind": "to92",
-      "label": "Q",
-      "pinCountStrategy": "fixed3",
-      "match": [
-        { "field": "packageName", "includes": "TO-92" },
-        { "field": "packageName", "includes": "TO92" }
-      ]
-    },
-    {
-      "kind": "to39",
-      "label": "Q",
-      "pinCountStrategy": "fixed3",
-      "match": [
-        { "field": "packageName", "includes": "TO-39" },
-        { "field": "packageName", "includes": "TO39" }
-      ]
-    },
-    {
-      "kind": "to92",
-      "label": "Q",
-      "pinCountStrategy": "fixed3",
-      "matchMode": "all",
-      "match": [
-        { "field": "refPrefix", "equals": "Q" },
-        {
-          "any": [
-            { "field": "category", "includes": "BJT" },
-            { "field": "category", "includes": "TRANSISTOR" }
-          ]
-        }
-      ]
-    },
-    {
-      "kind": "electrolytic_capacitor",
-      "label": "C",
-      "leadSpacing": 1,
-      "matchMode": "all",
-      "match": [
-        {
-          "any": [
-            { "field": "refPrefix", "equals": "C" },
-            { "field": "category", "includes": "CAP" }
-          ]
-        },
-        {
-          "any": [
-            { "field": "category", "includes": "ELECT" },
-            { "field": "value", "includes": "UF" }
-          ]
-        }
-      ]
-    },
-    {
-      "kind": "radial_capacitor",
-      "label": "C",
-      "leadSpacing": 1,
-      "match": [
-        { "field": "refPrefix", "equals": "C" },
-        { "field": "category", "includes": "CAP" }
+        { "field": "category", "matches": "^TRANSISTOR_FET:" },
+        { "field": "category", "matches": "^REGULATOR_LINEAR:" },
+        { "field": "category", "matches": "^REGULATOR_SWITCHING:" }
       ]
     },
     {
       "kind": "dip",
       "label": "DIP",
       "rowSpacing": 3,
-      "pinCountStrategy": "dipPackage",
-      "matchMode": "all",
+      "pinCountStrategy": "fromPins",
       "match": [
-        { "field": "refPrefix", "equals": "U" },
-        { "not": { "field": "packageName", "includes": "DIPSW" } },
-        {
-          "any": [
-            { "field": "packageName", "matches": "^(?:P?DIP|SDIP)-?P?-?[0-9]+" },
-            { "field": "packageName", "includes": "SO-" },
-            { "field": "packageName", "includes": "SOIC" },
-            { "field": "packageName", "matches": "^D0?[0-9]+$" },
-            { "field": "packageName", "matches": "^DO[0-9]+$" },
-            { "field": "packageName", "includes": "CASE751A" }
-          ]
-        }
+        { "field": "category", "matches": "^AMPLIFIER_OPERATIONAL:" },
+        { "field": "category", "matches": "^COMPARATOR:" },
+        { "field": "category", "matches": "^TIMER:" },
+        { "field": "category", "matches": "^74XX:" },
+        { "field": "category", "matches": "^4XXX_IEEE:" },
+        { "field": "category", "matches": "^AUDIO:" },
+        { "field": "category", "matches": "^VIDEO:" }
       ]
     },
     {
-      "kind": "dip",
-      "label": "DIP",
+      "kind": "dip_switch",
+      "label": "DIPSW",
       "rowSpacing": 3,
-      "pinCountStrategy": "dipPackage",
-      "matchMode": "all",
+      "pinCountStrategy": "fromPins",
       "match": [
-        { "field": "refPrefix", "equals": "U" },
-        {
-          "any": [
-            { "field": "category", "matches": "^74" },
-            { "field": "value", "matches": "^74[A-Z0-9_+-]*" }
-          ]
-        }
-      ]
-    },
-    {
-      "kind": "buzzer",
-      "label": "BZ",
-      "pinCountStrategy": "fixed2",
-      "match": [
-        { "field": "category", "includes": "BUZZER" },
-        { "field": "value", "includes": "BUZZER" }
+        { "field": "category", "matches": "^SWITCH:SW_DIP" }
       ]
     },
     {
       "kind": "seven_segment_display",
       "label": "7SEG",
-      "pinCountStrategy": "fixed8",
+      "pinCountStrategy": "fromPins",
       "match": [
-        { "field": "value", "includes": "SEVEN_SEG" },
-        { "field": "value", "includes": "7SEG" }
+        { "field": "category", "matches": "^DISPLAY_CHARACTER:" }
       ]
     },
     {
-      "kind": "alphanumeric_display",
-      "label": "ALNUM",
-      "pinCountStrategy": "fixed18",
+      "kind": "pin_header",
+      "label": "HDR",
+      "pinCountStrategy": "fromPins",
       "match": [
-        { "field": "value", "includes": "ALPHA_NUMERIC" },
-        { "field": "value", "includes": "ALPHANUMERIC" }
+        { "field": "category", "matches": "^CONNECTOR:CONN_" },
+        { "field": "category", "matches": "^CONNECTOR_PINHEADER:" },
+        { "field": "category", "matches": "^PIN_HEADER:" },
+        { "field": "category", "matches": "^TESTPOINT:TESTPAD" }
+      ]
+    },
+    {
+      "kind": "terminal_block",
+      "label": "TB",
+      "pinCountStrategy": "fromPins",
+      "match": [
+        { "field": "category", "matches": "^TERMINALBLOCK:" },
+        { "field": "category", "matches": "^CONNECTOR:SCREWTERMINAL" }
+      ]
+    },
+    {
+      "kind": "buzzer",
+      "label": "BZ",
+      "pinCountStrategy": "fromPins",
+      "match": [
+        { "field": "category", "matches": "^DEVICE:BUZZER" }
       ]
     },
     {
@@ -229,17 +153,17 @@
       "label": "SW",
       "pinCountStrategy": "fixed3",
       "match": [
-        { "field": "value", "includes": "SPDT" },
-        { "field": "packageName", "includes": "SPDT" }
+        { "field": "category", "matches": "^DEVICE:SW_SPDT" },
+        { "field": "category", "matches": "^SWITCH:SW_" }
       ]
     },
     {
-      "kind": "pin_header",
-      "label": "HDR",
-      "pinCountStrategy": "fixed10",
+      "kind": "tactile_switch",
+      "label": "SW",
+      "pinCountStrategy": "fixed4",
       "match": [
-        { "field": "category", "includes": "HEADERS_TEST" },
-        { "field": "packageName", "includes": "1787234" }
+        { "field": "category", "matches": "^DEVICE:SW_PUSH" },
+        { "field": "category", "matches": "^BUTTON:" }
       ]
     }
   ],

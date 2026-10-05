@@ -1,29 +1,30 @@
 import {
   buildPinOffsetsForComponent,
   getLibraryComponentByKind
-} from "../project/componentLibrary";
-import type { LibraryComponentKind, ParsedComponent, ParsedNet, PlacedComponent } from "../../types/project";
-import { buildFallbackPinMaps } from "./fallbackPinMapping";
-import { componentMappingRules, fallbackComponentMapping, ignoredComponentRules, normalizeComponentFields } from "./importConfig";
+} from "../project/componentLibrary.ts";
+import type { ImportState, LibraryComponentKind, ParsedComponent, PlacedComponent } from "../../types/project.ts";
+import { componentMappingRules, fallbackComponentMapping, ignoredComponentRules, normalizeComponentFields } from "./importConfig.ts";
 
 export function createPlacedComponentsFromParsed(
-  parsedComponents: ParsedComponent[],
-  parsedNets: ParsedNet[],
+  importState: ImportState,
   existingComponents: PlacedComponent[],
   boardWidth: number
 ): PlacedComponent[] {
   const existingNames = new Set(existingComponents.map((component) => component.name));
-  const fallbackPinMaps = buildFallbackPinMaps(parsedNets);
+  const pinCountByRef = new Map<string, number>();
+  Object.entries(importState.pinInfo ?? {}).forEach(([ref, pins]) => {
+    pinCountByRef.set(ref, Object.keys(pins).length);
+  });
   const nextComponents: PlacedComponent[] = [];
 
-  parsedComponents
-    .filter((component) => shouldCreatePhysicalComponent(component))
+  importState.components
+    .filter((component) => !shouldIgnoreComponent(component))
     .forEach((component) => {
       if (existingNames.has(component.ref)) {
         return;
       }
 
-      const mapped = mapParsedComponent(component, fallbackPinMaps.get(component.ref));
+      const mapped = mapParsedComponent(component, pinCountByRef.get(component.ref));
       const library = getLibraryComponentByKind(mapped.kind, mapped.pinCount);
       if (!library) {
         return;
@@ -58,20 +59,19 @@ export function createPlacedComponentsFromParsed(
         rotation: 0,
         mounted: false,
         isFallback: mapped.isFallback,
-        fallbackReason: mapped.fallbackReason,
-        fallbackPinMap: mapped.fallbackPinMap
+        fallbackReason: mapped.fallbackReason
       });
     });
 
   return nextComponents;
 }
 
-function shouldCreatePhysicalComponent(component: ParsedComponent) {
+function shouldIgnoreComponent(component: ParsedComponent) {
   const fields = normalizeComponentFields(component);
-  return !ignoredComponentRules.some((rule) => rule.match(fields));
+  return ignoredComponentRules.some((rule) => rule.match(fields));
 }
 
-function mapParsedComponent(component: ParsedComponent, fallbackPinMap: Record<string, number> | undefined): {
+function mapParsedComponent(component: ParsedComponent, pinsFromNetlist: number | undefined): {
   kind: LibraryComponentKind;
   label: string;
   pinCount?: number;
@@ -79,13 +79,12 @@ function mapParsedComponent(component: ParsedComponent, fallbackPinMap: Record<s
   rowSpacing?: number;
   isFallback?: boolean;
   fallbackReason?: string;
-  fallbackPinMap?: Record<string, number>;
 } {
   const fields = normalizeComponentFields(component);
   const rule = componentMappingRules.find((candidate) => candidate.match(fields));
 
   if (rule) {
-    const pinCount = rule.pinCount?.(component);
+    const pinCount = rule.pinCount?.(component, pinsFromNetlist);
     return {
       kind: rule.kind,
       label: makeMappedLabel(rule.kind, rule.label, pinCount),
@@ -98,10 +97,9 @@ function mapParsedComponent(component: ParsedComponent, fallbackPinMap: Record<s
   return {
     ...fallbackComponentMapping,
     label: "UNK",
-    pinCount: Math.max(2, Object.keys(fallbackPinMap ?? {}).length || fallbackComponentMapping.pinCount),
+    pinCount: Math.max(2, pinsFromNetlist ?? fallbackComponentMapping.pinCount),
     isFallback: true,
-    fallbackReason: `元件 ${component.ref} (${component.value}) 在库中没有对应封装，已按网表引脚生成占位排针。`,
-    fallbackPinMap
+    fallbackReason: `元件 ${component.ref} (${component.category}) 在库中没有对应封装，已按网表引脚生成占位排针。`
   };
 }
 

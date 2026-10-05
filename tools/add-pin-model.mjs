@@ -19,90 +19,186 @@ async function main() {
   const rl = readline.createInterface({ input, output });
 
   try {
-    const deviceInput = args.device ?? await promptRequired(rl, "请输入 docs 中的器件型号或 RefDes：");
-    const component = resolveComponent(deviceInput);
-    console.log(`找到元件：${component.ref} ${component.value} ${component.category} ${component.packageName}`);
+    const sourceInputs = args.inputs.length > 0
+      ? args.inputs.flatMap(parsePathList)
+      : parsePathList(await rl.question("报告文件或目录（多个路径用分号分隔，回车默认 docs/）："));
+    const sourceFiles = collectSourceFiles(sourceInputs.length > 0 ? sourceInputs : [docsDir]);
+    console.log(`报告来源：${sourceFiles.length} 个文本文件`);
 
-    const netlistPins = findNetlistPinsInDocs(component);
+    const modelFileInput = args.modelFile
+      ?? (args.device || args.model || args.modelClipboard
+        ? ""
+        : (await rl.question("批量模型 TXT 路径（回车进入单元件模式）：")).trim());
+    const outputPath = args.output ? resolveInputPath(args.output) : pinLibraryOverridesPath;
+    const overrideLibrary = readJson(fs.existsSync(outputPath) ? outputPath : pinLibraryOverridesPath);
+
+    if (modelFileInput) {
+      const batchPath = resolveInputPath(modelFileInput);
+      const records = parseBatchModelFile(readTextFile(batchPath));
+      if (records.length === 0) {
+        throw new Error(`批量文件没有可处理的元件记录：${batchPath}`);
+      }
+
+      console.log(`批量文件：${batchPath}`);
+      console.log(`待处理元件：${records.length} 个`);
+      const failures = [];
+      let changedCount = 0;
+      let unchangedCount = 0;
+      for (const record of records) {
+        try {
+          const result = processDeviceModel({
+            deviceInput: record.device,
+            modelLines: record.modelLines,
+            sourceFiles,
+            overrideLibrary,
+            noNetCheck: args.noNetCheck
+          });
+          if (result.changed) changedCount += 1;
+          else unchangedCount += 1;
+        } catch (error) {
+          failures.push(`${record.device}: ${error instanceof Error ? error.message : error}`);
+        }
+      }
+
+      if (failures.length > 0) {
+        throw new Error(`批量校验失败，未写入任何数据：\n${failures.map((item) => `- ${item}`).join("\n")}`);
+      }
+
+      if (!args.dryRun && changedCount > 0) {
+        writeJson(outputPath, overrideLibrary);
+      }
+      console.log(`${args.dryRun ? "试运行完成" : "批量处理完成"}：新增/更新 ${changedCount}，无变化 ${unchangedCount}`);
+      if (!args.dryRun && changedCount > 0) console.log(`已更新 ${outputPath}`);
+      return;
+    }
+
+    const deviceInput = args.device ?? await promptRequired(rl, "请输入器件型号或 RefDes：");
     const modelLines = args.modelClipboard
       ? splitModelInput(readClipboard())
       : args.model
         ? splitModelInput(args.model)
         : await promptModelLines(rl);
-
-    const parsedModel = modelLines.length > 0
-      ? parseModelLines(modelLines)
-      : parsedModelFromNetlist(netlistPins);
-    if (parsedModel.units.length === 0) {
-      throw new Error("没有找到 %p/%t 模型单元，也没有可用于推断的网表引脚。");
+    const result = processDeviceModel({
+      deviceInput,
+      modelLines,
+      sourceFiles,
+      overrideLibrary,
+      noNetCheck: args.noNetCheck
+    });
+    if (!args.dryRun && result.changed) {
+      writeJson(outputPath, overrideLibrary);
+      console.log(`已更新 ${outputPath}`);
+    } else if (args.dryRun) {
+      console.log("试运行完成，未写入文件。");
     }
-
-    if (!args.noNetCheck) {
-      const netCheck = checkNetlistPins(component, parsedModel, netlistPins);
-      printNetlistCheck(netCheck);
-      if (netCheck.status === "mismatch") {
-        throw new Error("网表引脚和模型引脚不一致。请在 Multisim 中把该元件所有脚接地，导出网表报告到 docs/，然后重新运行。");
-      }
-    }
-
-    const overrideLibrary = readJson(pinLibraryOverridesPath);
-    const templateName = findMatchingTemplate(parsedModel, overrideLibrary.pinModelTemplates ?? {});
-    const devicePattern = buildDevicePattern(component.value, templateName);
-    const deviceModel = templateName
-      ? { match: devicePattern, flags: "i", template: templateName }
-      : buildExplicitDeviceModel(component, devicePattern, parsedModel);
-    if (!deviceModel) {
-      printUnknownTemplateHelp(parsedModel);
-      return;
-    }
-
-    const changed = addDeviceModel(overrideLibrary, deviceModel);
-    if (!changed) {
-      console.log(`没有变化：${devicePattern} 已经被本地覆盖库覆盖。`);
-      return;
-    }
-
-    writeJson(pinLibraryOverridesPath, overrideLibrary);
-    console.log(templateName
-      ? `已添加 ${devicePattern} -> ${templateName}`
-      : `已添加 ${devicePattern} -> 显式引脚映射`);
-    console.log(`已更新 ${path.relative(repoRoot, pinLibraryOverridesPath)}`);
   } finally {
     rl.close();
   }
 }
 
+function processDeviceModel({ deviceInput, modelLines, sourceFiles, overrideLibrary, noNetCheck }) {
+  const component = resolveComponent(deviceInput, sourceFiles);
+  console.log(`\n找到元件：${component.ref} ${component.value} ${component.category} ${component.packageName}`);
+  const netlistPins = findNetlistPins(component, sourceFiles);
+  const parsedModel = modelLines.length > 0
+    ? parseModelLines(modelLines)
+    : parsedModelFromNetlist(netlistPins);
+  if (parsedModel.units.length === 0) {
+    throw new Error("没有找到 %p/%t 模型单元，也没有可用于推断的网表引脚。");
+  }
+
+  if (!noNetCheck) {
+    const netCheck = checkNetlistPins(component, parsedModel, netlistPins);
+    printNetlistCheck(netCheck);
+    if (netCheck.status === "mismatch") {
+      throw new Error("网表引脚和模型引脚不一致。可修正报告来源，或确认风险后使用 --no-net-check。");
+    }
+  }
+
+  const templateName = findMatchingTemplate(parsedModel, overrideLibrary.pinModelTemplates ?? {});
+  const devicePattern = buildDevicePattern(component.value, templateName);
+  const deviceModel = templateName
+    ? { match: devicePattern, flags: "i", template: templateName }
+    : buildExplicitDeviceModel(component, devicePattern, parsedModel);
+  if (!deviceModel) {
+    throw new Error(formatUnknownTemplateError(parsedModel));
+  }
+
+  const changed = addDeviceModel(overrideLibrary, deviceModel);
+  console.log(changed
+    ? `已准备 ${devicePattern} -> ${templateName ?? "显式引脚映射"}`
+    : `无变化：${devicePattern} 已被本地覆盖库覆盖。`);
+  return { changed, devicePattern, templateName };
+}
+
 function parseArgs(args) {
-  const result = {};
+  const result = { inputs: [] };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--device") {
-      result.device = args[index + 1];
+      result.device = requireArgValue(args, index, arg);
       index += 1;
     } else if (arg === "--model") {
-      result.model = args[index + 1];
+      result.model = requireArgValue(args, index, arg);
       index += 1;
     } else if (arg === "--model-clipboard") {
       result.modelClipboard = true;
+    } else if (arg === "--input" || arg === "--report") {
+      result.inputs.push(requireArgValue(args, index, arg));
+      index += 1;
+    } else if (arg === "--model-file" || arg === "--batch") {
+      result.modelFile = requireArgValue(args, index, arg);
+      index += 1;
+    } else if (arg === "--output") {
+      result.output = requireArgValue(args, index, arg);
+      index += 1;
+    } else if (arg === "--dry-run") {
+      result.dryRun = true;
     } else if (arg === "--no-net-check") {
       result.noNetCheck = true;
     } else if (arg === "--help" || arg === "-h") {
       printHelp();
       process.exit(0);
+    } else {
+      throw new Error(`未知参数：${arg}`);
     }
   }
   return result;
 }
 
+function requireArgValue(args, index, option) {
+  const value = args[index + 1];
+  if (!value || value.startsWith("--")) {
+    throw new Error(`${option} 后必须提供路径或内容。`);
+  }
+  return value;
+}
+
 function printHelp() {
   console.log(`用法：
   node tools/add-pin-model.mjs
-  node tools/add-pin-model.mjs --device LM358AD --model "x%p_a %t1IN+ ..."
-  node tools/add-pin-model.mjs --device 74LS138 --model-clipboard
+  node tools/add-pin-model.mjs --input "D:\\reports" --device LM358AD --model "x%p_a %t1IN+ ..."
+  node tools/add-pin-model.mjs --input cross.txt --input netlist.txt --model-file pins.txt
 
-器件可以输入 RefDes，例如 U4，也可以输入型号，例如 LM358AD。
-工具会扫描 docs/ 中的交叉报告行和全脚接地网表报告。
-只有在明确想跳过网表校验时，才使用 --no-net-check。`);
+选项：
+  --input, --report <路径>    报告文件或目录，可重复使用
+  --model-file, --batch <TXT> 批量读取元件模型
+  --device <型号或 RefDes>    单元件模式
+  --model <模型文本>          单元件模式
+  --model-clipboard           从剪贴板读取单元件模型
+  --output <JSON>             自定义覆盖库输出路径
+  --dry-run                   只解析和校验，不写文件
+  --no-net-check              跳过网表引脚校验
+
+批量 TXT 格式：
+  [U1]
+  x%p_a %t1IN+ %t1IN- %t1OUT
+  x%p_b %t2IN+ %t2IN- %t2OUT
+
+  [74LS138]
+  x%p %tA %tB %tC %tG1 %t~G2A %t~G2B %tY0
+
+也支持单行：U1 | x%p_a %t1IN+ %t1IN- %t1OUT`);
 }
 
 async function promptRequired(rl, prompt) {
@@ -139,18 +235,142 @@ function readClipboard() {
   throw new Error("当前只实现了 Windows 剪贴板读取；其他平台请使用 --model。");
 }
 
-function resolveComponent(inputText) {
+function parsePathList(value) {
+  return value
+    .split(/[;\r\n]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function resolveInputPath(inputPath) {
+  const unquoted = inputPath.trim().replace(/^(["'])(.*)\1$/, "$2");
+  const expanded = unquoted.replace(/%([^%]+)%/g, (_, name) => process.env[name] ?? `%${name}%`);
+  return path.resolve(expanded);
+}
+
+function collectSourceFiles(inputs) {
+  const files = [];
+  for (const inputPath of inputs) {
+    const resolved = resolveInputPath(inputPath);
+    if (!fs.existsSync(resolved)) {
+      throw new Error(`报告路径不存在：${resolved}`);
+    }
+    const stat = fs.statSync(resolved);
+    if (stat.isDirectory()) {
+      files.push(...walkFiles(resolved));
+    } else if (stat.isFile()) {
+      files.push(resolved);
+    }
+  }
+
+  const textFiles = [...new Set(files.map((file) => path.resolve(file)))]
+    .filter((file) => /\.(txt|md|csv|tsv|net|cir)$/i.test(file));
+  if (textFiles.length === 0) {
+    throw new Error("所选路径中没有可读取的文本报告文件。");
+  }
+  return textFiles;
+}
+
+function readTextFile(filePath) {
+  const buffer = fs.readFileSync(filePath);
+  if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) {
+    return buffer.subarray(2).toString("utf16le");
+  }
+  if (buffer.length >= 2 && buffer[0] === 0xfe && buffer[1] === 0xff) {
+    const swapped = Buffer.from(buffer.subarray(2));
+    swapped.swap16();
+    return swapped.toString("utf16le");
+  }
+  if (buffer.includes(0)) {
+    return buffer.toString("utf16le").replace(/^\uFEFF/, "");
+  }
+
+  const utf8 = buffer.toString("utf8").replace(/^\uFEFF/, "");
+  if (!utf8.includes("\uFFFD")) return utf8;
+  try {
+    return new TextDecoder("gb18030").decode(buffer);
+  } catch {
+    return utf8;
+  }
+}
+
+function parseBatchModelFile(text) {
+  const records = [];
+  let current;
+
+  const flush = () => {
+    if (!current) return;
+    if (current.modelLines.length === 0) {
+      throw new Error(`元件 ${current.device} 后没有 %p/%t 模型文本（第 ${current.line} 行）。`);
+    }
+    records.push(current);
+    current = undefined;
+  };
+
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const lineNumber = index + 1;
+    const line = lines[index].trim();
+    if (!line || /^(#|\/\/)/.test(line)) continue;
+    if (/^-{3,}$/.test(line)) {
+      flush();
+      continue;
+    }
+
+    const inline = line.match(/^(.+?)\s*(?:\||\t)\s*(.*%p.*)$/i);
+    if (inline) {
+      flush();
+      records.push({
+        device: inline[1].trim(),
+        modelLines: splitModelInput(inline[2]),
+        line: lineNumber
+      });
+      continue;
+    }
+
+    const bracketHeader = line.match(/^\[([^\]]+)]$/);
+    const namedHeader = line.match(/^(?:device|component|refdes|ref|型号|元件|器件)\s*[:=]\s*(.+)$/i);
+    const crossRow = !line.includes("%p") ? parseCrossRow(line) : undefined;
+    const bareHeader = !line.includes("%p") && /^[A-Za-z0-9_.+\-]+$/.test(line) ? line : undefined;
+    const device = bracketHeader?.[1].trim() ?? namedHeader?.[1].trim() ?? crossRow?.ref ?? bareHeader;
+    if (device) {
+      flush();
+      current = { device, modelLines: [], line: lineNumber };
+      continue;
+    }
+
+    if (!line.includes("%p")) {
+      throw new Error(`无法识别批量文件第 ${lineNumber} 行：${line}`);
+    }
+    if (!current) {
+      throw new Error(`第 ${lineNumber} 行是模型文本，但前面没有 [型号] 或 [RefDes] 标题。`);
+    }
+    current.modelLines.push(line);
+  }
+  flush();
+
+  const merged = new Map();
+  for (const record of records) {
+    const key = record.device.toUpperCase();
+    const existing = merged.get(key);
+    if (existing) existing.modelLines.push(...record.modelLines);
+    else merged.set(key, record);
+  }
+  return [...merged.values()];
+}
+
+function resolveComponent(inputText, sourceFiles) {
   const direct = parseCrossRow(inputText);
   if (direct) {
     return direct;
   }
 
-  const match = findCrossRowInDocs(inputText.trim());
+  const match = findCrossRow(inputText.trim(), sourceFiles);
   if (match) {
     return match;
   }
 
-  throw new Error(`找不到 "${inputText}" 对应的交叉报告行。请粘贴完整行，或把报告放入 docs/。`);
+  throw new Error(`在所选报告文件中找不到 "${inputText}" 对应的交叉报告行。`);
 }
 
 function parseCrossRow(line) {
@@ -173,17 +393,10 @@ function parseCrossRow(line) {
   };
 }
 
-function findCrossRowInDocs(query) {
-  if (!fs.existsSync(docsDir)) {
-    return undefined;
-  }
-
+function findCrossRow(query, sourceFiles) {
   const normalizedQuery = query.toUpperCase();
-  for (const filePath of walkFiles(docsDir)) {
-    if (!/\.(txt|md|csv)$/i.test(filePath)) {
-      continue;
-    }
-    const content = fs.readFileSync(filePath, "utf8");
+  for (const filePath of sourceFiles) {
+    const content = readTextFile(filePath);
     for (const line of content.split(/\r?\n/)) {
       if (!line.toUpperCase().includes(normalizedQuery)) {
         continue;
@@ -289,7 +502,7 @@ function stripLeadingUnitNumber(pin) {
   return pin.replace(/^\d+/, "");
 }
 
-function checkNetlistPins(component, parsedModel, netlistPins = findNetlistPinsInDocs(component)) {
+function checkNetlistPins(component, parsedModel, netlistPins) {
   if (netlistPins.allPins.size === 0) {
     return {
       status: "missing",
@@ -317,20 +530,14 @@ function checkNetlistPins(component, parsedModel, netlistPins = findNetlistPinsI
   };
 }
 
-function findNetlistPinsInDocs(component) {
+function findNetlistPins(component, sourceFiles) {
   const pinsByUnit = new Map();
   const allPins = new Set();
-  if (!fs.existsSync(docsDir)) {
-    return { allPins, pinsByUnit };
-  }
 
   const normalizedRef = component.ref.toUpperCase();
   const normalizedCircuitId = component.circuitId?.toUpperCase();
-  for (const filePath of walkFiles(docsDir)) {
-    if (!/\.(txt|md|csv)$/i.test(filePath)) {
-      continue;
-    }
-    const content = fs.readFileSync(filePath, "utf8");
+  for (const filePath of sourceFiles) {
+    const content = readTextFile(filePath);
     for (const line of content.split(/\r?\n/)) {
       const columns = splitReportLine(line);
       if (columns.length < 4) {
@@ -654,13 +861,11 @@ function mergePattern(existingPattern, newPattern) {
   return `^(${parts.join("|")})${existingPattern.slice(closeIndex + 1)}`;
 }
 
-function printUnknownTemplateHelp(parsedModel) {
-  console.log("没有已有引脚模板能匹配这些模型引脚。");
-  console.log("检测到的单元：");
-  for (const unit of parsedModel.units) {
-    console.log(`  ${unit.unit || "单单元"}: ${unit.pins.join(", ")}`);
-  }
-  console.log("请先向 pinModelTemplates 添加模板，或直接用 add-import-json.mjs 写入显式 JSON 映射。");
+function formatUnknownTemplateError(parsedModel) {
+  const units = parsedModel.units
+    .map((unit) => `  ${unit.unit || "单单元"}: ${unit.pins.join(", ")}`)
+    .join("\n");
+  return `没有已有引脚模板能匹配这些模型引脚：\n${units}\n请先添加模板，或提供能确定物理脚号顺序的完整模型。`;
 }
 
 function readJson(filePath) {

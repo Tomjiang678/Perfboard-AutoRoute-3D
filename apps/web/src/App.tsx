@@ -9,7 +9,7 @@ import {
   buildPinOffsetsForComponent,
   type LibraryComponentDefinition
 } from "./features/project/componentLibrary";
-import { mergeImportState, parseImportFiles } from "./features/import/multisimReportParser";
+import { mergeImportState, parseImportFiles } from "./features/import/kicadNetlistParser";
 import { createPlacedComponentsFromParsed } from "./features/import/componentMapping";
 import { useAutoPlacement } from "./features/layout/useAutoPlacement";
 import { useAiConstraintAssistant } from "./features/ai/useAiConstraintAssistant";
@@ -27,7 +27,7 @@ import { createProject } from "./features/project/projectFactory";
 import { getBoardModel, normalizeBoardDefinition } from "./features/board/factory";
 import { componentPinHoles } from "./features/board/placement";
 import type { PinNetAssignments } from "./features/board/types";
-import type { BoardSize, DragMoveModifier, ImportKind, KeyboardShortcuts, PerfboardProject, PlacedComponent, RoutedNetEndpoint, ThemeMode } from "./types/project";
+import type { BoardSize, DragMoveModifier, ImportKind, ImportState, KeyboardShortcuts, PerfboardProject, PlacedComponent, RoutedNetEndpoint, ThemeMode } from "./types/project";
 import type { SelectedPin } from "./components/Perfboard3DViewport";
 import type { RouteEditMode, WorkspaceToolbarProps } from "./components/WorkspaceToolbar";
 
@@ -376,7 +376,7 @@ export function App() {
   }
 
   async function handleImportFiles(kind: ImportKind, files: File[]) {
-    const parsed = await parseImportFiles(kind, files);
+    const parsed = await parseImportFiles(files);
 
     commitProject((current) => {
       return {
@@ -404,26 +404,23 @@ export function App() {
       }
 
       const files = current.files.filter((item) => item.id !== fileId);
-      const importState = file.kind === "bom"
-        ? {
-            ...current.importState,
-            components: current.importState.components.filter((component) => component.sourceFile !== file.name)
-          }
-        : {
-            ...current.importState,
-            nets: current.importState.nets
-              .map((net) => ({
-                ...net,
-                nodes: net.nodes.filter((node) => node.sourceFile !== file.name)
-              }))
-              .filter((net) => net.nodes.length > 0)
-          };
+      const importState: ImportState = {
+        components: current.importState.components.filter((component) => component.sourceFile !== file.name),
+        nets: current.importState.nets
+          .map((net) => ({
+            ...net,
+            nodes: net.nodes.filter((node) => node.sourceFile !== file.name)
+          }))
+          .filter((net) => net.nodes.length > 0),
+        warnings: current.importState.warnings.filter((warning) => warning.fileName !== file.name),
+        pinInfo: current.importState.pinInfo
+      };
 
       return {
         ...current,
         files,
         importState,
-        selectedNetName: file.kind === "netlist" ? undefined : current.selectedNetName
+        selectedNetName: undefined
       };
     });
   }
@@ -502,8 +499,7 @@ export function App() {
   function handleCreateComponentsFromImport() {
     commitProject((current) => {
       const importedComponents = createPlacedComponentsFromParsed(
-        current.importState.components,
-        current.importState.nets,
+        current.importState,
         current.components,
         current.board.width
       );

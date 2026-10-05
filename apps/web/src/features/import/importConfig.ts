@@ -1,7 +1,8 @@
-import type { LibraryComponentKind, ParsedComponent } from "../../types/project";
-import behaviorData from "./importBehaviorData.json";
-import configData from "./importConfigData.json";
-import pinLibraryOverrides from "./pinLibraryOverrides.json";
+import type { LibraryComponentKind, ParsedComponent } from "../../types/project.ts";
+import behaviorData from "./importBehaviorData.json" with { type: "json" };
+import configData from "./importConfigData.json" with { type: "json" };
+import pinLibraryOverrides from "./pinLibraryOverrides.json" with { type: "json" };
+import pinLibraryGenerated from "./pinLibraryGenerated.json" with { type: "json" };
 
 export interface DevicePinModel {
   match: RegExp;
@@ -13,7 +14,7 @@ export interface ComponentMappingRule {
   kind: LibraryComponentKind;
   label: string;
   match: (component: NormalizedComponentFields) => boolean;
-  pinCount?: (component: ParsedComponent) => number | undefined;
+  pinCount?: (component: ParsedComponent, pinsFromNetlist?: number) => number | undefined;
   leadSpacing?: number;
   rowSpacing?: number;
 }
@@ -26,13 +27,8 @@ export interface NormalizedComponentFields {
   value: string;
 }
 
-export type SimplePinResolverMode = "numeric" | "pinMap" | "dipSwitch";
-
-export interface SimplePinResolverRule {
-  mode: SimplePinResolverMode;
+export interface IgnoredComponentRule {
   match: (component: NormalizedComponentFields) => boolean;
-  pinPattern?: RegExp;
-  pinMap?: Record<string, number>;
 }
 
 interface RawDevicePinModel {
@@ -48,7 +44,7 @@ interface RawComponentMappingRule {
   label: string;
   match: MatchExpression[];
   matchMode?: "any" | "all";
-  pinCountStrategy?: "dipPackage" | "dipSwitch" | "fixed2" | "fixed3" | "fixed8" | "fixed10" | "fixed18";
+  pinCountStrategy?: "fromPins" | "fixed2" | "fixed3" | "fixed4" | "fixed8" | "fixed10" | "fixed18";
   leadSpacing?: number;
   rowSpacing?: number;
 }
@@ -56,12 +52,6 @@ interface RawComponentMappingRule {
 interface RawBehaviorRule {
   match: MatchExpression[];
   matchMode?: "any" | "all";
-}
-
-interface RawSimplePinResolverRule extends RawBehaviorRule {
-  mode: SimplePinResolverMode;
-  pinPattern?: string;
-  pinMap?: Record<string, number>;
 }
 
 interface RawPinLibraryData {
@@ -90,22 +80,27 @@ const rawConfig = configData as unknown as {
 
 const rawBehavior = behaviorData as unknown as {
   ignoredComponentRules: RawBehaviorRule[];
-  simplePinResolverRules: RawSimplePinResolverRule[];
 };
 
-const rawPinLibrary = pinLibraryOverrides as unknown as RawPinLibraryData;
+const rawOverrides = pinLibraryOverrides as unknown as RawPinLibraryData;
+const rawGenerated = pinLibraryGenerated as unknown as RawPinLibraryData;
 
-const pinCountResolvers: Record<NonNullable<RawComponentMappingRule["pinCountStrategy"]>, (component: ParsedComponent) => number> = {
-  dipPackage: (component) => parseDipPinCount(component.packageName) ?? inferPinCountFromDevicePinModels(component.value) ?? 8,
-  dipSwitch: (component) => parseDipSwitchPinCount(component.value) ?? parseDipSwitchPinCount(component.packageName) ?? 4,
+const pinCountResolvers: Record<NonNullable<RawComponentMappingRule["pinCountStrategy"]>, (component: ParsedComponent, pinsFromNetlist?: number) => number> = {
+  fromPins: (component, pinsFromNetlist) => Math.max(1, pinsFromNetlist ?? inferPinCountFromDevicePinModels(component.value) ?? 2),
   fixed2: () => 2,
   fixed3: () => 3,
+  fixed4: () => 4,
   fixed8: () => 8,
   fixed10: () => 10,
   fixed18: () => 18
 };
 
-export const devicePinModels: DevicePinModel[] = (rawPinLibrary.devicePinModels ?? []).map(buildDevicePinModel);
+// Hand-tuned overrides win; the 867 models generated from the KiCad symbol
+// libraries act as the broad fallback (pin name enrichment, power pins).
+export const devicePinModels: DevicePinModel[] = [
+  ...(rawOverrides.devicePinModels ?? []).map((model) => buildDevicePinModel(model, rawOverrides)),
+  ...(rawGenerated.devicePinModels ?? []).map((model) => buildDevicePinModel(model, rawGenerated))
+];
 
 export const componentMappingRules: ComponentMappingRule[] = rawConfig.componentMappingRules.map((rule) => ({
   kind: rule.kind,
@@ -118,27 +113,24 @@ export const componentMappingRules: ComponentMappingRule[] = rawConfig.component
 
 export const fallbackComponentMapping = rawConfig.fallbackComponentMapping;
 
-export const ignoredComponentRules = rawBehavior.ignoredComponentRules.map(buildBehaviorRule);
-
-export const simplePinResolverRules: SimplePinResolverRule[] = rawBehavior.simplePinResolverRules.map((rule) => ({
-  mode: rule.mode,
-  pinPattern: rule.pinPattern ? new RegExp(rule.pinPattern) : undefined,
-  pinMap: rule.pinMap,
-  match: buildBehaviorRule(rule).match
-}));
+export const ignoredComponentRules: IgnoredComponentRule[] = rawBehavior.ignoredComponentRules.map(buildBehaviorRule);
 
 export function normalizeComponentFields(component: ParsedComponent): NormalizedComponentFields {
   return {
     ref: component.ref.toUpperCase(),
-    refPrefix: component.ref.match(/^[A-Za-z]+/)?.[0].toUpperCase() ?? "",
+    refPrefix: component.ref.match(/^[A-Za-z#]+/)?.[0].toUpperCase() ?? "",
     category: component.category.toUpperCase(),
     packageName: component.packageName.toUpperCase(),
     value: component.value.toUpperCase()
   };
 }
 
-function buildDevicePinModel(model: RawDevicePinModel): DevicePinModel {
-  const template = model.template ? rawPinLibrary.pinModelTemplates?.[model.template] : undefined;
+function buildPinCountResolver(strategy: RawComponentMappingRule["pinCountStrategy"]) {
+  return strategy ? pinCountResolvers[strategy] : undefined;
+}
+
+function buildDevicePinModel(model: RawDevicePinModel, library: RawPinLibraryData): DevicePinModel {
+  const template = model.template ? library.pinModelTemplates?.[model.template] : undefined;
   return {
     match: new RegExp(model.match, model.flags),
     units: mergeUnitMaps(template?.units, model.units),
@@ -149,7 +141,7 @@ function buildDevicePinModel(model: RawDevicePinModel): DevicePinModel {
   };
 }
 
-function buildBehaviorRule(rule: RawBehaviorRule) {
+function buildBehaviorRule(rule: RawBehaviorRule): IgnoredComponentRule {
   return {
     match: (component: NormalizedComponentFields) => evaluateMatchList(rule.match, component, rule.matchMode ?? "any")
   };
@@ -170,40 +162,6 @@ function mergeUnitMaps(
     };
   }
   return result;
-}
-
-export function parseDipPinCount(packageName: string) {
-  const normalized = packageName.toUpperCase();
-  if (normalized.includes("CASE751A")) {
-    return 14;
-  }
-
-  const match = normalized.match(/(?:DIP|PDIP|SDIP|SO|SOP|SOIC)-?P?-?(\d+)/i)
-    ?? normalized.match(/\bD0?(\d+)\b/i)
-    ?? normalized.match(/\bDO(\d+)\b/i)
-    ?? normalized.match(/\bN0?(\d+)\b/i)
-    ?? normalized.match(/\bNO(\d+)\b/i)
-    ?? normalized.match(/(\d+)\s*PIN/i);
-  if (!match) {
-    return undefined;
-  }
-
-  const value = Number(match[1]);
-  return Number.isFinite(value) ? value : undefined;
-}
-
-export function parseDipSwitchPinCount(value: string) {
-  const match = value.match(/DIPSW(\d+)/i);
-  if (!match) {
-    return undefined;
-  }
-
-  const switchCount = Number(match[1]);
-  return Number.isFinite(switchCount) ? switchCount * 2 : undefined;
-}
-
-function buildPinCountResolver(strategy: RawComponentMappingRule["pinCountStrategy"]) {
-  return strategy ? pinCountResolvers[strategy] : undefined;
 }
 
 function inferPinCountFromDevicePinModels(value: string) {

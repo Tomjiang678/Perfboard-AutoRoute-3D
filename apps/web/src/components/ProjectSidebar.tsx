@@ -15,7 +15,6 @@ interface ProjectSidebarProps {
 }
 
 export function ProjectSidebar({ project, onImportFiles, onRemoveImportedFile, onSelectNet }: ProjectSidebarProps) {
-  const bomFiles = project.files.filter((file) => file.kind === "bom");
   const netlistFiles = project.files.filter((file) => file.kind === "netlist");
 
   return (
@@ -37,11 +36,9 @@ export function ProjectSidebar({ project, onImportFiles, onRemoveImportedFile, o
       <section className="sidebar-section">
         <h2>Import</h2>
         <div className="drop-list">
-          <FileDropZone kind="netlist" title="Netlist" accept=".cir,.txt,.csv,.net" onFiles={onImportFiles} />
-          <FileDropZone kind="bom" title="BOM" accept=".csv,.txt,.tsv,.xlsx" onFiles={onImportFiles} />
+          <FileDropZone kind="netlist" title="Netlist (.net)" accept=".net,.txt" onFiles={onImportFiles} />
         </div>
         <FileList title="Netlist files" files={netlistFiles} emptyText="No netlist imported" onRemove={onRemoveImportedFile} />
-        <FileList title="BOM files" files={bomFiles} emptyText="No BOM imported" onRemove={onRemoveImportedFile} />
       </section>
 
       <ImportSummary project={project} onSelectNet={onSelectNet} />

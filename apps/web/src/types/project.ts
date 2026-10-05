@@ -57,6 +57,8 @@ export interface ImportState {
   components: ParsedComponent[];
   nets: ParsedNet[];
   warnings: ImportWarning[];
+  /** Per-refdes pin metadata from the KiCad netlist: pin number -> name/type. */
+  pinInfo?: Record<string, Record<string, { name?: string; type?: string }>>;
 }
 
 export interface RoutedNetEndpoint {

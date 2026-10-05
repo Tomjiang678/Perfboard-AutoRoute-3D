@@ -1,0 +1,15 @@
+# 标题可以写 Multisim 的 RefDes（推荐）或器件型号。
+# 每个标题下面粘贴该元件的完整 %p/%t 模型；空行可有可无。
+
+[U1]
+x%p_a %t1IN+ %t1IN- %tVS- %tVS+ %t1OUT
+x%p_b %t2IN+ %t2IN- %tVS- %tVS+ %t2OUT
+
+[U2]
+x%p_a %t1OUT %t1IN- %t1IN+ %tVS+ %tVS-
+x%p_b %t2IN+ %t2IN- %t2OUT %tVS+ %tVS-
+x%p_c %t3OUT %t3IN- %t3IN+ %tVS+ %tVS-
+x%p_d %t4IN+ %t4IN- %t4OUT %tVS+ %tVS-
+
+# 单行形式也可以：
+# U6 | x%p_a %t1A %t1Y
