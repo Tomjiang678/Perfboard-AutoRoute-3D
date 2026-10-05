@@ -75,6 +75,21 @@ function makeDynamicLibraryComponent(
     return createPinHeaderDefinition(1, pinCount);
   }
 
+  if (kind === "to92" || kind === "to220") {
+    // 3-pin TO-92/TO-220 is the common case; netlists occasionally use 4/5-pin
+    // variants, which become an inline single-row package with the same body.
+    return {
+      kind,
+      label: "Q",
+      title: kind === "to92" ? `TO-92-${pinCount}` : `TO-220-${pinCount}`,
+      pinCount,
+      leadSpacing: 1,
+      rowSpacing: 0,
+      sameSidePitch: 1,
+      pinOffsets: inlinePinOffsets(pinCount)
+    };
+  }
+
   if (kind === "seven_segment_display") {
     return makeDisplay("7SEG", "七段数码管", "seven_segment_display", pinCount, 3, 1);
   }
@@ -100,7 +115,7 @@ export function buildPinOffsetsForComponent(component: {
   }
 
   if (threeInlinePinKinds.has(component.kind)) {
-    return [[-component.leadSpacing, 0], [0, 0], [component.leadSpacing, 0]];
+    return inlinePinOffsets(component.pinCount ?? 3);
   }
 
   if (component.kind === "to39") {
@@ -137,6 +152,11 @@ function makeTwoPin(
     sameSidePitch: 1,
     pinOffsets: [[0, 0], [leadSpacing, 0]]
   };
+}
+
+function inlinePinOffsets(pinCount: number): Array<[number, number]> {
+  const start = -Math.floor(pinCount / 2);
+  return Array.from({ length: pinCount }, (_, index) => [start + index, 0] as [number, number]);
 }
 
 function makeDip(

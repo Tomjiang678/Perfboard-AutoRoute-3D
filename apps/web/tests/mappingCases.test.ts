@@ -106,6 +106,38 @@ test("74HC595 without pinInfo still resolves 16 pins from the device library", (
   assert.equal(placed[0].pinOffsets.length, 16);
 });
 
+test("3-pin and 5-pin TO-92 transistors are distinguished by netlist pin count", () => {
+  const threePin = importStateWith(
+    [{ ref: "Q1", value: "2N3904", category: "Transistor_BJT:2N3904", packageName: "", sourceFile: "x.net" }],
+    { Q1: Object.fromEntries(Array.from({ length: 3 }, (_, i) => [String(i + 1), { name: "", type: "" }])) }
+  );
+  const fivePin = importStateWith(
+    [{ ref: "Q2", value: "BC548B", category: "Transistor_BJT:BC548B", packageName: "", sourceFile: "x.net" }],
+    { Q2: Object.fromEntries(Array.from({ length: 5 }, (_, i) => [String(i + 1), { name: "", type: "" }])) }
+  );
+
+  const q1 = createPlacedComponentsFromParsed(threePin, [], 30)[0];
+  assert.equal(q1.kind, "to92");
+  assert.equal(q1.pinOffsets.length, 3);
+  assert.deepEqual(q1.pinOffsets, [[-1, 0], [0, 0], [1, 0]]);
+
+  const q2 = createPlacedComponentsFromParsed(fivePin, [], 30)[0];
+  assert.equal(q2.kind, "to92");
+  assert.equal(q2.pinOffsets.length, 5);
+  assert.deepEqual(q2.pinOffsets, [[-2, 0], [-1, 0], [0, 0], [1, 0], [2, 0]]);
+});
+
+test("4-pin TO-220 regulators keep all four pins", () => {
+  const state = importStateWith(
+    [{ ref: "U1", value: "LM2576", category: "Regulator_Switching:LM2576", packageName: "", sourceFile: "x.net" }],
+    { U1: Object.fromEntries(Array.from({ length: 4 }, (_, i) => [String(i + 1), { name: "", type: "" }])) }
+  );
+  const placed = createPlacedComponentsFromParsed(state, [], 30)[0];
+  assert.equal(placed.kind, "to220");
+  assert.equal(placed.pinOffsets.length, 4);
+  assert.deepEqual(placed.pinOffsets, [[-2, 0], [-1, 0], [0, 0], [1, 0]]);
+});
+
 test("unknown component falls back to a pin header with the netlist pin count", () => {
   const state = importStateWith(
     [{ ref: "X1", value: "Widget", category: "Mystery_Lib:Widget", packageName: "", sourceFile: "x.net" }],

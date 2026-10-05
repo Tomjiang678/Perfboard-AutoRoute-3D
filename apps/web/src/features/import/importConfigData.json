@@ -73,7 +73,7 @@
     {
       "kind": "to92",
       "label": "Q",
-      "pinCountStrategy": "fixed3",
+      "pinCountStrategy": "fromPins",
       "match": [
         { "field": "category", "matches": "^TRANSISTOR_BJT:" },
         { "field": "category", "matches": "^DEVICE:Q_" }
@@ -82,7 +82,7 @@
     {
       "kind": "to220",
       "label": "Q",
-      "pinCountStrategy": "fixed3",
+      "pinCountStrategy": "fromPins",
       "match": [
         { "field": "category", "matches": "^TRANSISTOR_FET:" },
         { "field": "category", "matches": "^REGULATOR_LINEAR:" },
