@@ -1,4 +1,3 @@
-export type ImportKind = "netlist" | "bom";
 export type DragMoveModifier = "shift" | "alt" | "ctrl" | "none";
 export type ThemeMode = "light" | "dark";
 export type ShortcutAction =
@@ -22,7 +21,6 @@ export type KeyboardShortcuts = Record<ShortcutAction, string>;
 
 export interface ImportedFile {
   id: string;
-  kind: ImportKind;
   name: string;
   size: number;
   importedAt: string;

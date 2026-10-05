@@ -27,7 +27,7 @@ import { createProject } from "./features/project/projectFactory";
 import { getBoardModel, normalizeBoardDefinition } from "./features/board/factory";
 import { componentPinHoles } from "./features/board/placement";
 import type { PinNetAssignments } from "./features/board/types";
-import type { BoardSize, DragMoveModifier, ImportKind, ImportState, KeyboardShortcuts, PerfboardProject, PlacedComponent, RoutedNetEndpoint, ThemeMode } from "./types/project";
+import type { BoardSize, DragMoveModifier, ImportState, KeyboardShortcuts, PerfboardProject, PlacedComponent, RoutedNetEndpoint, ThemeMode } from "./types/project";
 import type { SelectedPin } from "./components/Perfboard3DViewport";
 import type { RouteEditMode, WorkspaceToolbarProps } from "./components/WorkspaceToolbar";
 
@@ -375,7 +375,7 @@ export function App() {
     setIsCreatingProject(false);
   }
 
-  async function handleImportFiles(kind: ImportKind, files: File[]) {
+  async function handleImportFiles(files: File[]) {
     const parsed = await parseImportFiles(files);
 
     commitProject((current) => {
@@ -385,7 +385,6 @@ export function App() {
           ...current.files,
           ...files.map((file) => ({
             id: crypto.randomUUID(),
-            kind,
             name: file.name,
             size: file.size,
             importedAt: new Date().toISOString()

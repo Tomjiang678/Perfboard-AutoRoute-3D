@@ -3,20 +3,18 @@ import { useState } from "react";
 import { resolveImportPins } from "../features/import/pinResolver";
 import { resolveNetEndpoints } from "../features/import/netEndpointResolver";
 import { pinGridPosition } from "../features/board/placement";
-import type { DrcIssue, ImportedFile, ImportKind, PerfboardProject, PlacedComponent, RoutedNetEndpoint } from "../types/project";
+import type { DrcIssue, ImportedFile, PerfboardProject, PlacedComponent, RoutedNetEndpoint } from "../types/project";
 import { FileDropZone } from "./FileDropZone";
 import { getBoardModel } from "../features/board/factory";
 
 interface ProjectSidebarProps {
   project: PerfboardProject;
-  onImportFiles: (kind: ImportKind, files: File[]) => void | Promise<void>;
+  onImportFiles: (files: File[]) => void | Promise<void>;
   onRemoveImportedFile: (fileId: string) => void;
   onSelectNet: (netName: string | undefined) => void;
 }
 
 export function ProjectSidebar({ project, onImportFiles, onRemoveImportedFile, onSelectNet }: ProjectSidebarProps) {
-  const netlistFiles = project.files.filter((file) => file.kind === "netlist");
-
   return (
     <aside className="sidebar">
       <section className="sidebar-section">
@@ -36,9 +34,9 @@ export function ProjectSidebar({ project, onImportFiles, onRemoveImportedFile, o
       <section className="sidebar-section">
         <h2>Import</h2>
         <div className="drop-list">
-          <FileDropZone kind="netlist" title="Netlist (.net)" accept=".net,.txt" onFiles={onImportFiles} />
+          <FileDropZone title="Netlist (.net)" accept=".net,.txt" onFiles={onImportFiles} />
         </div>
-        <FileList title="Netlist files" files={netlistFiles} emptyText="No netlist imported" onRemove={onRemoveImportedFile} />
+        <FileList title="Netlist files" files={project.files} emptyText="No netlist imported" onRemove={onRemoveImportedFile} />
       </section>
 
       <ImportSummary project={project} onSelectNet={onSelectNet} />
