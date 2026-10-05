@@ -3,18 +3,21 @@ import { useState } from "react";
 import { resolveImportPins } from "../features/import/pinResolver.ts";
 import { resolveNetEndpoints } from "../features/import/netEndpointResolver.ts";
 import { pinGridPosition } from "../features/board/placement.ts";
+import { AiConstraintLists } from "../features/ai/components/AiConstraintLists.tsx";
+import type { AiConstraintAssistantController } from "../features/ai/useAiConstraintAssistant.ts";
 import type { DrcIssue, ImportedFile, PerfboardProject, PlacedComponent, RoutedNetEndpoint } from "../types/project.ts";
 import { FileDropZone } from "./FileDropZone.tsx";
 import { getBoardModel } from "../features/board/factory.ts";
 
 interface ProjectSidebarProps {
   project: PerfboardProject;
+  aiAssistant: AiConstraintAssistantController;
   onImportFiles: (files: File[]) => void | Promise<void>;
   onRemoveImportedFile: (fileId: string) => void;
   onSelectNet: (netName: string | undefined) => void;
 }
 
-export function ProjectSidebar({ project, onImportFiles, onRemoveImportedFile, onSelectNet }: ProjectSidebarProps) {
+export function ProjectSidebar({ project, aiAssistant, onImportFiles, onRemoveImportedFile, onSelectNet }: ProjectSidebarProps) {
   return (
     <aside className="sidebar">
       <section className="sidebar-section">
@@ -38,6 +41,13 @@ export function ProjectSidebar({ project, onImportFiles, onRemoveImportedFile, o
         </div>
         <FileList title="Netlist files" files={project.files} emptyText="No netlist imported" onRemove={onRemoveImportedFile} />
       </section>
+
+      {(aiAssistant.draftConstraints.length > 0 || aiAssistant.activeConstraints.length > 0) && (
+        <section className="sidebar-section">
+          <h2>AI 约束</h2>
+          <AiConstraintLists controller={aiAssistant} />
+        </section>
+      )}
 
       <ImportSummary project={project} onSelectNet={onSelectNet} />
     </aside>

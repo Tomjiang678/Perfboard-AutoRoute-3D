@@ -166,7 +166,6 @@ export function App() {
   const canUnmountSelected = Boolean(selectedComponent?.mounted);
   const hasComponents = (project?.components.length ?? 0) > 0;
   const hasImportedComponents = (project?.importState.components.length ?? 0) > 0;
-  const hasUnmountedComponents = Boolean(project?.components.some((component) => !component.mounted));
   const hasDrc = Boolean(project?.routing.drc);
   const resolvedEndpoints = useMemo(
     () => (project ? resolveNetEndpoints(project.importState, project.components) : []),
@@ -203,7 +202,7 @@ export function App() {
       command(settings.shortcuts.unmount, canUnmountSelected, handleUnmountSelected),
       command(settings.shortcuts.delete, Boolean(selectedComponent), handleDeleteSelected),
       command(settings.shortcuts.generateComponents, hasImportedComponents, handleCreateComponentsFromImport),
-      command(settings.shortcuts.autoPlace, hasUnmountedComponents, () => autoPlacement.open()),
+      command(settings.shortcuts.autoPlace, hasComponents, () => autoPlacement.open()),
       command(settings.shortcuts.autoRoute, hasComponents, handleAutoRoute),
       command(settings.shortcuts.runDrc, hasComponents, handleRunDrc),
       command(settings.shortcuts.clearDrc, hasDrc, handleClearDrc),
@@ -291,7 +290,6 @@ export function App() {
     canUnmountSelected,
     hasComponents,
     hasImportedComponents,
-    hasUnmountedComponents,
     hasDrc,
     shortcuts: settings.shortcuts,
     openMenu: toolbarOpenMenu,
@@ -726,7 +724,7 @@ export function App() {
         toolbar={toolbar}
       />
       <div className={project ? "main-layout with-sidebar" : "main-layout"}>
-        {project && <ProjectSidebar project={project} onImportFiles={handleImportFiles} onRemoveImportedFile={handleRemoveImportedFile} onSelectNet={handleSelectNet} />}
+        {project && <ProjectSidebar project={project} aiAssistant={aiAssistant} onImportFiles={handleImportFiles} onRemoveImportedFile={handleRemoveImportedFile} onSelectNet={handleSelectNet} />}
         <Workspace
           project={project}
           selectedComponentId={selectedComponentId}

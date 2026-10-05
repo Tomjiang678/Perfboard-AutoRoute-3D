@@ -43,7 +43,11 @@ export function useAutoPlacement({ project, commitProject }: UseAutoPlacementOpt
     if (!project || running) return;
     const sourceProject = project;
     const constraints = projectConstraints(sourceProject);
-    const preparedComponents = prepareComponentsForConstraints(sourceProject.components, constraints);
+    // Re-placement starts from a clean slate: previously auto-placed parts are
+    // unlocked so the whole board can be arranged again. AI component_lock
+    // constraints are re-applied by prepareComponentsForConstraints.
+    const resettableComponents = sourceProject.components.map((component) => ({ ...component, mounted: false }));
+    const preparedComponents = prepareComponentsForConstraints(resettableComponents, constraints);
     setWarnings([]);
     setProgress({ percent: 0, phase: "prepare", detail: "[autoplacement] 正在启动自动放置诊断" });
     setRunning(true);

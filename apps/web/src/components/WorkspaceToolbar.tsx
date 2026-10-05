@@ -13,7 +13,6 @@ export interface WorkspaceToolbarProps {
   canUnmountSelected: boolean;
   hasComponents: boolean;
   hasImportedComponents: boolean;
-  hasUnmountedComponents: boolean;
   hasDrc: boolean;
   shortcuts: KeyboardShortcuts;
   openMenu?: string;
@@ -47,7 +46,6 @@ export function WorkspaceToolbar({
   canUnmountSelected,
   hasComponents,
   hasImportedComponents,
-  hasUnmountedComponents,
   hasDrc,
   shortcuts,
   openMenu,
@@ -109,7 +107,7 @@ export function WorkspaceToolbar({
         <MenuButton disabled={!hasImportedComponents} shortcut={shortcutLabel(shortcuts.generateComponents)} onClick={onCreateComponentsFromImport}>
           生成元件
         </MenuButton>
-        <MenuButton disabled={!hasUnmountedComponents} shortcut={shortcutLabel(shortcuts.autoPlace)} onClick={onOpenAutoPlacement}>
+        <MenuButton disabled={!hasComponents} shortcut={shortcutLabel(shortcuts.autoPlace)} onClick={onOpenAutoPlacement}>
           自动放置
         </MenuButton>
         <MenuButton disabled={!hasComponents} shortcut={shortcutLabel(shortcuts.autoRoute)} onClick={onAutoRoute}>
