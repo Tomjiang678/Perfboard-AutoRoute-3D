@@ -3,7 +3,7 @@ import type { LibraryComponentKind, PlacedComponent } from "../../types/project.
 const kinds = <T extends LibraryComponentKind>(...values: T[]) => new Set<LibraryComponentKind>(values);
 
 export const centerBridgeKinds = kinds("dip", "dip_switch", "seven_segment_display", "alphanumeric_display");
-export const bendableTwoPinKinds = kinds("resistor", "inductor", "radial_capacitor", "diode", "led");
+export const bendableTwoPinKinds = kinds("resistor", "inductor", "radial_capacitor", "diode", "led", "crystal", "fuse");
 export const threeInlinePinKinds = kinds("to92", "to220", "potentiometer", "slide_switch");
 export const transistorKinds = kinds("to92", "to39", "to220");
 

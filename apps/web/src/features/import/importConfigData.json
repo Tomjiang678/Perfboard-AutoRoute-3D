@@ -71,6 +71,22 @@
       ]
     },
     {
+      "kind": "to3",
+      "label": "Q",
+      "pinCountStrategy": "fromPins",
+      "match": [
+        { "field": "value", "matches": "^(2N3055|MJ2955|2N3773|TIP3[56]|MJ150[0-9]+|2N628[47])" }
+      ]
+    },
+    {
+      "kind": "to247",
+      "label": "Q",
+      "pinCountStrategy": "fromPins",
+      "match": [
+        { "field": "value", "matches": "^(IRFP[0-9]+|STP[0-9]+[A-Z]?|FQP[0-9]+[A-Z]?|2SK[0-9]+|IXFP[0-9]+)" }
+      ]
+    },
+    {
       "kind": "to92",
       "label": "Q",
       "pinCountStrategy": "fromPins",
@@ -90,6 +106,41 @@
       ]
     },
     {
+      "kind": "bridge_rectifier",
+      "label": "BR",
+      "pinCountStrategy": "fromPins",
+      "match": [
+        { "field": "category", "matches": "^DIODE_BRIDGE:" }
+      ]
+    },
+    {
+      "kind": "relay",
+      "label": "RLY",
+      "pinCountStrategy": "fromPins",
+      "match": [
+        { "field": "category", "matches": "^RELAY:" }
+      ]
+    },
+    {
+      "kind": "crystal",
+      "label": "Y",
+      "leadSpacing": 2,
+      "pinCountStrategy": "fixed2",
+      "match": [
+        { "field": "category", "matches": "^DEVICE:CRYSTAL" },
+        { "field": "category", "matches": "^CRYSTAL:" }
+      ]
+    },
+    {
+      "kind": "fuse",
+      "label": "F",
+      "leadSpacing": 5,
+      "pinCountStrategy": "fixed2",
+      "match": [
+        { "field": "category", "matches": "^DEVICE:FUSE" }
+      ]
+    },
+    {
       "kind": "dip",
       "label": "DIP",
       "rowSpacing": 3,
@@ -101,7 +152,10 @@
         { "field": "category", "matches": "^74XX:" },
         { "field": "category", "matches": "^4XXX_IEEE:" },
         { "field": "category", "matches": "^AUDIO:" },
-        { "field": "category", "matches": "^VIDEO:" }
+        { "field": "category", "matches": "^VIDEO:" },
+        { "field": "category", "matches": "^OPTOCOUPLER:" },
+        { "field": "category", "matches": "^ISOLATOR:" },
+        { "field": "category", "matches": "^SOCKET:" }
       ]
     },
     {

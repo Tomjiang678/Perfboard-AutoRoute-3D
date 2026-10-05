@@ -25,6 +25,13 @@ export const componentLibrary: LibraryComponentDefinition[] = [
   { kind: "to92", label: "Q", title: "TO-92", leadSpacing: 1, rowSpacing: 0, sameSidePitch: 1, pinOffsets: [[-1, 0], [0, 0], [1, 0]] },
   { kind: "to39", label: "Q", title: "TO-39", leadSpacing: 1, rowSpacing: 1, sameSidePitch: 1, pinOffsets: [[-1, 0], [1, 0], [0, 1]] },
   { kind: "to220", label: "Q", title: "TO-220", leadSpacing: 1, rowSpacing: 0, sameSidePitch: 1, pinOffsets: [[-1, 0], [0, 0], [1, 0]] },
+  { kind: "to3", label: "Q", title: "TO-3", pinCount: 3, leadSpacing: 2, rowSpacing: 2, sameSidePitch: 1, pinOffsets: [[-1, 0], [1, 0], [0, 2]] },
+  { kind: "to247", label: "Q", title: "TO-247", leadSpacing: 2, rowSpacing: 0, sameSidePitch: 2, pinOffsets: [[-2, 0], [0, 0], [2, 0]] },
+  { kind: "bridge_rectifier", label: "BR", title: "整流桥堆", pinCount: 4, leadSpacing: 1, rowSpacing: 0, sameSidePitch: 1, pinOffsets: [[-2, 0], [-1, 0], [0, 0], [1, 0]] },
+  makeRelay("RLY-SPDT", "继电器 SPDT", 5),
+  makeRelay("RLY-DPDT", "继电器 DPDT", 8),
+  makeTwoPin("crystal", "Y", "晶振 HC-49", 2),
+  makeTwoPin("fuse", "F", "保险丝", 5),
   makeDip("DIP8", "DIP-8", 8, 3, 1),
   makeDip("DIP14", "DIP-14", 14, 3, 1),
   makeDip("DIP16", "DIP-16", 16, 3, 1),
@@ -75,19 +82,37 @@ function makeDynamicLibraryComponent(
     return createPinHeaderDefinition(1, pinCount);
   }
 
-  if (kind === "to92" || kind === "to220") {
+  if (kind === "to92" || kind === "to220" || kind === "to247") {
     // 3-pin TO-92/TO-220 is the common case; netlists occasionally use 4/5-pin
     // variants, which become an inline single-row package with the same body.
+    const pitch = kind === "to247" ? 2 : 1;
     return {
       kind,
       label: "Q",
-      title: kind === "to92" ? `TO-92-${pinCount}` : `TO-220-${pinCount}`,
+      title: kind === "to92" ? `TO-92-${pinCount}` : kind === "to247" ? `TO-247-${pinCount}` : `TO-220-${pinCount}`,
+      pinCount,
+      leadSpacing: pitch,
+      rowSpacing: 0,
+      sameSidePitch: pitch,
+      pinOffsets: inlinePinOffsets(pinCount, pitch)
+    };
+  }
+
+  if (kind === "bridge_rectifier") {
+    return {
+      kind,
+      label: "BR",
+      title: `桥堆 ${pinCount} 脚`,
       pinCount,
       leadSpacing: 1,
       rowSpacing: 0,
       sameSidePitch: 1,
-      pinOffsets: inlinePinOffsets(pinCount)
+      pinOffsets: inlinePinOffsets(pinCount, 1)
     };
+  }
+
+  if (kind === "relay") {
+    return makeRelay(`RLY${pinCount}`, `继电器 ${pinCount} 脚`, pinCount);
   }
 
   if (kind === "seven_segment_display") {
@@ -115,7 +140,27 @@ export function buildPinOffsetsForComponent(component: {
   }
 
   if (threeInlinePinKinds.has(component.kind)) {
-    return inlinePinOffsets(component.pinCount ?? 3);
+    return inlinePinOffsets(component.pinCount ?? 3, 1);
+  }
+
+  if (component.kind === "to247") {
+    return inlinePinOffsets(component.pinCount ?? 3, 2);
+  }
+
+  if (component.kind === "to3") {
+    return [[-1, 0], [1, 0], [0, 2]];
+  }
+
+  if (component.kind === "bridge_rectifier") {
+    return inlinePinOffsets(component.pinCount ?? 4, 1);
+  }
+
+  if (component.kind === "relay") {
+    return relayPinOffsets(component.pinCount ?? 5);
+  }
+
+  if (component.kind === "crystal" || component.kind === "fuse") {
+    return [[0, 0], [component.leadSpacing, 0]];
   }
 
   if (component.kind === "to39") {
@@ -154,9 +199,33 @@ function makeTwoPin(
   };
 }
 
-function inlinePinOffsets(pinCount: number): Array<[number, number]> {
-  const start = -Math.floor(pinCount / 2);
-  return Array.from({ length: pinCount }, (_, index) => [start + index, 0] as [number, number]);
+function inlinePinOffsets(pinCount: number, pitch = 1): Array<[number, number]> {
+  const start = -Math.floor(pinCount / 2) * pitch;
+  return Array.from({ length: pinCount }, (_, index) => [start + index * pitch, 0] as [number, number]);
+}
+
+function makeRelay(label: string, title: string, pinCount: number): LibraryComponentDefinition {
+  return {
+    kind: "relay",
+    label,
+    title,
+    pinCount,
+    leadSpacing: 1,
+    rowSpacing: 1,
+    sameSidePitch: 1,
+    pinOffsets: relayPinOffsets(pinCount)
+  };
+}
+
+function relayPinOffsets(pinCount: number): Array<[number, number]> {
+  // SPDT: 2 coil pins + COM/NO/NC; DPDT: 2 coil pins + 2×3 switch pins.
+  if (pinCount === 5) {
+    return [[0, 0], [1, 0], [0, 2], [1, 2], [2, 2]];
+  }
+  if (pinCount === 8) {
+    return [[0, 0], [1, 0], [0, 2], [1, 2], [2, 2], [0, 3], [1, 3], [2, 3]];
+  }
+  return inlinePinOffsets(pinCount, 1);
 }
 
 function makeDip(

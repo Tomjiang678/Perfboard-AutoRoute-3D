@@ -36,6 +36,9 @@ const RULE_CASES: Array<[string, string]> = [
   ["Timer:NE555", "dip"],
   ["74xx:74LS138", "dip"],
   ["4xxx_IEEE:4017", "dip"],
+  ["Optocoupler:PC817", "dip"],
+  ["Isolator:ISO7221", "dip"],
+  ["Socket:DIP-8", "dip"],
   ["Switch:SW_DIP_x04", "dip_switch"],
   ["Display_Character:7Segment", "seven_segment_display"],
   ["Connector:Conn_01x02", "pin_header"],
@@ -45,7 +48,12 @@ const RULE_CASES: Array<[string, string]> = [
   ["Device:Buzzer", "buzzer"],
   ["Device:SW_SPDT", "slide_switch"],
   ["Device:SW_Push", "tactile_switch"],
-  ["Switch:SW_SPST", "slide_switch"]
+  ["Switch:SW_SPST", "slide_switch"],
+  ["Diode_Bridge:KBPC5010", "bridge_rectifier"],
+  ["Relay:G5LE", "relay"],
+  ["Device:Crystal", "crystal"],
+  ["Crystal:HC-49", "crystal"],
+  ["Device:Fuse", "fuse"]
 ];
 
 for (const [category, kind] of RULE_CASES) {
@@ -136,6 +144,69 @@ test("4-pin TO-220 regulators keep all four pins", () => {
   assert.equal(placed.kind, "to220");
   assert.equal(placed.pinOffsets.length, 4);
   assert.deepEqual(placed.pinOffsets, [[-2, 0], [-1, 0], [0, 0], [1, 0]]);
+});
+
+test("TO-3 power transistors match by value pattern", () => {
+  const state = importStateWith(
+    [{ ref: "Q1", value: "2N3055", category: "Transistor_BJT:2N3055", packageName: "", sourceFile: "x.net" }],
+    { Q1: Object.fromEntries(Array.from({ length: 3 }, (_, i) => [String(i + 1), { name: "", type: "" }])) }
+  );
+  const placed = createPlacedComponentsFromParsed(state, [], 30)[0];
+  assert.equal(placed.kind, "to3");
+  assert.deepEqual(placed.pinOffsets, [[-1, 0], [1, 0], [0, 2]]);
+});
+
+test("TO-247 power FETs match by value pattern", () => {
+  const state = importStateWith(
+    [{ ref: "Q1", value: "IRFP250", category: "Transistor_FET:IRFP250", packageName: "", sourceFile: "x.net" }],
+    { Q1: Object.fromEntries(Array.from({ length: 3 }, (_, i) => [String(i + 1), { name: "", type: "" }])) }
+  );
+  const placed = createPlacedComponentsFromParsed(state, [], 30)[0];
+  assert.equal(placed.kind, "to247");
+  assert.deepEqual(placed.pinOffsets, [[-2, 0], [0, 0], [2, 0]]);
+});
+
+test("bridge rectifiers get 4 pins", () => {
+  const state = importStateWith(
+    [{ ref: "BR1", value: "KBPC5010", category: "Diode_Bridge:KBPC5010", packageName: "", sourceFile: "x.net" }],
+    { BR1: Object.fromEntries(Array.from({ length: 4 }, (_, i) => [String(i + 1), { name: "", type: "" }])) }
+  );
+  const placed = createPlacedComponentsFromParsed(state, [], 30)[0];
+  assert.equal(placed.kind, "bridge_rectifier");
+  assert.equal(placed.pinOffsets.length, 4);
+});
+
+test("relay pin layouts follow SPDT/DPDT patterns", () => {
+  const spdt = importStateWith(
+    [{ ref: "K1", value: "G5LE", category: "Relay:G5LE", packageName: "", sourceFile: "x.net" }],
+    { K1: Object.fromEntries(Array.from({ length: 5 }, (_, i) => [String(i + 1), { name: "", type: "" }])) }
+  );
+  const dpdt = importStateWith(
+    [{ ref: "K2", value: "G2R", category: "Relay:G2R", packageName: "", sourceFile: "x.net" }],
+    { K2: Object.fromEntries(Array.from({ length: 8 }, (_, i) => [String(i + 1), { name: "", type: "" }])) }
+  );
+  const k1 = createPlacedComponentsFromParsed(spdt, [], 30)[0];
+  const k2 = createPlacedComponentsFromParsed(dpdt, [], 30)[0];
+  assert.equal(k1.kind, "relay");
+  assert.equal(k1.pinOffsets.length, 5);
+  assert.equal(k2.pinOffsets.length, 8);
+});
+
+test("crystal and fuse become two-pin axial parts", () => {
+  const crystal = importStateWith(
+    [{ ref: "Y1", value: "Crystal", category: "Device:Crystal", packageName: "", sourceFile: "x.net" }],
+    { Y1: { "1": {}, "2": {} } }
+  );
+  const fuse = importStateWith(
+    [{ ref: "F1", value: "Fuse", category: "Device:Fuse", packageName: "", sourceFile: "x.net" }],
+    { F1: { "1": {}, "2": {} } }
+  );
+  const y1 = createPlacedComponentsFromParsed(crystal, [], 30)[0];
+  const f1 = createPlacedComponentsFromParsed(fuse, [], 30)[0];
+  assert.equal(y1.kind, "crystal");
+  assert.deepEqual(y1.pinOffsets, [[0, 0], [2, 0]]);
+  assert.equal(f1.kind, "fuse");
+  assert.deepEqual(f1.pinOffsets, [[0, 0], [5, 0]]);
 });
 
 test("unknown component falls back to a pin header with the netlist pin count", () => {
