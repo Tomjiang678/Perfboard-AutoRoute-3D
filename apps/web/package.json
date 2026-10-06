@@ -32,7 +32,7 @@
   },
   "build": {
     "appId": "com.perfboard.autoroute3d",
-    "productName": "PerfBoard AutoRoute 3D",
+    "productName": "ProtoRoute 3D",
     "files": [
       "dist/**/*",
       "electron/**/*",
@@ -44,7 +44,7 @@
     },
     "win": {
       "target": "dir",
-      "icon": "assets/icon.ico"
+      "icon": "assets/image1.ico"
     }
   }
 }

@@ -65,15 +65,13 @@ button {
 }
 
 .brand-mark {
-  display: grid;
+  display: block;
   width: 34px;
   height: 34px;
   place-items: center;
   border-radius: 7px;
   background: #1b1f24;
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 700;
+  object-fit: cover;
 }
 
 .brand-title {
@@ -1275,8 +1273,6 @@ body {
   border: 1px solid #313842;
   border-radius: 3px;
   background: #242a32;
-  color: #ffffff;
-  font-size: 11px;
 }
 
 .brand-title {

@@ -1,4 +1,4 @@
-# PerfBoard AutoRoute 3D
+# ProtoRoute 3D
 
 面向洞洞板/万能板的 3D 元件放置、反面走锡、跳线规划和连通性检查工具。
 
@@ -146,7 +146,7 @@ apps/web/release/win-unpacked
 双击运行：
 
 ```text
-apps/web/release/win-unpacked/PerfBoard AutoRoute 3D.exe
+apps/web/release/win-unpacked/ProtoRoute 3D.exe
 ```
 
 说明：这里使用的是稳定的目录版 EXE。整个 `win-unpacked` 文件夹需要一起保留，不能只单独复制 exe 文件。

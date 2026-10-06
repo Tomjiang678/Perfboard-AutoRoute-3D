@@ -2,6 +2,7 @@ import { Moon, RotateCcw, Save, Settings, Sun } from "lucide-react";
 import type { ChangeEvent } from "react";
 import type { ThemeMode } from "../types/project.ts";
 import { WorkspaceToolbar, type WorkspaceToolbarProps } from "./WorkspaceToolbar.tsx";
+import appLogo from "../../assets/image1.png";
 
 interface HeaderBarProps {
   projectName?: string;
@@ -31,9 +32,9 @@ export function HeaderBar({ projectName, theme, onToggleTheme, onNewProject, onS
   return (
     <header className="header-bar">
       <div className="brand">
-        <div className="brand-mark">PB</div>
+        <img className="brand-mark" src={appLogo} alt="ProtoRoute 3D" />
         <div>
-          <div className="brand-title">PerfBoard AutoRoute 3D</div>
+          <div className="brand-title">ProtoRoute 3D</div>
           <div className="brand-subtitle">{projectName ?? "No project opened"}</div>
         </div>
       </div>

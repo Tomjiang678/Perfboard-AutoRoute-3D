@@ -107,6 +107,7 @@ export function Perfboard3DViewport({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(host.clientWidth, host.clientHeight);
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     host.appendChild(renderer.domElement);
 
     const camera = new THREE.PerspectiveCamera(45, host.clientWidth / host.clientHeight, 0.1, 6000);
@@ -147,6 +148,17 @@ export function Perfboard3DViewport({
 
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.15);
     keyLight.position.set(80, 110, 95);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(2048, 2048);
+    keyLight.shadow.camera.left = -Math.max(board.width, board.height);
+    keyLight.shadow.camera.right = Math.max(board.width, board.height);
+    keyLight.shadow.camera.top = Math.max(board.width, board.height);
+    keyLight.shadow.camera.bottom = -Math.max(board.width, board.height);
+    keyLight.shadow.camera.near = 1;
+    keyLight.shadow.camera.far = Math.max(board.width, board.height) * 5;
+    keyLight.shadow.bias = -0.0004;
+    keyLight.shadow.radius = 4;
+    keyLight.shadow.camera.updateProjectionMatrix();
     scene.add(keyLight);
 
     // Soft fill light from below so the back side of the board is not much darker than the front.
@@ -167,6 +179,7 @@ export function Perfboard3DViewport({
     const animate = () => {
       frame = requestAnimationFrame(animate);
       controls.update();
+      updateRouteOverlayVisibility(routeObject, camera, controls.target);
       renderer.render(scene, camera);
     };
     animate();
@@ -660,6 +673,10 @@ function createPlacedComponents(components: PlacedComponent[], board: BoardSize,
     component.traverse((child) => {
       child.userData.componentId = placed.id;
       child.userData.componentRoot = component;
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
     });
 
     if (placed.id === selectedComponentId) {
@@ -862,50 +879,76 @@ function createRoutingIssueHighlights(routing: RoutingState, board: BoardSize) {
 
 function createRouteObjects(routing: RoutingState, board: BoardSize, components: PlacedComponent[]) {
   const group = new THREE.Group();
-  const traceMaterial = new THREE.MeshStandardMaterial({
-    color: 0xf2f2f2,
-    emissive: 0x777777,
-    emissiveIntensity: 0.45,
-    roughness: 0.08,
-    metalness: 0.65
-  });
-  const jumperMaterial = new THREE.MeshStandardMaterial({
-    color: 0xffc857,
-    emissive: 0x6b3f00,
-    emissiveIntensity: 0.2,
-    roughness: 0.28,
-    metalness: 0.35
-  });
-
-  routing.traces.forEach((trace) => {
-    for (let index = 1; index < trace.points.length; index += 1) {
-      const from = trace.points[index - 1];
-      const to = trace.points[index];
-      group.add(createSegment(from, to, board, -0.58, traceMaterial, 0.13));
-    }
-  });
+  const topOverlay = new THREE.Group();
+  topOverlay.userData.routeSide = "top";
+  const bottomOverlay = new THREE.Group();
+  bottomOverlay.userData.routeSide = "bottom";
+  group.add(topOverlay, bottomOverlay);
 
   if ((board.kind ?? "perfboard") === "breadboard") {
     const levels = computeJumperCrossLevels(routing.jumpers, components);
-    const materials = BREADBOARD_JUMPER_COLORS.map((color) => new THREE.MeshStandardMaterial({
-      color,
-      roughness: 0.28,
-      metalness: 0.3
-    }));
     routing.jumpers.forEach((jumper, index) => {
-      group.add(createBreadboardJumper(jumper.from, jumper.to, board, materials[netColorIndex(jumper.net)], levels[index]));
+      topOverlay.add(createBreadboardJumper(jumper.from, jumper.to, board, createJumperMaterials(jumper.net), levels[index]));
     });
   } else {
-    routing.jumpers.forEach((jumper) => {
-      group.add(createBottomJumper(jumper.from, jumper.to, board, jumperMaterial));
+    routing.traces.forEach((trace) => {
+      const materials = createJumperMaterials(trace.net, 0xc2c8ce);
+      for (let index = 1; index < trace.points.length; index += 1) {
+        bottomOverlay.add(createOutlinedRouteSegment(trace.points[index - 1], trace.points[index], board, -0.58, materials, 0.13, 40));
+      }
+    });
+    const levels = computeJumperCrossLevels(routing.jumpers, components);
+    routing.jumpers.forEach((jumper, index) => {
+      bottomOverlay.add(createBottomJumper(jumper.from, jumper.to, board, createJumperMaterials(jumper.net, 0xffc857), levels[index]));
     });
   }
 
   return group;
 }
 
+function updateRouteOverlayVisibility(routes: THREE.Group, camera: THREE.Camera, target: THREE.Vector3) {
+  const isTopView = camera.position.y >= target.y;
+  routes.children.forEach((overlay) => {
+    const side = overlay.userData.routeSide;
+    if (side === "top" || side === "bottom") {
+      overlay.visible = side === (isTopView ? "top" : "bottom");
+    }
+  });
+}
+
 const BREADBOARD_JUMPER_COLORS = [0xd92d20, 0xf5c518, 0x2563eb, 0x16a34a];
 const BREADBOARD_JUMPER_BASE_Y = 0.32;
+
+function createJumperMaterials(net: string, coreColor = BREADBOARD_JUMPER_COLORS[netColorIndex(net)]) {
+  return {
+    outline: new THREE.MeshBasicMaterial({ color: 0x17212b, depthTest: false, depthWrite: false }),
+    halo: new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, depthWrite: false }),
+    core: new THREE.MeshBasicMaterial({ color: coreColor, depthTest: false, depthWrite: false }),
+    endpoint: new THREE.MeshBasicMaterial({ color: coreColor, depthTest: false, depthWrite: false })
+  };
+}
+
+type JumperMaterials = ReturnType<typeof createJumperMaterials>;
+
+function createOutlinedRouteSegment(
+  from: [number, number],
+  to: [number, number],
+  board: BoardSize,
+  y: number,
+  materials: JumperMaterials,
+  radius: number,
+  renderOrder: number
+) {
+  const group = new THREE.Group();
+  const outline = createSegment(from, to, board, y, materials.outline, radius + 0.075);
+  const halo = createSegment(from, to, board, y, materials.halo, radius + 0.04);
+  const core = createSegment(from, to, board, y, materials.core, radius);
+  outline.renderOrder = renderOrder;
+  halo.renderOrder = renderOrder + 1;
+  core.renderOrder = renderOrder + 2;
+  group.add(outline, halo, core);
+  return group;
+}
 
 function netColorIndex(net: string) {
   let hash = 0;
@@ -1067,15 +1110,18 @@ function createBreadboardJumper(
   from: [number, number],
   to: [number, number],
   board: BoardSize,
-  material: THREE.Material,
+  materials: JumperMaterials,
   level: number
 ) {
   const start = new THREE.Vector3(from[0] - board.width / 2 + 0.5, BREADBOARD_JUMPER_BASE_Y, from[1] - board.height / 2 + 0.5);
   const end = new THREE.Vector3(to[0] - board.width / 2 + 0.5, BREADBOARD_JUMPER_BASE_Y, to[1] - board.height / 2 + 0.5);
   const group = new THREE.Group();
+  const renderOrder = 40 + level * 3;
 
   if (level === 0) {
-    group.add(createSegment(from, to, board, BREADBOARD_JUMPER_BASE_Y, material, 0.055));
+    group.add(createBreadboardJumperSegment(from, to, board, materials.outline, 0.14, renderOrder));
+    group.add(createBreadboardJumperSegment(from, to, board, materials.halo, 0.105, renderOrder + 1));
+    group.add(createBreadboardJumperSegment(from, to, board, materials.core, 0.072, renderOrder + 2));
   } else {
     // Visible bulge: the arch bows SIDEWAYS in the board plane (plus a small
     // rise), so it is obvious even from a top-down view; stacked levels bow
@@ -1090,22 +1136,54 @@ function createBreadboardJumper(
     const mid1 = start.clone().lerp(end, 1 / 3).add(perpendicular).add(upward);
     const mid2 = start.clone().lerp(end, 2 / 3).add(perpendicular).add(upward);
     const curve = new THREE.CatmullRomCurve3([start, mid1, mid2, end]);
-    group.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 32, 0.055, 10, false), material));
+    group.add(createBreadboardJumperTube(curve, materials.outline, 0.14, renderOrder));
+    group.add(createBreadboardJumperTube(curve, materials.halo, 0.105, renderOrder + 1));
+    group.add(createBreadboardJumperTube(curve, materials.core, 0.072, renderOrder + 2));
   }
 
-  const startJoint = new THREE.Mesh(new THREE.SphereGeometry(0.1, 14, 10), material);
-  const endJoint = new THREE.Mesh(new THREE.SphereGeometry(0.1, 14, 10), material);
+  const startJoint = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 12), materials.outline);
+  const endJoint = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 12), materials.outline);
+  startJoint.renderOrder = renderOrder;
+  endJoint.renderOrder = renderOrder;
   startJoint.position.copy(start);
   endJoint.position.copy(end);
   group.add(startJoint, endJoint);
+
+  const startCore = new THREE.Mesh(new THREE.SphereGeometry(0.105, 16, 12), materials.endpoint);
+  const endCore = new THREE.Mesh(new THREE.SphereGeometry(0.105, 16, 12), materials.endpoint);
+  startCore.renderOrder = renderOrder + 2;
+  endCore.renderOrder = renderOrder + 2;
+  startCore.position.copy(start);
+  endCore.position.copy(end);
+  group.add(startCore, endCore);
   return group;
+}
+
+function createBreadboardJumperSegment(
+  from: [number, number],
+  to: [number, number],
+  board: BoardSize,
+  material: THREE.Material,
+  radius: number,
+  renderOrder: number
+) {
+  const mesh = createSegment(from, to, board, BREADBOARD_JUMPER_BASE_Y, material, radius);
+  mesh.renderOrder = renderOrder;
+  return mesh;
+}
+
+function createBreadboardJumperTube(curve: THREE.CatmullRomCurve3, material: THREE.Material, radius: number, renderOrder: number) {
+  const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, 32, radius, 12, false), material);
+  mesh.renderOrder = renderOrder;
+  return mesh;
 }
 
 function createBottomJumper(
   from: [number, number],
   to: [number, number],
   board: BoardSize,
-  material: THREE.Material
+  materials: JumperMaterials,
+  level: number
 ) {
   const isTopWire = getBoardModel(board).capabilities.jumperSide === "top";
   const wireY = isTopWire ? 0.48 : -0.7;
@@ -1114,17 +1192,38 @@ function createBottomJumper(
   const span = start.distanceTo(end);
   const lift = isTopWire ? Math.max(0.16, Math.min(0.52, span * 0.035)) : Math.max(1.2, Math.min(5.2, span * 0.22));
   const middle = start.clone().lerp(end, 0.5);
-  middle.y += isTopWire ? lift : -lift;
+  const side = level % 2 === 0 ? 1 : -1;
+  middle.y += (isTopWire ? 1 : -1) * (lift + level * 0.3);
+  const direction = end.clone().sub(start);
+  const perpendicular = new THREE.Vector3(-direction.z, 0, direction.x).normalize()
+    .multiplyScalar(side * Math.min(0.45 + Math.max(0, level - 1) * 0.2, Math.max(0.3, span * 0.12)));
 
   const group = new THREE.Group();
-  const curve = new THREE.CatmullRomCurve3([start, middle, end]);
-  const wire = new THREE.Mesh(new THREE.TubeGeometry(curve, 32, isTopWire ? 0.055 : 0.075, 10, false), material);
-  const startJoint = new THREE.Mesh(new THREE.SphereGeometry(isTopWire ? 0.11 : 0.16, 14, 10), material);
-  const endJoint = new THREE.Mesh(new THREE.SphereGeometry(isTopWire ? 0.11 : 0.16, 14, 10), material);
+  const curve = new THREE.CatmullRomCurve3([start, middle.clone().add(perpendicular), end]);
+  const renderOrder = 40 + level * 3;
+  const radii = [isTopWire ? 0.14 : 0.19, isTopWire ? 0.105 : 0.15, isTopWire ? 0.072 : 0.11];
+  const materialsByLayer = [materials.outline, materials.halo, materials.core];
+  materialsByLayer.forEach((material, layer) => {
+    const wire = new THREE.Mesh(new THREE.TubeGeometry(curve, 36, radii[layer], 12, false), material);
+    wire.renderOrder = renderOrder + layer;
+    group.add(wire);
+  });
+  const jointRadius = isTopWire ? 0.16 : 0.22;
+  const startJoint = new THREE.Mesh(new THREE.SphereGeometry(jointRadius, 16, 12), materials.outline);
+  const endJoint = new THREE.Mesh(new THREE.SphereGeometry(jointRadius, 16, 12), materials.outline);
+  startJoint.renderOrder = renderOrder;
+  endJoint.renderOrder = renderOrder;
 
   startJoint.position.copy(start);
   endJoint.position.copy(end);
-  group.add(wire, startJoint, endJoint);
+  group.add(startJoint, endJoint);
+  const startCore = new THREE.Mesh(new THREE.SphereGeometry(jointRadius * 0.66, 16, 12), materials.endpoint);
+  const endCore = new THREE.Mesh(new THREE.SphereGeometry(jointRadius * 0.66, 16, 12), materials.endpoint);
+  startCore.renderOrder = renderOrder + 2;
+  endCore.renderOrder = renderOrder + 2;
+  startCore.position.copy(start);
+  endCore.position.copy(end);
+  group.add(startCore, endCore);
   return group;
 }
 

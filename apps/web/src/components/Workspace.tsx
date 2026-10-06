@@ -63,7 +63,7 @@ export function Workspace({
       <main className="empty-workspace">
         <div className="empty-panel">
           <Layers3 size={36} />
-          <h1>PerfBoard AutoRoute 3D</h1>
+          <h1>ProtoRoute 3D</h1>
           <p>创建工程后导入 KiCad 网表（.net），随后进入洞洞板布局与布线流程。</p>
           <button className="tool-button primary" type="button" onClick={onNewProject}>
             新建工程

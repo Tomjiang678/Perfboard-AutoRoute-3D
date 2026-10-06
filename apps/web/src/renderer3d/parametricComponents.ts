@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 
 export type ParametricComponentKind =
   | "resistor"
@@ -49,7 +50,6 @@ export function setComponentTheme(dark: boolean) {
 const materials = {
   lead: new THREE.MeshStandardMaterial({ color: 0xc7c7c7, roughness: 0.28, metalness: 0.72 }),
   resistorBody: new THREE.MeshStandardMaterial({ color: 0xd5ba86, roughness: 0.55 }),
-  inductorBody: new THREE.MeshStandardMaterial({ color: 0x3d7a4f, roughness: 0.48 }),
   diodeBody: new THREE.MeshStandardMaterial({ color: 0x1f252b, roughness: 0.42 }),
   icBody: new THREE.MeshStandardMaterial({ color: 0x15191f, roughness: 0.34 }),
   blackPlastic: new THREE.MeshStandardMaterial({ color: 0x20262d, roughness: 0.45 }),
@@ -60,8 +60,13 @@ const materials = {
     transparent: true,
     opacity: 0.72
   }),
-  capacitorBlue: new THREE.MeshStandardMaterial({ color: 0x2f6fd6, roughness: 0.3 }),
-  capacitorDark: new THREE.MeshStandardMaterial({ color: 0x252b31, roughness: 0.24 }),
+  capacitorFilm: new THREE.MeshPhysicalMaterial({ color: 0xc9853d, roughness: 0.34, metalness: 0.08, clearcoat: 0.28, clearcoatRoughness: 0.32 }),
+  capacitorSleeve: new THREE.MeshPhysicalMaterial({ color: 0x172b43, roughness: 0.3, metalness: 0.08, clearcoat: 0.2, clearcoatRoughness: 0.35 }),
+  capacitorAluminum: new THREE.MeshStandardMaterial({ color: 0xc7d0d8, roughness: 0.24, metalness: 0.78 }),
+  capacitorMarking: new THREE.MeshStandardMaterial({ color: 0xe7e8e8, roughness: 0.44 }),
+  crystalMetal: new THREE.MeshStandardMaterial({ color: 0x9ca9b3, roughness: 0.24, metalness: 0.82 }),
+  ferrite: new THREE.MeshStandardMaterial({ color: 0x294b42, roughness: 0.38, metalness: 0.08 }),
+  copper: new THREE.MeshStandardMaterial({ color: 0xc77a43, roughness: 0.24, metalness: 0.78 }),
   terminalGreen: new THREE.MeshStandardMaterial({ color: 0x15845f, roughness: 0.32 }),
   brass: new THREE.MeshStandardMaterial({ color: 0xc7953a, roughness: 0.22, metalness: 0.55 })
 };
@@ -75,7 +80,7 @@ export function createParametricComponent(spec: ParametricComponentSpec) {
 
 const componentFactories: Record<ParametricComponentKind, (spec: ParametricComponentSpec) => THREE.Group> = {
   resistor: (s) => createAxialPart(s.label ?? "R", materials.resistorBody, 0.45, 2.2, true, s.pinOffsets),
-  inductor: (s) => createAxialPart(s.label ?? "L", materials.inductorBody, 0.52, 2.35, false, s.pinOffsets),
+  inductor: (s) => createAxialInductor(s.label ?? "L", s.pinOffsets),
   diode: (s) => createDiode(s.label ?? "D", s.pinOffsets),
   led: (s) => createLed(s.color ?? 0xe83f3f, s.pinOffsets),
   radial_capacitor: (s) => createRadialCapacitor(s.label ?? "C", false, s.pinOffsets),
@@ -140,12 +145,6 @@ function createAxialPart(
       band.position.set(centerX + axisX * x, 1.55, centerZ + axisZ * x);
       group.add(band);
     });
-  } else {
-    const coil = new THREE.Mesh(new THREE.TorusGeometry(0.56, 0.035, 8, 24), materials.lead);
-    coil.scale.set(1, 1, 0.22);
-    coil.rotation.y = -angle;
-    coil.position.set(centerX, 1.55, centerZ);
-    group.add(coil);
   }
 
   addTextLabel(group, label, centerX, 2.18, centerZ + 0.52, 0x1e242b, 2.2);
@@ -199,17 +198,106 @@ function createRadialCapacitor(
   const [leftPin, rightPin] = normalizeTwoPins(pinOffsets);
   const centerX = (leftPin[0] + rightPin[0]) / 2;
   const centerZ = (leftPin[1] + rightPin[1]) / 2;
-  const material = polarized ? materials.capacitorDark : materials.capacitorBlue;
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, polarized ? 2.2 : 1.45, 28), material);
-  body.position.set(centerX, polarized ? 1.62 : 1.28, centerZ);
+  const height = polarized ? 2.2 : 1.5;
+  const radius = polarized ? 0.64 : 0.68;
+  const centerY = polarized ? 1.62 : 1.28;
+  const bodyGeometry = createRoundedCanGeometry(radius, height);
+  const body = new THREE.Mesh(bodyGeometry, polarized ? materials.capacitorSleeve : materials.capacitorFilm);
+  body.position.set(centerX, centerY, centerZ);
+  body.castShadow = true;
+  body.receiveShadow = true;
   group.add(body);
   addStraightPin(group, leftPin[0], leftPin[1], 0.9);
   addStraightPin(group, rightPin[0], rightPin[1], 0.9);
 
   if (polarized) {
-    addTextLabel(group, "-", centerX + 0.48, 2.05, centerZ + 0.58, 0x3fffd2, 1.8);
+    const topY = centerY + height / 2 + 0.035;
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.83, radius * 0.83, 0.08, 40), materials.capacitorAluminum);
+    top.position.set(centerX, topY, centerZ);
+    group.add(top);
+
+    const ventMaterial = new THREE.MeshStandardMaterial({ color: 0x77828b, roughness: 0.34, metalness: 0.55 });
+    const ventA = new THREE.Mesh(new RoundedBoxGeometry(0.74, 0.025, 0.075, 2, 0.01), ventMaterial);
+    const ventB = new THREE.Mesh(new RoundedBoxGeometry(0.075, 0.025, 0.74, 2, 0.01), ventMaterial);
+    ventA.position.set(centerX, topY + 0.055, centerZ);
+    ventB.position.set(centerX, topY + 0.055, centerZ);
+    group.add(ventA, ventB);
+
+    const polarityStripe = new THREE.Mesh(
+      new RoundedBoxGeometry(0.2, height * 0.66, 0.025, 2, 0.01),
+      materials.capacitorMarking
+    );
+    polarityStripe.position.set(centerX + radius * 0.72, centerY, centerZ + radius * 0.58);
+    group.add(polarityStripe);
+    addTextLabel(group, "−", centerX + 0.4, topY + 0.14, centerZ + 0.3, 0x27313b, 0.32);
+    addTextLabel(group, "+", centerX - 0.4, topY + 0.14, centerZ - 0.3, 0x27313b, 0.32);
+  } else {
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(radius * 0.9, 0.035, 10, 40), new THREE.MeshStandardMaterial({ color: 0xa96b35, roughness: 0.32, metalness: 0.18 }));
+    rim.rotation.x = Math.PI / 2;
+    rim.position.set(centerX, centerY + height * 0.28, centerZ);
+    group.add(rim);
   }
-  addTextLabel(group, label, centerX, polarized ? 2.82 : 2.04, centerZ + 0.15, 0x3fffd2, 2.05);
+  addTextLabel(group, label, centerX, centerY + height / 2 + 0.15, centerZ + 0.12, polarized ? 0xe8edf2 : 0x382b20, polarized ? 1.55 : 1.7);
+  return group;
+}
+
+function createRoundedCanGeometry(radius: number, height: number) {
+  const halfHeight = height / 2;
+  const bevel = Math.min(0.12, radius * 0.2, height * 0.08);
+  return new THREE.LatheGeometry([
+    new THREE.Vector2(0, -halfHeight),
+    new THREE.Vector2(radius * 0.82, -halfHeight),
+    new THREE.Vector2(radius * 0.96, -halfHeight + bevel * 0.55),
+    new THREE.Vector2(radius, -halfHeight + bevel),
+    new THREE.Vector2(radius, halfHeight - bevel),
+    new THREE.Vector2(radius * 0.96, halfHeight - bevel * 0.55),
+    new THREE.Vector2(radius * 0.82, halfHeight),
+    new THREE.Vector2(0, halfHeight)
+  ], 48);
+}
+
+function createAxialInductor(label: string, pinOffsets: Array<[number, number]> = [[-3, 0], [3, 0]]) {
+  const group = new THREE.Group();
+  const [leftPin, rightPin] = normalizeTwoPins(pinOffsets);
+  const centerX = (leftPin[0] + rightPin[0]) / 2;
+  const centerZ = (leftPin[1] + rightPin[1]) / 2;
+  const span = Math.max(1, distance2d(leftPin, rightPin));
+  const bodyLength = Math.min(span * 0.72, Math.max(2.1, span - 1.1));
+  const angle = Math.atan2(rightPin[1] - leftPin[1], rightPin[0] - leftPin[0]);
+  const axisX = Math.cos(angle);
+  const axisZ = Math.sin(angle);
+  const bodyY = 1.55;
+  const bodyRadius = 0.5;
+
+  const core = new THREE.Mesh(new THREE.CylinderGeometry(bodyRadius, bodyRadius, bodyLength, 40, 1), materials.ferrite);
+  core.rotation.z = Math.PI / 2;
+  core.rotation.y = -angle;
+  core.position.set(centerX, bodyY, centerZ);
+  group.add(core);
+
+  const windingCount = Math.max(5, Math.min(9, Math.floor(bodyLength * 2.7)));
+  for (let index = 0; index < windingCount; index += 1) {
+    const along = -bodyLength * 0.38 + (bodyLength * 0.76 * index) / Math.max(1, windingCount - 1);
+    const winding = new THREE.Mesh(new THREE.TorusGeometry(bodyRadius + 0.025, 0.045, 10, 24), materials.copper);
+    winding.rotation.y = Math.PI / 2 - angle;
+    winding.position.set(centerX + axisX * along, bodyY, centerZ + axisZ * along);
+    group.add(winding);
+  }
+
+  const endCapMaterial = new THREE.MeshStandardMaterial({ color: 0x526e64, roughness: 0.3, metalness: 0.12 });
+  [-1, 1].forEach((side) => {
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(bodyRadius * 0.82, bodyRadius * 0.92, 0.12, 36), endCapMaterial);
+    cap.rotation.z = Math.PI / 2;
+    cap.rotation.y = -angle;
+    cap.position.set(centerX + axisX * side * bodyLength * 0.47, bodyY, centerZ + axisZ * side * bodyLength * 0.47);
+    group.add(cap);
+  });
+
+  addLeadBetween(group, [centerX - axisX * bodyLength / 2, centerZ - axisZ * bodyLength / 2], leftPin, bodyY);
+  addLeadBetween(group, [centerX + axisX * bodyLength / 2, centerZ + axisZ * bodyLength / 2], rightPin, bodyY);
+  addBentPin(group, leftPin[0], bodyY, leftPin[1]);
+  addBentPin(group, rightPin[0], bodyY, rightPin[1]);
+  addTextLabel(group, label, centerX, 2.18, centerZ + 0.52, 0x1e242b, 1.9);
   return group;
 }
 
@@ -291,22 +379,17 @@ function createDip(pinCount: number, label: string, pinOffsets = makeDipPinOffse
   const box = getPinBox(pinOffsets);
   const bodyWidth = Math.max(2.4, box.width - 0.45);
   const bodyLength = Math.max(2, box.height + 0.7);
-  const body = new THREE.Mesh(new THREE.BoxGeometry(bodyWidth, 0.62, bodyLength), materials.icBody);
+  const body = new THREE.Mesh(new RoundedBoxGeometry(bodyWidth, 0.62, bodyLength, 4, 0.12), materials.icBody);
   body.position.set(box.centerX, 1.0, box.centerZ);
   group.add(body);
 
-  const notch = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.035, 20), new THREE.MeshStandardMaterial({ color: 0x2f3740 }));
-  notch.rotation.x = Math.PI / 2;
-  notch.position.set(box.centerX, 1.32, box.minZ - 0.16);
-  group.add(notch);
+  const pinOne = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.045, 24), materials.capacitorAluminum);
+  pinOne.position.set(box.centerX - bodyWidth * 0.34, 1.335, box.minZ + 0.38);
+  group.add(pinOne);
 
   pinOffsets.forEach(([x, z]) => addDipPin(group, x, z));
-  pinOffsets.forEach(([x, z], index) => {
-    const sideSign = x <= box.centerX ? -1 : 1;
-    addTextLabel(group, String(index + 1), x + sideSign * 0.34, 0.82, z, 0x3fffd2, 0.9);
-  });
 
-  addTextLabel(group, label, box.centerX, 1.38, box.centerZ, 0x3fffd2, Math.min(2.8, bodyLength * 0.58));
+  addTextLabel(group, label, box.centerX, 1.38, box.centerZ, 0xe8edf2, Math.min(2.4, bodyLength * 0.5));
   return group;
 }
 
@@ -315,7 +398,7 @@ function createDipSwitch(pinCount: number, label: string, pinOffsets = makeDipPi
   const box = getPinBox(pinOffsets);
   const bodyWidth = Math.max(2.4, box.width - 0.25);
   const bodyLength = Math.max(2, box.height + 0.75);
-  const body = new THREE.Mesh(new THREE.BoxGeometry(bodyWidth, 0.5, bodyLength), new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.36 }));
+  const body = new THREE.Mesh(new RoundedBoxGeometry(bodyWidth, 0.5, bodyLength, 4, 0.1), new THREE.MeshStandardMaterial({ color: 0x9c2732, roughness: 0.36 }));
   body.position.set(box.centerX, 0.96, box.centerZ);
   group.add(body);
 
@@ -585,17 +668,29 @@ function createBridgeRectifier(label: string, pinOffsets: Array<[number, number]
 function createRelay(label: string, pinCount: number, pinOffsets: Array<[number, number]> = [[0, 0], [1, 0], [0, 2], [1, 2], [2, 2]]) {
   const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
+  const bodyWidth = Math.max(2.6, box.width + 0.6);
+  const bodyDepth = Math.max(2.6, box.height + 0.8);
 
-  const body = new THREE.Mesh(new THREE.BoxGeometry(Math.max(2.6, box.width + 0.6), 1.4, Math.max(2.6, box.height + 0.8)), new THREE.MeshStandardMaterial({ color: 0x2f6fd6, roughness: 0.3 }));
-  body.position.set(box.centerX, 1.28, box.centerZ);
+  const base = new THREE.Mesh(new RoundedBoxGeometry(bodyWidth + 0.18, 0.2, bodyDepth + 0.18, 4, 0.08), materials.blackPlastic);
+  base.position.set(box.centerX, 0.55, box.centerZ);
+  group.add(base);
+
+  const bodyMaterial = new THREE.MeshPhysicalMaterial({ color: 0x24384c, roughness: 0.3, metalness: 0.08, clearcoat: 0.34, clearcoatRoughness: 0.28 });
+  const body = new THREE.Mesh(new RoundedBoxGeometry(bodyWidth, 1.25, bodyDepth, 5, 0.16), bodyMaterial);
+  body.position.set(box.centerX, 1.27, box.centerZ);
   group.add(body);
 
-  const lid = new THREE.Mesh(new THREE.BoxGeometry(Math.max(2.6, box.width + 0.6), 0.22, Math.max(2.6, box.height + 0.8)), new THREE.MeshStandardMaterial({ color: 0x8ec8ff, roughness: 0.25, transparent: true, opacity: 0.8 }));
-  lid.position.set(box.centerX, 1.68, box.centerZ);
-  group.add(lid);
+  const topY = 1.27 + 1.25 / 2;
+  const topPanel = new THREE.Mesh(new RoundedBoxGeometry(bodyWidth * 0.72, 0.035, bodyDepth * 0.58, 3, 0.01), new THREE.MeshStandardMaterial({ color: 0x354d63, roughness: 0.36, metalness: 0.16 }));
+  topPanel.position.set(box.centerX, topY + 0.018, box.centerZ);
+  group.add(topPanel);
+
+  const indicator = new THREE.Mesh(new THREE.SphereGeometry(0.095, 20, 14), new THREE.MeshStandardMaterial({ color: 0xe6ae57, emissive: 0x4b2b08, emissiveIntensity: 0.24, roughness: 0.2, metalness: 0.12 }));
+  indicator.position.set(box.centerX - bodyWidth * 0.32, topY + 0.055, box.centerZ - bodyDepth * 0.28);
+  group.add(indicator);
 
   pinOffsets.forEach(([x, z]) => addStraightPin(group, x, z, 0.86));
-  addTextLabel(group, label, box.centerX, 1.95, box.centerZ + box.height * 0.28, 0x0b1c33, Math.min(2.4, box.width * 0.8));
+  addTextLabel(group, label, box.centerX, topY + 0.34, box.centerZ + bodyDepth * 0.08, 0xe8edf2, Math.min(1.8, bodyWidth * 0.68));
   return group;
 }
 
@@ -604,15 +699,31 @@ function createCrystal(label: string, pinOffsets: Array<[number, number]> = [[0,
   const [leftPin, rightPin] = normalizeTwoPins(pinOffsets);
   const centerX = (leftPin[0] + rightPin[0]) / 2;
   const centerZ = (leftPin[1] + rightPin[1]) / 2;
+  const angle = Math.atan2(rightPin[1] - leftPin[1], rightPin[0] - leftPin[0]);
+  const axisX = Math.cos(angle);
+  const axisZ = Math.sin(angle);
+  const bodyY = 1.34;
+  const bodyLength = Math.max(1.7, distance2d(leftPin, rightPin) + 0.15);
 
-  const can = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 2.1, 28), materials.lead);
-  can.rotation.x = Math.PI / 2;
-  can.position.set(centerX, 1.3, centerZ);
+  const can = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, bodyLength, 36, 1), materials.crystalMetal);
+  can.rotation.z = Math.PI / 2;
+  can.rotation.y = -angle;
+  can.position.set(centerX, bodyY, centerZ);
   group.add(can);
 
-  addStraightPin(group, leftPin[0], leftPin[1], 1.1);
-  addStraightPin(group, rightPin[0], rightPin[1], 1.1);
-  addTextLabel(group, label, centerX, 1.72, centerZ + 0.42, 0x1e242b, 1.6);
+  [-1, 1].forEach((side) => {
+    const endCap = new THREE.Mesh(new THREE.CylinderGeometry(0.435, 0.435, 0.1, 36), materials.capacitorAluminum);
+    endCap.rotation.z = Math.PI / 2;
+    endCap.rotation.y = -angle;
+    endCap.position.set(centerX + axisX * side * bodyLength * 0.46, bodyY, centerZ + axisZ * side * bodyLength * 0.46);
+    group.add(endCap);
+  });
+
+  // Anchor both leads to their actual grid holes and run them into the underside
+  // of the can so they stay attached at every allowed board rotation.
+  addStraightPin(group, leftPin[0], leftPin[1], bodyY + 0.08);
+  addStraightPin(group, rightPin[0], rightPin[1], bodyY + 0.08);
+  addTextLabel(group, label, centerX, bodyY + 0.48, centerZ + 0.4, 0x1e242b, 1.45);
   return group;
 }
 
@@ -622,25 +733,49 @@ function createFuse(label: string, pinOffsets: Array<[number, number]> = [[0, 0]
   const centerX = (leftPin[0] + rightPin[0]) / 2;
   const centerZ = (leftPin[1] + rightPin[1]) / 2;
   const span = Math.max(1, distance2d(leftPin, rightPin));
+  const angle = Math.atan2(rightPin[1] - leftPin[1], rightPin[0] - leftPin[0]);
+  const axisX = Math.cos(angle);
+  const axisZ = Math.sin(angle);
+  const bodyY = 1.28;
+  const tubeLength = Math.max(0.8, span - 1.45);
+  const capLength = 0.34;
+  const bodyCenter = (along: number): [number, number, number] => [centerX + axisX * along, bodyY, centerZ + axisZ * along];
 
   const glass = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.32, 0.32, span - 1.2, 24),
-    new THREE.MeshStandardMaterial({ color: 0xdbeafe, roughness: 0.12, transparent: true, opacity: 0.6 })
+    new THREE.CylinderGeometry(0.31, 0.31, tubeLength, 36, 1),
+    new THREE.MeshPhysicalMaterial({ color: 0xd9e8ed, roughness: 0.12, metalness: 0.05, transparent: true, opacity: 0.34, transmission: 0.42, thickness: 0.18, clearcoat: 0.8 })
   );
-  glass.rotation.x = Math.PI / 2;
-  glass.position.set(centerX, 1.3, centerZ);
+  glass.rotation.z = Math.PI / 2;
+  glass.rotation.y = -angle;
+  glass.position.set(centerX, bodyY, centerZ);
   group.add(glass);
 
+  const fuseWire = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, tubeLength * 0.76, 16), materials.copper);
+  fuseWire.rotation.z = Math.PI / 2;
+  fuseWire.rotation.y = -angle;
+  fuseWire.position.set(centerX, bodyY, centerZ);
+  group.add(fuseWire);
+
   [-1, 1].forEach((side) => {
-    const endCap = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.4, 24), materials.lead);
-    endCap.rotation.x = Math.PI / 2;
-    endCap.position.set(centerX + (side * (span - 1.2)) / 2, 1.3, centerZ);
+    const capOffset = tubeLength / 2 + capLength / 2 - 0.025;
+    const endCap = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, capLength, 32), materials.capacitorAluminum);
+    endCap.rotation.z = Math.PI / 2;
+    endCap.rotation.y = -angle;
+    endCap.position.set(...bodyCenter(side * capOffset));
     group.add(endCap);
+
+    const seam = new THREE.Mesh(new THREE.TorusGeometry(0.352, 0.018, 8, 28), materials.brass);
+    seam.rotation.y = Math.PI / 2 - angle;
+    seam.position.set(...bodyCenter(side * (tubeLength / 2 + capLength * 0.72)));
+    group.add(seam);
   });
 
-  addStraightPin(group, leftPin[0], leftPin[1], 1.15);
-  addStraightPin(group, rightPin[0], rightPin[1], 1.15);
-  addTextLabel(group, label, centerX, 1.82, centerZ + 0.4, 0x1e242b, 1.7);
+  const leadEndOffset = tubeLength / 2 + capLength;
+  addLeadBetween(group, [centerX - axisX * leadEndOffset, centerZ - axisZ * leadEndOffset], leftPin, bodyY);
+  addLeadBetween(group, [centerX + axisX * leadEndOffset, centerZ + axisZ * leadEndOffset], rightPin, bodyY);
+  addStraightPin(group, leftPin[0], leftPin[1], bodyY + 0.08);
+  addStraightPin(group, rightPin[0], rightPin[1], bodyY + 0.08);
+  addTextLabel(group, label, centerX, 1.98, centerZ + 0.42, 0x1e242b, 1.45);
   return group;
 }
 
@@ -748,6 +883,10 @@ function addTextLabel(group: THREE.Group, text: string, x: number, y: number, z:
   ctx.font = "800 38px Segoe UI, Arial";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(12,18,28,0.52)";
+  ctx.strokeText(text, canvas.width / 2, canvas.height / 2);
   ctx.fillText(text, canvas.width / 2, canvas.height / 2);
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -759,6 +898,9 @@ function addTextLabel(group: THREE.Group, text: string, x: number, y: number, z:
 }
 
 function labelColorForTheme(color: number) {
+  if (color === 0x3fffd2) {
+    return 0xe8edf2;
+  }
   if (!darkComponentTheme) {
     return color;
   }
