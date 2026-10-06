@@ -82,7 +82,6 @@ function mapParsedComponent(component: ParsedComponent, pinsFromNetlist: number 
 } {
   const fields = normalizeComponentFields(component);
   const rule = componentMappingRules.find((candidate) => candidate.match(fields));
-
   if (rule) {
     const pinCount = rule.pinCount?.(component, pinsFromNetlist);
     return {
@@ -94,6 +93,14 @@ function mapParsedComponent(component: ParsedComponent, pinsFromNetlist: number 
     };
   }
 
+  // Generic inference fallback: library-name independent, so netlists exported
+  // from schematics that were imported from other EDA tools (LTSpice, Altium,
+  // PADS, EasyEDA, ...) still land on a sensible package.
+  const inferred = inferKindFromComponent(component, pinsFromNetlist);
+  if (inferred) {
+    return inferred;
+  }
+
   return {
     ...fallbackComponentMapping,
     label: "UNK",
@@ -101,6 +108,48 @@ function mapParsedComponent(component: ParsedComponent, pinsFromNetlist: number 
     isFallback: true,
     fallbackReason: `元件 ${component.ref} (${component.category}) 在库中没有对应封装，已按网表引脚生成占位排针。`
   };
+}
+
+function inferKindFromComponent(component: ParsedComponent, pinsFromNetlist: number | undefined) {
+  const ref = component.ref.toUpperCase();
+  const value = component.value.toUpperCase();
+  const pins = Math.max(1, pinsFromNetlist ?? 2);
+  const prefix = ref.match(/^[A-Z#]+/)?.[0] ?? "";
+
+  if (/^(LED|DS)/.test(prefix) || value.includes("LED")) {
+    return { kind: "led" as const, label: "LED", pinCount: pins, leadSpacing: 1 };
+  }
+  if (prefix === "R") {
+    return { kind: "resistor" as const, label: "R", pinCount: pins, leadSpacing: 3 };
+  }
+  if (prefix === "C") {
+    return { kind: "radial_capacitor" as const, label: "C", pinCount: pins, leadSpacing: 1 };
+  }
+  if (prefix === "L") {
+    return { kind: "inductor" as const, label: "L", pinCount: pins, leadSpacing: 3 };
+  }
+  if (prefix === "D") {
+    return { kind: "diode" as const, label: "D", pinCount: pins, leadSpacing: 3 };
+  }
+  if (prefix === "Q") {
+    return { kind: pins <= 3 ? "to92" as const : "to220" as const, label: "Q", pinCount: pins, leadSpacing: 1 };
+  }
+  if (prefix === "SW") {
+    return { kind: pins === 4 ? "tactile_switch" as const : "slide_switch" as const, label: "SW", pinCount: pins, leadSpacing: 1 };
+  }
+  if (prefix === "U") {
+    return { kind: "dip" as const, label: `DIP${pins}`, pinCount: pins, rowSpacing: 3 };
+  }
+  if (prefix === "K") {
+    return { kind: "relay" as const, label: "RLY", pinCount: pins, rowSpacing: 1 };
+  }
+  if (prefix === "Y") {
+    return { kind: "crystal" as const, label: "Y", pinCount: pins, leadSpacing: 2 };
+  }
+  if (/^(J|P|X|TP)/.test(prefix)) {
+    return { kind: "pin_header" as const, label: "HDR", pinCount: pins };
+  }
+  return undefined;
 }
 
 function makeMappedLabel(kind: LibraryComponentKind, label: string, pinCount?: number) {

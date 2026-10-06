@@ -8,7 +8,7 @@ import {
 } from "../src/features/import/importConfig.ts";
 import { parseKicadNetlist } from "../src/features/import/kicadNetlistParser.ts";
 import { createPlacedComponentsFromParsed } from "../src/features/import/componentMapping.ts";
-import type { ImportState, ParsedComponent } from "../src/types/project.ts";
+import type { ImportState, LibraryComponentKind, ParsedComponent } from "../src/types/project.ts";
 
 function matchKind(category: string, value = "X", ref = "U1") {
   const fields = normalizeComponentFields({ ref, value, category, packageName: "", sourceFile: "x.net" });
@@ -242,10 +242,45 @@ test("2-pin SPST slide switches stay 2-pin", () => {
   assert.deepEqual(placed.pinOffsets, [[-1, 0], [0, 0]]);
 });
 
-test("unknown component falls back to a pin header with the netlist pin count", () => {
+test("unknown components are inferred from ref prefix and pin count", () => {
+  const cases: Array<[string, string, number, LibraryComponentKind]> = [
+    ["R5", "R", 2, "resistor"],
+    ["C3", "C", 2, "radial_capacitor"],
+    ["D2", "D", 2, "diode"],
+    ["LED1", "LED", 2, "led"],
+    ["Q2", "Q", 3, "to92"],
+    ["U4", "IC", 8, "dip"],
+    ["J1", "CONN", 3, "pin_header"],
+    ["K1", "RELAY", 5, "relay"],
+    ["Y1", "XTAL", 2, "crystal"],
+    ["SW1", "SW", 3, "slide_switch"]
+  ];
+  for (const [ref, value, pins, kind] of cases) {
+    const state = importStateWith(
+      [{ ref, value, category: `ForeignLib:${value}`, packageName: "", sourceFile: "x.net" }],
+      { [ref]: Object.fromEntries(Array.from({ length: pins }, (_, i) => [String(i + 1), { name: "", type: "" }])) }
+    );
+    const placed = createPlacedComponentsFromParsed(state, [], 30)[0];
+    assert.equal(placed.kind, kind, `${ref} should infer ${kind}`);
+    assert.equal(placed.pinOffsets.length, pins, `${ref} pin count`);
+  }
+});
+
+test("truly unknown components still fall back to a placeholder", () => {
   const state = importStateWith(
-    [{ ref: "X1", value: "Widget", category: "Mystery_Lib:Widget", packageName: "", sourceFile: "x.net" }],
-    { X1: Object.fromEntries(Array.from({ length: 4 }, (_, i) => [String(i + 1), { name: "", type: "" }])) }
+    [{ ref: "Z1", value: "Widget", category: "Mystery_Lib:Widget", packageName: "", sourceFile: "x.net" }],
+    { Z1: { "1": {}, "2": {} } }
+  );
+  const placed = createPlacedComponentsFromParsed(state, [], 30)[0];
+  assert.equal(placed.kind, "pin_header");
+  assert.equal(placed.isFallback, true);
+  assert.ok(placed.fallbackReason?.includes("占位排针"));
+});
+
+test("truly unknown refs fall back to a pin header placeholder with the netlist pin count", () => {
+  const state = importStateWith(
+    [{ ref: "Z1", value: "Widget", category: "Mystery_Lib:Widget", packageName: "", sourceFile: "x.net" }],
+    { Z1: Object.fromEntries(Array.from({ length: 4 }, (_, i) => [String(i + 1), { name: "", type: "" }])) }
   );
   const placed = createPlacedComponentsFromParsed(state, [], 30);
   assert.equal(placed.length, 1);
@@ -272,9 +307,9 @@ test("existing components are not duplicated", () => {
   assert.equal(again.length, 0);
 });
 
-test("fallback mapping defaults to 2 pins with no pin info", () => {
+test("truly unknown refs default to 2 pins with no pin info", () => {
   const state = importStateWith([
-    { ref: "X1", value: "Widget", category: "Mystery_Lib:Widget", packageName: "", sourceFile: "x.net" }
+    { ref: "Z1", value: "Widget", category: "Mystery_Lib:Widget", packageName: "", sourceFile: "x.net" }
   ]);
   const placed = createPlacedComponentsFromParsed(state, [], 30);
   assert.equal(placed[0].pinOffsets.length, fallbackComponentMapping.pinCount);
