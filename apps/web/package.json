@@ -1,8 +1,8 @@
 {
   "name": "@perfboard-autoroute/web",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "description": "A 3D perfboard component placement, routing, jumper planning, and DRC tool.",
-  "author": "zhuohan jiang",
+  "author": "zhuohanjiang",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
