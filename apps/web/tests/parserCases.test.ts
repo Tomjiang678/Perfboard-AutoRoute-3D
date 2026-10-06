@@ -68,6 +68,42 @@ test("pin info only spans up to the maximum pin number", () => {
   assert.deepEqual(Object.keys(bundle.pinInfo.U1).map(Number), [1, 2, 3, 4]);
 });
 
+test("libparts with an empty lib are matched by part name (LTSpice import)", () => {
+  const text = `(export
+	(version "E")
+	(components
+		(comp (ref "D1") (value "D") (libsource (lib "ltspice") (part "diode")))
+		(comp (ref "U1") (value "OP07") (libsource (lib "ltspice") (part "OpAmps/OP07")))
+	)
+	(libparts
+		(libpart
+			(lib "")
+			(part "OpAmps/OP07")
+			(pins
+				(pin (num "1") (name "In+") (type "passive"))
+				(pin (num "2") (name "In-") (type "passive"))
+				(pin (num "3") (name "V+") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "")
+			(part "diode")
+			(pins
+				(pin (num "1") (name "+") (type "passive"))
+				(pin (num "2") (name "-") (type "passive"))
+			)
+		)
+	)
+	(nets)
+)`;
+  const bundle = parseKicadNetlist(text, "ltspice.net");
+  assert.equal(bundle.components.length, 2);
+  assert.equal(bundle.pinInfo!["U1"]!["1"].name, "In+");
+  assert.equal(bundle.pinInfo!["U1"]!["3"].name, "V+");
+  assert.equal(bundle.pinInfo!["D1"]!["1"].name, "+");
+  assert.equal(Object.keys(bundle.pinInfo!["U1"]!).length, 3);
+});
+
 test("components without libparts get no pin info", () => {
   const text = '(export\n\t(version "E")\n\t(components (comp (ref "U1") (value "Y") (libsource (lib "X") (part "Y"))))\n)';
   const bundle = parseKicadNetlist(text, "a.net");

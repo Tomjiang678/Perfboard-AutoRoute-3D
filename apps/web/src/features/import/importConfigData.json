@@ -7,7 +7,8 @@
       "pinCountStrategy": "fromPins",
       "match": [
         { "field": "category", "matches": "^DEVICE:R$" },
-        { "field": "category", "matches": "^DEVICE:R_SMALL$" }
+        { "field": "category", "matches": "^DEVICE:R_SMALL$" },
+        { "field": "category", "matches": "^LTSPICE:.*RES" }
       ]
     },
     {
@@ -17,7 +18,8 @@
       "pinCountStrategy": "fromPins",
       "match": [
         { "field": "category", "matches": "^DEVICE:C$" },
-        { "field": "category", "matches": "^CAPACITOR:" }
+        { "field": "category", "matches": "^CAPACITOR:" },
+        { "field": "category", "matches": "^LTSPICE:.*CAP" }
       ]
     },
     {
@@ -37,7 +39,8 @@
       "pinCountStrategy": "fromPins",
       "match": [
         { "field": "category", "matches": "^DEVICE:L$" },
-        { "field": "category", "matches": "^INDUCTOR:" }
+        { "field": "category", "matches": "^INDUCTOR:" },
+        { "field": "category", "matches": "^LTSPICE:.*IND" }
       ]
     },
     {
@@ -47,7 +50,8 @@
       "pinCountStrategy": "fromPins",
       "match": [
         { "field": "category", "matches": "^DEVICE:D" },
-        { "field": "category", "matches": "^DIODE:" }
+        { "field": "category", "matches": "^DIODE:" },
+        { "field": "category", "matches": "^LTSPICE:.*DIODE" }
       ]
     },
     {
@@ -57,7 +61,8 @@
       "pinCountStrategy": "fromPins",
       "match": [
         { "field": "category", "matches": "^DEVICE:LED" },
-        { "field": "category", "matches": "^LED:" }
+        { "field": "category", "matches": "^LED:" },
+        { "field": "category", "matches": "^LTSPICE:LED" }
       ]
     },
     {
@@ -92,7 +97,9 @@
       "pinCountStrategy": "fromPins",
       "match": [
         { "field": "category", "matches": "^TRANSISTOR_BJT:" },
-        { "field": "category", "matches": "^DEVICE:Q_" }
+        { "field": "category", "matches": "^DEVICE:Q_" },
+        { "field": "category", "matches": "^LTSPICE:(NPN|PNP)" },
+        { "field": "category", "matches": "^LTSPICE:.*(NPN|PNP)" }
       ]
     },
     {
@@ -102,7 +109,9 @@
       "match": [
         { "field": "category", "matches": "^TRANSISTOR_FET:" },
         { "field": "category", "matches": "^REGULATOR_LINEAR:" },
-        { "field": "category", "matches": "^REGULATOR_SWITCHING:" }
+        { "field": "category", "matches": "^REGULATOR_SWITCHING:" },
+        { "field": "category", "matches": "^LTSPICE:(NMOS|PMOS)" },
+        { "field": "category", "matches": "^LTSPICE:.*(NMOS|PMOS)" }
       ]
     },
     {
@@ -158,7 +167,18 @@
         { "field": "category", "matches": "^ISOLATOR:" },
         { "field": "category", "matches": "^SOCKET:" },
         { "field": "category", "matches": "^MCU_" },
-        { "field": "category", "matches": "^SENSOR:" }
+        { "field": "category", "matches": "^SENSOR:" },
+        { "field": "category", "matches": "^LTSPICE:.*OPAMPS" },
+        { "field": "category", "matches": "^LTSPICE:.*COMPARATOR" },
+        { "field": "category", "matches": "^LTSPICE:.*DIGITAL" }
+      ]
+    },
+    {
+      "kind": "slide_switch",
+      "label": "SW",
+      "pinCountStrategy": "fromPins",
+      "match": [
+        { "field": "category", "matches": "^LTSPICE:SW" }
       ]
     },
     {

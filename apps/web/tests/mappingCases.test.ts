@@ -58,7 +58,14 @@ const RULE_CASES: Array<[string, string]> = [
   ["Relay:G5LE", "relay"],
   ["Device:Crystal", "crystal"],
   ["Crystal:HC-49", "crystal"],
-  ["Device:Fuse", "fuse"]
+  ["Device:Fuse", "fuse"],
+  ["ltspice:diode", "diode"],
+  ["ltspice:res", "resistor"],
+  ["ltspice:cap", "radial_capacitor"],
+  ["ltspice:ind", "inductor"],
+  ["ltspice:LED", "led"],
+  ["ltspice:npn", "to92"],
+  ["ltspice:OpAmps/OP07", "dip"]
 ];
 
 for (const [category, kind] of RULE_CASES) {

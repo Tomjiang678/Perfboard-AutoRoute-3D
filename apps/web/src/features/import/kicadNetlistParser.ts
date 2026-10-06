@@ -114,7 +114,7 @@ export function parseKicadNetlist(text: string, fileName: string): ParsedImportB
   for (const libpart of children(root, "libparts").flatMap((node) => children(node, "libpart"))) {
     const lib = childText(libpart, "lib");
     const part = childText(libpart, "part");
-    if (!lib || !part) continue;
+    if (!part) continue;
     const pins: LibPartPins = { pinCount: 0, names: new Map(), types: new Map() };
     for (const pin of children(libpart, "pins").flatMap((node) => children(node, "pin"))) {
       const num = Number(childText(pin, "num"));
@@ -125,12 +125,16 @@ export function parseKicadNetlist(text: string, fileName: string): ParsedImportB
       pins.names.set(num, name);
       pins.types.set(num, type);
     }
+    // LTSpice-imported schematics emit libparts with an empty lib; the part
+    // name alone then disambiguates. Store both keys so component lookup
+    // works for regular and ltspice-style netlists alike.
     libPinsByKey.set(`${lib}:${part}`, pins);
+    libPinsByKey.set(part, pins);
   }
 
   const pinInfo: NonNullable<ImportState["pinInfo"]> = {};
   for (const component of components) {
-    const libPins = libPinsByKey.get(component.category);
+    const libPins = libPinsByKey.get(component.category) ?? libPinsByKey.get(component.category.split(":")[1] ?? "");
     if (!libPins) continue;
     const model = findDevicePinModel(component.value, component.category);
     const perPin: NonNullable<ImportState["pinInfo"]>[string] = {};
