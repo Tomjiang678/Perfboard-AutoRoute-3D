@@ -179,6 +179,17 @@ test("two component pins in one hole report HOLE_OCCUPIED", () => {
   assert.ok(result.drc.errors.some((issue) => issue.code === "HOLE_OCCUPIED"));
 });
 
+test("two pins in one hole report HOLE_OCCUPIED even when they share a net", () => {
+  const endpoints = [endpoint("N1", "A", 1, [5, 3]), endpoint("N1", "B", 1, [5, 3])];
+  const result = run(perfboard, routingWith([]), endpoints, [pinComponent("A", [5, 3]), pinComponent("B", [5, 3])]);
+  assert.ok(result.drc.errors.some((issue) => issue.code === "HOLE_OCCUPIED"));
+});
+
+test("two pins in one hole are reported on the breadboard as well", () => {
+  const result = run(breadboard, routingWith([]), [], [pinComponent("A", [3, 5]), pinComponent("B", [3, 5])]);
+  assert.ok(result.drc.errors.some((issue) => issue.code === "HOLE_OCCUPIED"));
+});
+
 test("an endpoint outside the board reports INVALID_BOARD_HOLE", () => {
   const endpoints = [endpoint("N1", "A", 1, [40, 3])];
   const result = run(perfboard, routingWith([]), endpoints, [pinComponent("A", [40, 3])]);

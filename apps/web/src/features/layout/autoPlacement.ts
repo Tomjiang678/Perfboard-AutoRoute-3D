@@ -2,7 +2,7 @@ import type { BoardSize, ConstraintRegion, DesignConstraint, PlacedComponent, Ro
 import { activeConstraints } from "../constraints/model.ts";
 import { autoRouteBoard } from "../routing/autoRouter.ts";
 import { getBoardModel } from "../board/factory.ts";
-import { componentPinHoles, isPowerNet, rotateGridOffset } from "../board/placement.ts";
+import { componentPinHoles, isPowerNet, layoutFromComponent, pinsConflict, placementHasPinConflicts, rotateGridOffset } from "../board/placement.ts";
 import type { BoardModel, ElectricalNodeId } from "../board/types.ts";
 import { key, manhattan } from "../routing/routingGeometry.ts";
 import { isBendableTwoPin, preferredLeadSpan, spacingLimits } from "../project/componentTraits.ts";
@@ -913,9 +913,9 @@ function canPlaceAt(
 }
 
 /**
- * Breadboard rule: two pins of different nets (or any no-net pin sharing a
- * node with another pin) must not land on the same electrical node, e.g. the
- * same 5-hole row of a terminal strip or the same power rail.
+ * Cross-component pin rules (one hole = one pin; shared node must be one net)
+ * come from the board layer so manual placement, auto-placement and DRC all
+ * apply exactly the same rule.
  */
 function pinsConflictWithPlaced(
   candidate: PlacedComponent,
@@ -929,46 +929,21 @@ function pinsConflictWithPlaced(
   const boardModel = getBoardModel(board);
   const candidateNets = pinNetsForComponent(candidate, endpointMap);
   const candidateHoles = componentPinHoles(candidate);
-  for (const other of placedComponents) {
+  return placedComponents.some((other) => {
     const otherNets = pinNetsForComponent(other, endpointMap);
     const otherHoles = componentPinHoles(other);
-    for (let candidateIndex = 0; candidateIndex < candidateHoles.length; candidateIndex += 1) {
-      for (let otherIndex = 0; otherIndex < otherHoles.length; otherIndex += 1) {
-        if (!boardModel.areInternallyConnected(candidateHoles[candidateIndex], otherHoles[otherIndex])) {
-          continue;
-        }
-        const candidateNet = candidateNets[candidateIndex + 1];
-        const otherNet = otherNets[otherIndex + 1];
-        if (!candidateNet || !otherNet || candidateNet !== otherNet) {
-          return true;
-        }
-      }
-    }
-  }
-  return false;
+    return candidateHoles.some((hole, candidateIndex) => otherHoles.some((otherHole, otherIndex) => pinsConflict(
+      boardModel,
+      hole,
+      candidateNets[candidateIndex + 1],
+      otherHole,
+      otherNets[otherIndex + 1]
+    )));
+  });
 }
 
-function hasCrossComponentNodeConflicts(components: PlacedComponent[], board: BoardSize, endpointMap: EndpointMap) {
-  const boardModel = getBoardModel(board);
-  const netsByNode = new Map<string, Array<string | undefined>>();
-  for (const component of components) {
-    const pinNets = pinNetsForComponent(component, endpointMap);
-    componentPinHoles(component).forEach((hole, index) => {
-      const node = boardModel.getElectricalNode(hole);
-      if (!node) return;
-      const nets = netsByNode.get(node) ?? [];
-      nets.push(pinNets[index + 1]);
-      netsByNode.set(node, nets);
-    });
-  }
-  for (const nets of netsByNode.values()) {
-    if (nets.length < 2) continue;
-    const defined = nets.filter((net): net is string => Boolean(net));
-    if (defined.length !== nets.length || new Set(defined).size !== 1) {
-      return true;
-    }
-  }
-  return false;
+function crossComponentPinLayouts(components: PlacedComponent[], endpointMap: EndpointMap) {
+  return components.map((component) => layoutFromComponent(component, pinNetsForComponent(component, endpointMap)));
 }
 
 function constrainedRegionFor(component: PlacedComponent, fallback: PlacementRegion, constraints: DesignConstraint[], board: BoardSize): PlacementRegion {
@@ -1156,7 +1131,7 @@ function isValidPlacement(
       return false;
     }
   }
-  if (hasCrossComponentNodeConflicts(components, board, endpointMap)) {
+  if (placementHasPinConflicts(getBoardModel(board), crossComponentPinLayouts(components, endpointMap))) {
     return false;
   }
   return true;
