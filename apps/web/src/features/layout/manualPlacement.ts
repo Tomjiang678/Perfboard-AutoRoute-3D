@@ -1,6 +1,6 @@
 import type { PlacedComponent } from "../../types/project.ts";
 import { pinGridPosition } from "../board/placement.ts";
-import { isBendableTwoPin, maximumLeadSpan } from "../project/componentTraits.ts";
+import { isBendableTwoPin, spacingLimits } from "../project/componentTraits.ts";
 
 export { pinGridPosition } from "../board/placement.ts";
 
@@ -24,7 +24,8 @@ export function bendComponentPin(
   const dx = nextSecond[0] - nextFirst[0];
   const dy = nextSecond[1] - nextFirst[1];
   const span = Math.hypot(dx, dy);
-  if (span < 1 || span > maximumLeadSpan(component)) {
+  const { min, max } = spacingLimits(component.kind).leadSpacing;
+  if (span < min || span > max) {
     return undefined;
   }
 

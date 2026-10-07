@@ -123,36 +123,42 @@ export function Workspace({
                   onChange={(event) => onUpdateSelected({ value: event.target.value })}
                 />
               </label>
-              <label>
-                <span>脚距（{limits.leadSpacing.min}–{limits.leadSpacing.max}）</span>
-                <input
-                  type="number"
-                  min={limits.leadSpacing.min}
-                  max={limits.leadSpacing.max}
-                  value={selectedComponent.leadSpacing}
-                  onChange={(event) => onUpdateSelected({ leadSpacing: toGridNumber(event.target.value) })}
-                />
-              </label>
-              <label>
-                <span>异侧排距（{limits.rowSpacing.min}–{limits.rowSpacing.max}）</span>
-                <input
-                  type="number"
-                  min={limits.rowSpacing.min}
-                  max={limits.rowSpacing.max}
-                  value={selectedComponent.rowSpacing}
-                  onChange={(event) => onUpdateSelected({ rowSpacing: toGridNumber(event.target.value) })}
-                />
-              </label>
-              <label>
-                <span>同侧脚距（{limits.sameSidePitch.min}–{limits.sameSidePitch.max}）</span>
-                <input
-                  type="number"
-                  min={limits.sameSidePitch.min}
-                  max={limits.sameSidePitch.max}
-                  value={selectedComponent.sameSidePitch}
-                  onChange={(event) => onUpdateSelected({ sameSidePitch: Math.max(1, toGridNumber(event.target.value)) })}
-                />
-              </label>
+              {limits.leadSpacing.min !== limits.leadSpacing.max && (
+                <label>
+                  <span>脚距（{limits.leadSpacing.min}–{limits.leadSpacing.max}）</span>
+                  <input
+                    type="number"
+                    min={limits.leadSpacing.min}
+                    max={limits.leadSpacing.max}
+                    value={selectedComponent.leadSpacing}
+                    onChange={(event) => onUpdateSelected({ leadSpacing: toGridNumber(event.target.value) })}
+                  />
+                </label>
+              )}
+              {limits.rowSpacing.min !== limits.rowSpacing.max && (
+                <label>
+                  <span>异侧排距（{limits.rowSpacing.min}–{limits.rowSpacing.max}）</span>
+                  <input
+                    type="number"
+                    min={limits.rowSpacing.min}
+                    max={limits.rowSpacing.max}
+                    value={selectedComponent.rowSpacing}
+                    onChange={(event) => onUpdateSelected({ rowSpacing: toGridNumber(event.target.value) })}
+                  />
+                </label>
+              )}
+              {limits.sameSidePitch.min !== limits.sameSidePitch.max && (
+                <label>
+                  <span>同侧脚距（{limits.sameSidePitch.min}–{limits.sameSidePitch.max}）</span>
+                  <input
+                    type="number"
+                    min={limits.sameSidePitch.min}
+                    max={limits.sameSidePitch.max}
+                    value={selectedComponent.sameSidePitch}
+                    onChange={(event) => onUpdateSelected({ sameSidePitch: Math.max(1, toGridNumber(event.target.value)) })}
+                  />
+                </label>
+              )}
             <div className="inspector-meta">
               <span>
                 坐标 {selectedComponent.position[0]}, {selectedComponent.position[1]}

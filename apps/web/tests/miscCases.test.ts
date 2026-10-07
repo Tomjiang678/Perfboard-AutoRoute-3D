@@ -144,7 +144,7 @@ test("activeConstraints filters disabled and inactive entries", () => {
 
 /* ── spacing limits ───────────────────────────────────────────────────── */
 
-import { clampSpacing, spacingLimits } from "../src/features/project/componentTraits.ts";
+import { clampSpacing, maximumLeadSpan, preferredLeadSpan, spacingLimits } from "../src/features/project/componentTraits.ts";
 
 for (const [kind, min, max] of [
   ["resistor", 2, 7],
@@ -188,6 +188,20 @@ test("clampSpacing clamps out-of-range values per kind", () => {
   assert.equal(clampSpacing("to92", 9, "leadSpacing"), 1);
   assert.equal(clampSpacing("dip", 1, "rowSpacing"), 2);
   assert.equal(clampSpacing("dip", 9, "sameSidePitch"), 2);
+});
+
+test("maximumLeadSpan follows the per-kind limits", () => {
+  assert.equal(maximumLeadSpan({ kind: "resistor" }), 7);
+  assert.equal(maximumLeadSpan({ kind: "fuse" }), 8);
+  assert.equal(maximumLeadSpan({ kind: "diode" }), 6);
+  assert.equal(maximumLeadSpan({ kind: "to92" }), 1);
+});
+
+test("preferredLeadSpan stays inside the per-kind limits", () => {
+  assert.equal(preferredLeadSpan({ kind: "resistor" }), 3);
+  assert.equal(preferredLeadSpan({ kind: "led" }), 1);
+  assert.equal(preferredLeadSpan({ kind: "fuse" }), 4);
+  assert.equal(preferredLeadSpan({ kind: "to92" }), 1);
 });
 
 test("pinInfo power type is preserved for enrichment consumers", () => {

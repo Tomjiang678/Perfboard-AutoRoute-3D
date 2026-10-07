@@ -4,7 +4,7 @@ import { autoRouteBoard } from "../routing/autoRouter.ts";
 import { getBoardModel } from "../board/factory.ts";
 import { componentPinHoles, isPowerNet, rotateGridOffset } from "../board/placement.ts";
 import { key, manhattan } from "../routing/routingGeometry.ts";
-import { isBendableTwoPin, maximumLeadSpan, preferredLeadSpan } from "../project/componentTraits.ts";
+import { isBendableTwoPin, preferredLeadSpan, spacingLimits } from "../project/componentTraits.ts";
 
 export interface PlacementRegion {
   x: number;
@@ -602,16 +602,16 @@ function isStretchableTwoPin(component: PlacedComponent) {
 }
 
 function leadSpacingRange(component: PlacedComponent) {
-  const max = maximumLeadSpan(component);
+  const { min, max } = spacingLimits(component.kind).leadSpacing;
   const values = new Set<number>([component.leadSpacing]);
-  for (let spacing = 2; spacing <= max; spacing += 1) {
+  for (let spacing = min; spacing <= max; spacing += 1) {
     values.add(spacing);
   }
   return [...values].filter((spacing) => spacing >= 1).sort((a, b) => a - b);
 }
 
 function diagonalVectors(component: PlacedComponent): Array<[number, number]> {
-  const max = maximumLeadSpan(component);
+  const { min, max } = spacingLimits(component.kind).leadSpacing;
   const vectors: Array<[number, number]> = [];
   for (let dx = -max; dx <= max; dx += 1) {
     for (let dy = -max; dy <= max; dy += 1) {
@@ -619,7 +619,7 @@ function diagonalVectors(component: PlacedComponent): Array<[number, number]> {
         continue;
       }
       const span = Math.hypot(dx, dy);
-      if (span >= 2 && span <= max) {
+      if (span >= min && span <= max) {
         vectors.push([dx, dy]);
       }
     }

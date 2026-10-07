@@ -20,11 +20,13 @@ export function isBendableTwoPin(component: Pick<PlacedComponent, "kind" | "pinO
 }
 
 export function maximumLeadSpan(component: Pick<PlacedComponent, "kind">) {
-  return component.kind === "diode" || component.kind === "led" ? 4 : 5;
+  return spacingLimits(component.kind).leadSpacing.max;
 }
 
 export function preferredLeadSpan(component: Pick<PlacedComponent, "kind">) {
-  return component.kind === "led" || component.kind === "radial_capacitor" ? 1 : 3;
+  const { min, max } = spacingLimits(component.kind).leadSpacing;
+  const base = component.kind === "led" || component.kind === "radial_capacitor" ? 1 : 3;
+  return Math.min(max, Math.max(min, base));
 }
 
 export interface SpacingLimits {
