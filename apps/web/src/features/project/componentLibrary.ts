@@ -26,7 +26,7 @@ const rawLibrary: Array<Omit<LibraryComponentDefinition, "pinOffsets"> & { pinOf
   makeTwoPin("radial_capacitor", "C", "普通电容", 1),
   makeTwoPin("electrolytic_capacitor", "EC", "电解电容", 1),
   { kind: "to92", label: "Q", title: "TO-92", pinCount: 3, leadSpacing: 1, rowSpacing: 0, sameSidePitch: 1 },
-  { kind: "to39", label: "Q", title: "TO-39", pinCount: 3, leadSpacing: 1, rowSpacing: 1, sameSidePitch: 1 },
+  { kind: "to39", label: "Q", title: "TO-39", pinCount: 3, leadSpacing: 2, rowSpacing: 1, sameSidePitch: 1 },
   { kind: "to220", label: "Q", title: "TO-220", pinCount: 3, leadSpacing: 1, rowSpacing: 0, sameSidePitch: 1 },
   { kind: "to3", label: "Q", title: "TO-3", pinCount: 3, leadSpacing: 2, rowSpacing: 2, sameSidePitch: 1 },
   { kind: "to247", label: "Q", title: "TO-247", pinCount: 3, leadSpacing: 2, rowSpacing: 0, sameSidePitch: 2 },
@@ -148,23 +148,24 @@ export function buildPinOffsetsForComponent(component: {
   }
 
   if (threeInlinePinKinds.has(component.kind)) {
-    return inlinePinOffsets(component.pinCount ?? 3, 1);
+    return inlinePinOffsets(component.pinCount ?? 3, component.leadSpacing);
   }
 
   if (component.kind === "to247") {
-    return inlinePinOffsets(component.pinCount ?? 3, 2);
+    return inlinePinOffsets(component.pinCount ?? 3, component.leadSpacing);
   }
 
   if (component.kind === "to3") {
-    return [[-1, 0], [1, 0], [0, component.rowSpacing || 2]];
+    const sideOffset = Math.max(1, Math.round(component.leadSpacing / 2));
+    return [[-sideOffset, 0], [sideOffset, 0], [0, component.rowSpacing || 2]];
   }
 
   if (component.kind === "bridge_rectifier") {
-    return inlinePinOffsets(component.pinCount ?? 4, 1);
+    return inlinePinOffsets(component.pinCount ?? 4, component.leadSpacing);
   }
 
   if (component.kind === "relay") {
-    return relayPinOffsets(component.pinCount ?? 5);
+    return relayPinOffsets(component.pinCount ?? 5, component.rowSpacing);
   }
 
   if (component.kind === "crystal" || component.kind === "fuse") {
@@ -223,13 +224,16 @@ function makeRelay(label: string, title: string, pinCount: number): LibraryCompo
   });
 }
 
-function relayPinOffsets(pinCount: number): Array<[number, number]> {
+function relayPinOffsets(pinCount: number, rowSpacing: number): Array<[number, number]> {
   // SPDT: 2 coil pins + COM/NO/NC; DPDT: 2 coil pins + 2×3 switch pins.
   if (pinCount === 5) {
-    return [[0, 0], [1, 0], [0, 2], [1, 2], [2, 2]];
+    const switchRow = 1 + rowSpacing;
+    return [[0, 0], [1, 0], [0, switchRow], [1, switchRow], [2, switchRow]];
   }
   if (pinCount === 8) {
-    return [[0, 0], [1, 0], [0, 2], [1, 2], [2, 2], [0, 3], [1, 3], [2, 3]];
+    const firstSwitchRow = 1 + rowSpacing;
+    const secondSwitchRow = firstSwitchRow + rowSpacing;
+    return [[0, 0], [1, 0], [0, firstSwitchRow], [1, firstSwitchRow], [2, firstSwitchRow], [0, secondSwitchRow], [1, secondSwitchRow], [2, secondSwitchRow]];
   }
   return inlinePinOffsets(pinCount, 1);
 }

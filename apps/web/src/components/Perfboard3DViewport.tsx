@@ -81,13 +81,12 @@ export function Perfboard3DViewport({
   const sceneObjectsRef = useRef<{
     camera: THREE.PerspectiveCamera;
     componentsGroup: THREE.Group;
+    routeObject: THREE.Group;
   } | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
+  const keyLightRef = useRef<THREE.DirectionalLight | null>(null);
   const netHighlightsRef = useRef<THREE.Group | null>(null);
-  const viewStateRef = useRef<{
-    position: THREE.Vector3;
-    target: THREE.Vector3;
-  } | null>(null);
+  const boardDefinitionRef = useRef<BoardSize | undefined>(undefined);
   const draggingComponentIdRef = useRef<string | undefined>(undefined);
   const draggingGridRef = useRef<[number, number] | undefined>(undefined);
   const draggingPinRef = useRef<SelectedPin | undefined>(undefined);
@@ -101,7 +100,7 @@ export function Perfboard3DViewport({
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
-    scene.background = new THREE.Color(theme === "dark" ? 0x161b21 : 0xeef2f6);
+    scene.background = new THREE.Color(0xeef2f6);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -121,25 +120,12 @@ export function Perfboard3DViewport({
     controls.maxDistance = 4200;
     controlsRef.current = controls;
 
-    const boardObject = createBoardObject(board, transparentBoard, theme);
-    scene.add(boardObject);
-    const componentsGroup = createPlacedComponents(components, board, selectedComponentId, theme);
-    scene.add(componentsGroup);
-    const netHighlights = createNetEndpointHighlights([], board);
+    const netHighlights = new THREE.Group();
     netHighlightsRef.current = netHighlights;
     scene.add(netHighlights);
-    const routeObject = createRouteObjects(routing, board, components);
-    scene.add(routeObject);
-    const routingIssueHighlights = createRoutingIssueHighlights(routing, board);
-    scene.add(routingIssueHighlights);
     boardPlaneRef.current = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.28);
-    sceneObjectsRef.current = { camera, componentsGroup };
-
-    const boardMax = Math.max(board.width, board.height);
-    const distance = Math.max(55, boardMax * 1.25);
-    const savedView = viewStateRef.current;
-    controls.target.copy(savedView?.target ?? new THREE.Vector3(0, 0, 0));
-    camera.position.copy(savedView?.position ?? new THREE.Vector3(distance * 0.9, distance * 0.75, distance * 0.9));
+    camera.position.set(100, 80, 100);
+    controls.target.set(0, 0, 0);
     camera.lookAt(0, 0, 0);
     controls.update();
 
@@ -150,15 +136,9 @@ export function Perfboard3DViewport({
     keyLight.position.set(80, 110, 95);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.set(2048, 2048);
-    keyLight.shadow.camera.left = -Math.max(board.width, board.height);
-    keyLight.shadow.camera.right = Math.max(board.width, board.height);
-    keyLight.shadow.camera.top = Math.max(board.width, board.height);
-    keyLight.shadow.camera.bottom = -Math.max(board.width, board.height);
-    keyLight.shadow.camera.near = 1;
-    keyLight.shadow.camera.far = Math.max(board.width, board.height) * 5;
     keyLight.shadow.bias = -0.0004;
     keyLight.shadow.radius = 4;
-    keyLight.shadow.camera.updateProjectionMatrix();
+    keyLightRef.current = keyLight;
     scene.add(keyLight);
 
     // Soft fill light from below so the back side of the board is not much darker than the front.
@@ -179,29 +159,70 @@ export function Perfboard3DViewport({
     const animate = () => {
       frame = requestAnimationFrame(animate);
       controls.update();
-      updateRouteOverlayVisibility(routeObject, camera, controls.target);
+      const routeObject = sceneObjectsRef.current?.routeObject;
+      if (routeObject) updateRouteOverlayVisibility(routeObject, camera, controls.target);
       renderer.render(scene, camera);
     };
     animate();
 
     return () => {
       cancelAnimationFrame(frame);
-      viewStateRef.current = {
-        position: camera.position.clone(),
-        target: controls.target.clone()
-      };
       resizeObserver.disconnect();
       controls.dispose();
       renderer.dispose();
-      disposeObject(boardObject);
-      disposeObject(componentsGroup);
       disposeObject(netHighlights);
-      disposeObject(routeObject);
-      disposeObject(routingIssueHighlights);
       sceneRef.current = null;
+      keyLightRef.current = null;
       netHighlightsRef.current = null;
       sceneObjectsRef.current = null;
+      boardDefinitionRef.current = undefined;
       host.removeChild(renderer.domElement);
+    };
+  }, []);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    if (!scene || !camera || !controls) return;
+
+    scene.background = new THREE.Color(theme === "dark" ? 0x161b21 : 0xeef2f6);
+    const keyLight = keyLightRef.current;
+    if (keyLight) {
+      const boardMax = Math.max(board.width, board.height);
+      keyLight.shadow.camera.left = -boardMax;
+      keyLight.shadow.camera.right = boardMax;
+      keyLight.shadow.camera.top = boardMax;
+      keyLight.shadow.camera.bottom = -boardMax;
+      keyLight.shadow.camera.near = 1;
+      keyLight.shadow.camera.far = boardMax * 5;
+      keyLight.shadow.camera.updateProjectionMatrix();
+    }
+    const boardObject = createBoardObject(board, transparentBoard, theme);
+    const componentsGroup = createPlacedComponents(components, board, selectedComponentId, theme);
+    const routeObject = createRouteObjects(routing, board, components);
+    const routingIssueHighlights = createRoutingIssueHighlights(routing, board);
+    scene.add(boardObject, componentsGroup, routeObject, routingIssueHighlights);
+    sceneObjectsRef.current = { camera, componentsGroup, routeObject };
+
+    if (boardDefinitionRef.current !== board) {
+      const distance = Math.max(55, Math.max(board.width, board.height) * 1.25);
+      camera.position.set(distance * 0.9, distance * 0.75, distance * 0.9);
+      controls.target.set(0, 0, 0);
+      camera.lookAt(0, 0, 0);
+      controls.update();
+      boardDefinitionRef.current = board;
+    }
+
+    return () => {
+      scene.remove(boardObject, componentsGroup, routeObject, routingIssueHighlights);
+      disposeObject(boardObject);
+      disposeObject(componentsGroup);
+      disposeObject(routeObject);
+      disposeObject(routingIssueHighlights);
+      if (sceneObjectsRef.current?.componentsGroup === componentsGroup) {
+        sceneObjectsRef.current = null;
+      }
     };
   }, [board, components, selectedComponentId, routing, transparentBoard, theme]);
 
@@ -515,7 +536,11 @@ export function Perfboard3DViewport({
     const gridX = Math.round(hit.x + board.width / 2 - 0.5);
     const gridY = Math.round(hit.z + board.height / 2 - 0.5);
 
-    return getBoardModel(board).snapToHole([gridX, gridY]) ?? [0, 0];
+    const snapped = getBoardModel(board).snapToHole([gridX, gridY]);
+    return snapped ?? [
+      Math.max(0, Math.min(board.width - 1, gridX)),
+      Math.max(0, Math.min(board.height - 1, gridY))
+    ];
   }
 
   function pickComponent(event: React.PointerEvent<HTMLDivElement>) {
@@ -668,6 +693,9 @@ function createPlacedComponents(components: PlacedComponent[], board: BoardSize,
     });
     component.position.copy(getComponentWorldPosition(placed, board));
     component.rotation.y = placed.rotation;
+    if (placed.mounted) {
+      createPinLandingRings(component, placed, board);
+    }
     component.userData.componentId = placed.id;
     component.userData.componentRootMarker = true;
     component.traverse((child) => {
@@ -699,6 +727,28 @@ function createPlacedComponents(components: PlacedComponent[], board: BoardSize,
 
   applyThemeToGroup(group, dark);
   return group;
+}
+
+function createPinLandingRings(group: THREE.Group, placed: PlacedComponent, board: BoardSize) {
+  const anchor = getPinAnchor(placed.pinOffsets);
+  const boardModel = getBoardModel(board);
+  const ringMaterial = new THREE.MeshStandardMaterial({
+    color: board.kind === "breadboard" ? 0x8b969d : 0xb9c2c8,
+    roughness: 0.3,
+    metalness: 0.68,
+    side: THREE.DoubleSide
+  });
+
+  placed.pinOffsets.forEach((offset, index) => {
+    const hole = pinGridPosition(placed, index + 1);
+    if (!boardModel.isValidHole(hole)) return;
+
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.085, 0.18, 24), ringMaterial);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(offset[0] - anchor[0], 0.378, offset[1] - anchor[1]);
+    ring.userData.componentId = placed.id;
+    group.add(ring);
+  });
 }
 
 const THEME_DARK_LIGHTNESS_FLOOR = 0.4;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { AutoPlacementProgress, PlacementRegion } from "./autoPlacement.ts";
 import { runAutoPlacementInWorker } from "./autoPlacementWorkerClient.ts";
 import { projectConstraints } from "../constraints/model.ts";
@@ -28,6 +28,7 @@ export function useAutoPlacement({ project, commitProject }: UseAutoPlacementOpt
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<AutoPlacementProgress>();
   const [warnings, setWarnings] = useState<string[]>([]);
+  const abortControllerRef = useRef<AbortController | undefined>(undefined);
 
   function open() {
     setWarnings([]);
@@ -36,7 +37,8 @@ export function useAutoPlacement({ project, commitProject }: UseAutoPlacementOpt
   }
 
   function close() {
-    if (!running) setDialogOpen(false);
+    if (running) abortControllerRef.current?.abort();
+    setDialogOpen(false);
   }
 
   async function run(region: PlacementRegion) {
@@ -48,6 +50,8 @@ export function useAutoPlacement({ project, commitProject }: UseAutoPlacementOpt
     // constraints are re-applied by prepareComponentsForConstraints.
     const resettableComponents = sourceProject.components.map((component) => ({ ...component, mounted: false }));
     const preparedComponents = prepareComponentsForConstraints(resettableComponents, constraints);
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
     setWarnings([]);
     setProgress({ percent: 0, phase: "prepare", detail: "[autoplacement] 正在启动自动放置诊断" });
     setRunning(true);
@@ -63,17 +67,22 @@ export function useAutoPlacement({ project, commitProject }: UseAutoPlacementOpt
         board: sourceProject.board,
         endpoints,
         constraints
-      }, setProgress);
+      }, setProgress, abortController.signal);
 
       const constraintWarnings = evaluatePlacementConstraints(result.components, constraints);
       setWarnings([...result.warnings, ...constraintWarnings]);
       if (result.warnings.length > 0 && result.placedCount === 0) return;
 
-      commitProject((current) => current.id === sourceProject.id
+      commitProject((current) => current.id === sourceProject.id &&
+        current.board === sourceProject.board &&
+        current.components === sourceProject.components &&
+        current.importState === sourceProject.importState &&
+        current.constraints === sourceProject.constraints
         ? { ...current, components: result.components }
         : current);
       setDialogOpen(false);
     } catch (error) {
+      if (abortController.signal.aborted) return;
       const message = error instanceof Error ? error.message : "未知错误";
       setWarnings([`自动放置失败：${message}`]);
       setProgress((current) => ({
@@ -82,6 +91,9 @@ export function useAutoPlacement({ project, commitProject }: UseAutoPlacementOpt
         detail: `[autoplacement] 运行失败：${message}`
       }));
     } finally {
+      if (abortControllerRef.current === abortController) {
+        abortControllerRef.current = undefined;
+      }
       setRunning(false);
     }
   }

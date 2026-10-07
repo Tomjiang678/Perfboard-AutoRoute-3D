@@ -50,7 +50,7 @@ export function AutoPlacementDialog({
       <section className="dialog" role="dialog" aria-modal="true" aria-labelledby="auto-place-title">
         <div className="dialog-header">
           <h2 id="auto-place-title">自动放置</h2>
-          <button className="icon-button" type="button" onClick={onCancel} title="关闭" disabled={running}>
+          <button className="icon-button" type="button" onClick={onCancel} title={running ? "取消自动放置" : "关闭"}>
             <X size={18} />
           </button>
         </div>
@@ -76,7 +76,7 @@ export function AutoPlacementDialog({
           )}
 
           <footer className="dialog-actions">
-            <button className="tool-button" type="button" onClick={onCancel} disabled={running}>取消</button>
+            <button className="tool-button" type="button" onClick={onCancel}>取消</button>
             <button className="tool-button primary" type="submit" disabled={running}>
               {running ? "运行中" : "放置"}
             </button>

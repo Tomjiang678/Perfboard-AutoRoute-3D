@@ -194,8 +194,7 @@ function createLed(color: number, pinOffsets: Array<[number, number]>) {
   const base = new THREE.Mesh(new THREE.CylinderGeometry(0.74, 0.74, 0.24, 28), material);
   base.position.set(centerX, 0.98, centerZ);
   group.add(base);
-  addStraightPin(group, leftPin[0], leftPin[1], 0.98);
-  addStraightPin(group, rightPin[0], rightPin[1], 0.98);
+  addRadialPackagePins(group, [leftPin, rightPin], [centerX, centerZ], 0.74, 0.88, 0.98);
   return group;
 }
 
@@ -217,8 +216,7 @@ function createRadialCapacitor(
   body.castShadow = true;
   body.receiveShadow = true;
   group.add(body);
-  addStraightPin(group, leftPin[0], leftPin[1], 0.9);
-  addStraightPin(group, rightPin[0], rightPin[1], 0.9);
+  addRadialPackagePins(group, [leftPin, rightPin], [centerX, centerZ], radius, 0.56, 0.9);
 
   if (polarized) {
     const topY = centerY + height / 2 + 0.035;
@@ -334,7 +332,14 @@ function createTo92(label: string, pinOffsets: Array<[number, number]>) {
   body.position.set(center[0], 1.38, center[1]);
   group.add(body);
 
-  pinOffsets.forEach(([x, z]) => addStraightPin(group, x, z, 0.88));
+  const bodyHalfWidth = 0.82;
+  pinOffsets.forEach(([x, z]) => {
+    if (Math.abs(x - center[0]) > bodyHalfWidth - 0.04) {
+      const edgeX = center[0] + Math.sign(x - center[0]) * (bodyHalfWidth - 0.04);
+      addLeadBetween(group, [edgeX, z], [x, z], 1.12);
+    }
+    addStraightPin(group, x, z, 1.16);
+  });
   addTextLabel(group, label, center[0], 2.0, center[1] + 0.48, 0x3fffd2, 1.8);
   return group;
 }
@@ -358,7 +363,15 @@ function createTo220(label: string, pinOffsets: Array<[number, number]>) {
   hole.position.set(centerX, 2.92, centerZ + 0.36);
   group.add(hole);
 
-  pinOffsets.forEach(([x, z]) => addStraightPin(group, x, z, 1.05));
+  pinOffsets.forEach(([x, z]) => {
+    const bodyEdge = centerX + Math.sign(x - centerX) * 1.125;
+    if (Math.abs(x - centerX) > 1.125) {
+      addLeadBetween(group, [bodyEdge, z], [x, z], 0.62);
+      addStraightPin(group, x, z, 0.62);
+    } else {
+      addStraightPin(group, x, z, 1.05);
+    }
+  });
   addTextLabel(group, label, centerX, 2.12, centerZ + 0.72, 0x3fffd2, 1.7);
   return group;
 }
@@ -379,7 +392,16 @@ function createTo39(label: string, pinOffsets: Array<[number, number]>) {
   tab.position.set(center[0] - 0.72, 1.25, center[1]);
   group.add(tab);
 
-  pinOffsets.forEach(([x, z]) => addStraightPin(group, x, z, 0.86));
+  pinOffsets.forEach(([x, z]) => {
+    const dx = x - center[0];
+    const dz = z - center[1];
+    const radius = Math.hypot(dx, dz);
+    if (radius > 0.78) {
+      const scale = 0.78 / radius;
+      addLeadBetween(group, [center[0] + dx * scale, center[1] + dz * scale], [x, z], 0.85);
+    }
+    addStraightPin(group, x, z, 0.86);
+  });
   addTextLabel(group, label, center[0], 1.98, center[1] + 0.48, 0x1e242b, 1.6);
   return group;
 }
@@ -397,7 +419,13 @@ function createDip(pinCount: number, label: string, pinOffsets: Array<[number, n
   pinOne.position.set(box.centerX - bodyWidth * 0.34, 1.335, box.minZ + 0.38);
   group.add(pinOne);
 
-  pinOffsets.forEach(([x, z]) => addDipPin(group, x, z));
+  pinOffsets.forEach(([x, z]) => {
+    const edgeX = box.centerX + Math.sign(x - box.centerX) * bodyWidth / 2;
+    if (Math.abs(x - box.centerX) > bodyWidth / 2 - 0.08) {
+      addLeadBetween(group, [edgeX, z], [x, z], 0.69);
+    }
+    addDipPin(group, x, z);
+  });
 
   addTextLabel(group, label, box.centerX, 1.38, box.centerZ, 0xe8edf2, Math.min(2.4, bodyLength * 0.5));
   return group;
@@ -420,7 +448,13 @@ function createDipSwitch(pinCount: number, label: string, pinOffsets: Array<[num
     group.add(slider);
   }
 
-  pinOffsets.forEach(([x, z]) => addDipPin(group, x, z));
+  pinOffsets.forEach(([x, z]) => {
+    const edgeX = box.centerX + Math.sign(x - box.centerX) * bodyWidth / 2;
+    if (Math.abs(x - box.centerX) > bodyWidth / 2 - 0.08) {
+      addLeadBetween(group, [edgeX, z], [x, z], 0.71);
+    }
+    addDipPin(group, x, z);
+  });
   addTextLabel(group, label, box.centerX, 1.55, box.centerZ, 0xffffff, Math.min(2.6, bodyLength * 0.45));
   return group;
 }
@@ -572,8 +606,7 @@ function createBuzzer(label: string, pinOffsets: Array<[number, number]>) {
   top.position.set(centerX, 1.6, centerZ);
   group.add(top);
 
-  addStraightPin(group, leftPin[0], leftPin[1], 0.75);
-  addStraightPin(group, rightPin[0], rightPin[1], 0.75);
+  addRadialPackagePins(group, [leftPin, rightPin], [centerX, centerZ], 0.95, 0.74, 0.75);
   addTextLabel(group, label, centerX, 1.68, centerZ + 0.52, 0x3fffd2, 1.35);
   return group;
 }
@@ -621,13 +654,15 @@ function createTo3(label: string, pinOffsets: Array<[number, number]>) {
   cap.position.set(center[0], 1.52, center[1]);
   group.add(cap);
 
-  pinOffsets.forEach(([x, z], index) => {
-    if (index < 2) {
-      addStraightPin(group, x, z, 1.1);
-    } else {
-      // case stud
-      addStraightPin(group, x, z, 1.1);
+  pinOffsets.forEach(([x, z]) => {
+    const dx = x - center[0];
+    const dz = z - center[1];
+    const radius = Math.hypot(dx, dz);
+    if (radius > 1.08) {
+      const scale = 1.08 / radius;
+      addLeadBetween(group, [center[0] + dx * scale, center[1] + dz * scale], [x, z], 1.1);
     }
+    addStraightPin(group, x, z, 1.1);
   });
   addTextLabel(group, label, center[0], 1.8, center[1] + 0.45, 0x1e242b, 1.7);
   return group;
@@ -819,6 +854,34 @@ function addLeadBetween(group: THREE.Group, from: [number, number], to: [number,
   lead.rotation.y = -angle;
   lead.position.set((from[0] + to[0]) / 2, y, (from[1] + to[1]) / 2);
   group.add(lead);
+}
+
+function addRadialPackagePins(
+  group: THREE.Group,
+  pinOffsets: Array<[number, number]>,
+  center: [number, number],
+  bodyRadius: number,
+  connectionY: number,
+  innerPinTopY: number
+) {
+  pinOffsets.forEach(([x, z]) => {
+    const dx = x - center[0];
+    const dz = z - center[1];
+    const distance = Math.hypot(dx, dz);
+    const connectionRadius = bodyRadius * 0.8;
+    if (distance > connectionRadius) {
+      const scale = connectionRadius / distance;
+      addLeadBetween(
+        group,
+        [center[0] + dx * scale, center[1] + dz * scale],
+        [x, z],
+        connectionY
+      );
+      addStraightPin(group, x, z, connectionY);
+    } else {
+      addStraightPin(group, x, z, innerPinTopY);
+    }
+  });
 }
 
 function normalizeTwoPins(pinOffsets: Array<[number, number]>): [[number, number], [number, number]] {

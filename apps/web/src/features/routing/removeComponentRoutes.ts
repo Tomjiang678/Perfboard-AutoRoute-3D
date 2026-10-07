@@ -1,4 +1,5 @@
 import type { BottomTrace, JumperRoute, RoutingState } from "../../types/project.ts";
+import { stripDrcWarnings } from "./drcWarnings.ts";
 import { expandOrthogonalPath, key, type GridPoint } from "./routingGeometry.ts";
 
 interface GraphEdge {
@@ -32,7 +33,7 @@ export function removeRoutesToComponent(
     failedNets: [],
     diagnostics: undefined,
     drc: undefined,
-    warnings: routing.warnings.filter((warning) => !warning.startsWith("DRC:"))
+    warnings: stripDrcWarnings(routing.warnings)
   };
 }
 

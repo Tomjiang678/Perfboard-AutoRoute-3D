@@ -7,6 +7,7 @@ import { parseAiConstraintResponse } from "../src/features/constraints/schema.ts
 import { buildConstraintPrompt } from "../src/features/ai/constraintPrompt.ts";
 import { normalizeBoardDefinition } from "../src/features/board/factory.ts";
 import { createBreadboardDefinition } from "../src/features/board/breadboard.ts";
+import { withMigratedConstraints } from "../src/features/constraints/model.ts";
 import type { ConstraintDraft } from "../src/features/constraints/drafts.ts";
 import type { DesignConstraint, PerfboardProject, PlacedComponent, RoutedNetEndpoint, RoutingState } from "../src/types/project.ts";
 
@@ -37,6 +38,13 @@ function makeProject(overrides: Partial<PerfboardProject> = {}): PerfboardProjec
     ...overrides
   };
 }
+
+test("legacy TO-39 spacing is migrated into its supported range", () => {
+  const oldPart = { ...makeComponent("q1", "Q1", "to39"), leadSpacing: 1, rowSpacing: 1, pinOffsets: [[-1, 0], [1, 0], [0, 1]] as Array<[number, number]> };
+  const migrated = withMigratedConstraints(makeProject({ components: [oldPart] }));
+  assert.equal(migrated.components[0].leadSpacing, 2);
+  assert.deepEqual(migrated.components[0].pinOffsets, [[-2, 0], [2, 0], [0, 1]]);
+});
 
 /* ── resolveConstraintDrafts ──────────────────────────────────────────── */
 

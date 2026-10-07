@@ -61,7 +61,7 @@ const SPACING_LIMITS: Partial<Record<LibraryComponentKind, SpacingLimits>> = {
   relay: { leadSpacing: FIXED, rowSpacing: { min: 1, max: 2 }, sameSidePitch: FIXED },
   potentiometer: { leadSpacing: FIXED, rowSpacing: FIXED, sameSidePitch: FIXED },
   slide_switch: { leadSpacing: FIXED, rowSpacing: FIXED, sameSidePitch: FIXED },
-  tactile_switch: { leadSpacing: { min: 2, max: 3 }, rowSpacing: { min: 2, max: 3 }, sameSidePitch: { min: 2, max: 3 } },
+  tactile_switch: { leadSpacing: { min: 2, max: 3 }, rowSpacing: { min: 2, max: 3 }, sameSidePitch: FIXED },
   dip: { leadSpacing: FIXED, rowSpacing: { min: 3, max: 4 }, sameSidePitch: FIXED },
   dip_switch: { leadSpacing: FIXED, rowSpacing: { min: 3, max: 4 }, sameSidePitch: FIXED },
   seven_segment_display: { leadSpacing: FIXED, rowSpacing: { min: 3, max: 4 }, sameSidePitch: FIXED },

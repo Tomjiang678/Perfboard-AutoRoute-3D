@@ -179,6 +179,7 @@ test("fixed-pitch packages lock spacing to 1..1", () => {
     assert.deepEqual(spacingLimits(kind).rowSpacing, { min: 1, max: 1 });
     assert.deepEqual(spacingLimits(kind).sameSidePitch, { min: 1, max: 1 });
   }
+  assert.deepEqual(spacingLimits("tactile_switch").sameSidePitch, { min: 1, max: 1 });
 });
 
 test("clampSpacing clamps out-of-range values per kind", () => {

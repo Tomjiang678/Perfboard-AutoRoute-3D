@@ -21,13 +21,14 @@ import {
 import { bendComponentPin, pinGridPosition } from "./features/layout/manualPlacement.ts";
 import { resolveNetEndpoints } from "./features/import/netEndpointResolver.ts";
 import { autoRouteBoard, validateRoutingResult, MANUAL_NET_NAME } from "./features/routing/autoRouter.ts";
+import { stripDrcWarnings } from "./features/routing/drcWarnings.ts";
 import { expandOrthogonalPath } from "./features/routing/routingGeometry.ts";
 import { removeRoutesToComponent } from "./features/routing/removeComponentRoutes.ts";
 import { createProject } from "./features/project/projectFactory.ts";
+import { invalidateDrcIfInputsChanged } from "./features/project/projectTransitions.ts";
 import { getBoardModel, normalizeBoardDefinition } from "./features/board/factory.ts";
 import { componentPinHoles } from "./features/board/placement.ts";
 import { clampSpacing } from "./features/project/componentTraits.ts";
-import type { PinNetAssignments } from "./features/board/types.ts";
 import type { BoardSize, DragMoveModifier, ImportState, KeyboardShortcuts, PerfboardProject, PlacedComponent, RoutedNetEndpoint, ThemeMode } from "./types/project.ts";
 import type { SelectedPin } from "./components/Perfboard3DViewport.tsx";
 import type { RouteEditMode, WorkspaceToolbarProps } from "./components/WorkspaceToolbar.tsx";
@@ -68,6 +69,7 @@ const defaultSettings: AppSettings = {
 
 export function App() {
   const [project, setProject] = useState<PerfboardProject | undefined>();
+  const projectRef = useRef<PerfboardProject | undefined>(undefined);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectedComponentId, setSelectedComponentId] = useState<string | undefined>();
@@ -88,7 +90,7 @@ export function App() {
     }
 
     try {
-      setProject(withMigratedConstraints(JSON.parse(saved) as PerfboardProject));
+      replaceProject(withMigratedConstraints(JSON.parse(saved) as PerfboardProject));
     } catch {
       window.localStorage.removeItem(STORAGE_KEY);
     }
@@ -129,31 +131,31 @@ export function App() {
   }, [settings.theme]);
 
   function commitProject(updater: (current: PerfboardProject) => PerfboardProject) {
-    setProject((current) => {
-      if (!current) {
-        return current;
-      }
+    const current = projectRef.current;
+    if (!current) return;
 
-      const next = updater(current);
-      if (next === current) {
-        return current;
-      }
+    const updated = updater(current);
+    if (updated === current) return;
+    const next = invalidateDrcIfInputsChanged(current, updated);
 
-      undoStackRef.current = [...undoStackRef.current.slice(-(MAX_UNDO_HISTORY - 1)), current];
-      setUndoCount(undoStackRef.current.length);
-      return next;
-    });
+    undoStackRef.current = [...undoStackRef.current.slice(-(MAX_UNDO_HISTORY - 1)), current];
+    setUndoCount(undoStackRef.current.length);
+    replaceProject(next);
+  }
+
+  function replaceProject(next: PerfboardProject | undefined) {
+    projectRef.current = next;
+    setProject(next);
   }
 
   function updateComponent(
     componentId: string,
-    transform: (component: PlacedComponent) => PlacedComponent | undefined,
-    validate = true
+    transform: (component: PlacedComponent) => PlacedComponent | undefined
   ) {
     commitProject((current) => {
       const component = current.components.find((item) => item.id === componentId);
       const updated = component && transform(component);
-      if (!updated || updated === component || (validate && !isProjectPlacementValid(current, updated))) return current;
+      if (!updated || updated === component) return current;
       return { ...current, components: current.components.map((item) => item.id === componentId ? updated : item) };
     });
   }
@@ -333,7 +335,7 @@ export function App() {
 
     undoStackRef.current = undoStackRef.current.slice(0, -1);
     setUndoCount(undoStackRef.current.length);
-    setProject(previous);
+    replaceProject(previous);
     setSelectedComponentId(undefined);
   }
 
@@ -357,7 +359,7 @@ export function App() {
     try {
       const text = await file.text();
       const next = withMigratedConstraints(JSON.parse(text) as PerfboardProject);
-      setProject(next);
+      replaceProject(next);
       setSelectedComponentId(undefined);
       setSelectedPin(undefined);
       setPendingComponent(undefined);
@@ -369,7 +371,7 @@ export function App() {
   }
 
   function handleCreateProject(name: string, board: BoardSize) {
-    setProject(createProject(name, board));
+    replaceProject(createProject(name, board));
     setSelectedComponentId(undefined);
     setSelectedPin(undefined);
     setPendingComponent(undefined);
@@ -457,16 +459,14 @@ export function App() {
       rotation: 0,
       mounted: false
     };
-    if (!isProjectPlacementValid(project, placedComponent)) {
-      return false;
-    }
-    commitProject((current) => {
-      setSelectedComponentId(componentId);
-      return {
-        ...current,
-        components: [...current.components, placedComponent]
-      };
-    });
+    // Manual placement is an editing action: keep the part visible even when
+    // its pins do not fit the board rules. DRC remains responsible for
+    // reporting invalid geometry and electrical conflicts.
+    setSelectedComponentId(componentId);
+    commitProject((current) => ({
+      ...current,
+      components: [...current.components, placedComponent]
+    }));
     return true;
   }
 
@@ -476,7 +476,7 @@ export function App() {
   }
 
   function handleMoveComponent(componentId: string, position: [number, number]) {
-    updateComponent(componentId, (component) => component.mounted ? undefined : { ...component, position });
+    updateComponent(componentId, (component) => ({ ...component, position }));
   }
 
   function handleUpdateBoard(board: BoardSize) {
@@ -485,24 +485,16 @@ export function App() {
       return {
         ...current,
         board: normalizedBoard,
-        components: current.components.map((component) => ({
-          ...component,
-          position: getBoardModel(normalizedBoard).snapToHole(component.position) ?? [0, 0]
-        }))
       };
     });
   }
 
   function handleSelectNet(netName: string | undefined) {
-    setProject((current) => {
-      if (!current) {
-        return current;
-      }
-
-      return {
-        ...current,
-        selectedNetName: current.selectedNetName === netName ? undefined : netName
-      };
+    const current = projectRef.current;
+    if (!current) return;
+    replaceProject({
+      ...current,
+      selectedNetName: current.selectedNetName === netName ? undefined : netName
     });
   }
 
@@ -587,7 +579,7 @@ export function App() {
           ...current.routing,
           drc: validation.drc,
           diagnostics: { failedNetDetails: validation.failedNetDetails },
-          warnings: [...current.routing.warnings.filter((warning) => !warning.startsWith("DRC:")), ...validation.warnings],
+          warnings: stripDrcWarnings(current.routing.warnings),
           failedNets: [...failedNets]
         }
       };
@@ -601,7 +593,7 @@ export function App() {
         ...current.routing,
         drc: undefined,
         diagnostics: undefined,
-        warnings: current.routing.warnings.filter((warning) => !warning.startsWith("DRC:"))
+        warnings: stripDrcWarnings(current.routing.warnings)
       }
     }));
   }
@@ -679,7 +671,7 @@ export function App() {
   }
 
   function handleRotateSelected() {
-    if (selectedComponentId) updateComponent(selectedComponentId, (component) => component.mounted ? undefined : { ...component, rotation: component.rotation + Math.PI / 2 });
+    if (selectedComponentId) updateComponent(selectedComponentId, (component) => ({ ...component, rotation: component.rotation + Math.PI / 2 }));
   }
 
   function handleDeleteSelected() {
@@ -710,7 +702,7 @@ export function App() {
   }
 
   function handleUnmountSelected() {
-    if (selectedComponentId) updateComponent(selectedComponentId, (component) => ({ ...component, mounted: false }), false);
+    if (selectedComponentId) updateComponent(selectedComponentId, (component) => ({ ...component, mounted: false }));
   }
 
   function handleUpdateSelected(patch: {
@@ -732,17 +724,7 @@ export function App() {
         sameSidePitch: patch.sameSidePitch !== undefined ? clampSpacing(component.kind, patch.sameSidePitch, "sameSidePitch") : component.sameSidePitch
       };
       const updated = { ...next, pinOffsets: buildPinOffsetsForComponent(next) };
-      if (!component.mounted) {
-        // Floating parts (not yet placed) accept any property edit; placement
-        // rules apply when they are dropped on the board.
-        return { ...current, components: current.components.map((item) => item.id === component.id ? updated : item) };
-      }
-      if (isProjectPlacementValid(current, updated)) {
-        return { ...current, components: current.components.map((item) => item.id === component.id ? updated : item) };
-      }
-      // The new geometry no longer fits at the current spot: pop the part off
-      // the board (keep its position) so it can be re-placed manually.
-      return { ...current, components: current.components.map((item) => item.id === component.id ? { ...updated, mounted: false } : item) };
+      return { ...current, components: current.components.map((item) => item.id === component.id ? updated : item) };
     });
   }
 
@@ -897,40 +879,6 @@ function command(shortcut: string | undefined, enabled: boolean, run: () => void
 function makeDefaultComponentName(label: string, index: number) {
   const prefix = label.replace(/[^A-Za-z]/g, "") || "U";
   return `${prefix}${index}`;
-}
-
-function isProjectPlacementValid(project: PerfboardProject, candidate: PlacedComponent) {
-  const components = project.components.some((component) => component.id === candidate.id)
-    ? project.components.map((component) => component.id === candidate.id ? candidate : component)
-    : [...project.components, candidate];
-  const endpoints = resolveNetEndpoints(project.importState, components);
-  const endpointNets = new Map(endpoints.map((endpoint) => [`${endpoint.ref}:${endpoint.pin}`, endpoint.net]));
-  const pinNets: PinNetAssignments = Object.fromEntries(
-    candidate.pinOffsets.map((_, index) => [index + 1, endpointNets.get(`${candidate.name}:${index + 1}`)])
-  );
-  const board = getBoardModel(project.board);
-  if (!board.validatePlacement(candidate, pinNets).valid) return false;
-
-  const candidateHoles = componentPinHoles(candidate);
-  for (const other of components) {
-    if (other.id === candidate.id) continue;
-    const otherHoles = componentPinHoles(other);
-    for (let candidateIndex = 0; candidateIndex < candidateHoles.length; candidateIndex += 1) {
-      const candidateHole = candidateHoles[candidateIndex];
-      const candidateNet = pinNets[candidateIndex + 1];
-      for (let otherIndex = 0; otherIndex < otherHoles.length; otherIndex += 1) {
-        const otherHole = otherHoles[otherIndex];
-        if (samePoint(candidateHole, otherHole)) return false;
-        if (!board.areInternallyConnected(candidateHole, otherHole)) continue;
-        const otherNet = endpointNets.get(`${other.name}:${otherIndex + 1}`);
-        // A brand-new part has no nets yet: allow tentative placement and let
-        // DRC flag conflicts once nets resolve. Only reject proven shorts.
-        if (!candidateNet || !otherNet) continue;
-        if (candidateNet !== otherNet) return false;
-      }
-    }
-  }
-  return true;
 }
 
 function createManualBottomPath(from: [number, number], to: [number, number]): Array<[number, number]> {

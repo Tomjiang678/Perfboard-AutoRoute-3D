@@ -18,30 +18,52 @@ type AutoPlacementWorkerMessage =
 
 export function runAutoPlacementInWorker(
   request: AutoPlacementWorkerRequest,
-  onProgress: (progress: AutoPlacementProgress) => void
+  onProgress: (progress: AutoPlacementProgress) => void,
+  signal?: AbortSignal
 ) {
   return new Promise<AutoPlacementResult>((resolve, reject) => {
     const worker = new Worker(new URL("./autoPlacement.worker.ts", import.meta.url), { type: "module" });
+    let settled = false;
+
+    const cleanup = () => {
+      signal?.removeEventListener("abort", abort);
+      worker.terminate();
+    };
+    const finish = (action: () => void) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      action();
+    };
+    const abort = () => {
+      const error = new Error("Automatic placement was cancelled.");
+      error.name = "AbortError";
+      finish(() => reject(error));
+    };
+
+    if (signal?.aborted) {
+      abort();
+      return;
+    }
+    signal?.addEventListener("abort", abort, { once: true });
 
     worker.onmessage = (event: MessageEvent<AutoPlacementWorkerMessage>) => {
       const message = event.data;
       if (message.type === "progress") {
-        onProgress(message.progress);
+        if (!settled) onProgress(message.progress);
         return;
       }
-      worker.terminate();
-      if (message.type === "result") {
-        resolve(message.result);
-      } else {
-        reject(new Error(message.message));
-      }
+      finish(() => message.type === "result" ? resolve(message.result) : reject(new Error(message.message)));
     };
 
     worker.onerror = (event) => {
-      worker.terminate();
-      reject(new Error(event.message || "自动放置 Worker 启动失败。"));
+      finish(() => reject(new Error(event.message || "Auto-placement worker failed.")));
     };
 
-    worker.postMessage(request);
+    try {
+      worker.postMessage(request);
+    } catch (error) {
+      finish(() => reject(error));
+    }
   });
 }

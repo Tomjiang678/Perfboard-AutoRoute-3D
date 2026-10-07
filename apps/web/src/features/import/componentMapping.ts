@@ -2,7 +2,7 @@ import {
   buildPinOffsetsForComponent,
   getLibraryComponentByKind
 } from "../project/componentLibrary.ts";
-import { UNKNOWN_COMPONENT_LABEL } from "../project/componentTraits.ts";
+import { clampSpacing, UNKNOWN_COMPONENT_LABEL } from "../project/componentTraits.ts";
 import type { ImportState, LibraryComponentKind, ParsedComponent, PlacedComponent } from "../../types/project.ts";
 import { componentMappingRules, fallbackComponentMapping, ignoredComponentRules, normalizeComponentFields } from "./importConfig.ts";
 
@@ -42,9 +42,9 @@ export function createPlacedComponentsFromParsed(
       const base = {
         kind: library.kind,
         pinCount: mapped.pinCount ?? library.pinCount,
-        leadSpacing: mapped.leadSpacing ?? library.leadSpacing,
-        rowSpacing: mapped.rowSpacing ?? library.rowSpacing,
-        sameSidePitch: library.sameSidePitch
+        leadSpacing: clampSpacing(library.kind, mapped.leadSpacing ?? library.leadSpacing, "leadSpacing"),
+        rowSpacing: clampSpacing(library.kind, mapped.rowSpacing ?? library.rowSpacing, "rowSpacing"),
+        sameSidePitch: clampSpacing(library.kind, library.sameSidePitch, "sameSidePitch")
       };
 
       nextComponents.push({

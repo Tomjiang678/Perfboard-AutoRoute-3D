@@ -23,6 +23,7 @@ export interface AutoPlacementProgress {
   percent: number;
   phase: "prepare" | "initial-placement" | "candidate-routing" | "optimization" | "complete";
   detail: string;
+  routeEvaluation?: "full";
 }
 
 export type AutoPlacementProgressReporter = (progress: AutoPlacementProgress) => void;
@@ -60,11 +61,17 @@ interface RouteQuality {
   leadStretchPenalty: number;
 }
 
+interface RouteEvaluationBudget {
+  remaining: number;
+}
+
 type EndpointMap = Map<string, RoutedNetEndpoint[]>;
 type NetGraph = Map<string, Set<string>>;
 
 const ROTATIONS = [0, Math.PI / 2, Math.PI, Math.PI * 1.5];
-const ROUTE_VERIFIED_CANDIDATES = 6;
+const ROUTE_VERIFIED_CANDIDATES = 2;
+const INITIAL_ROUTE_EVALUATION_BUDGET = 24;
+const OPTIMIZATION_ROUTE_EVALUATION_BUDGET = 8;
 const OPTIMIZATION_ROUNDS = 2;
 const OPTIMIZATION_MOVE_CANDIDATES = 5;
 const MAX_OPTIMIZATION_COMPONENTS = 24;
@@ -91,12 +98,14 @@ export function autoPlaceComponents(
 
   const movableIds = new Set(components.filter((component) => !component.mounted).map((component) => component.id));
   const board = boardConfig ?? { width: boardWidth, height: boardHeight };
-  const initial = createInitialPlacement(components, normalizedRegion, boardWidth, boardHeight, endpoints, warnings, constraints, reportProgress, board);
+  const initialRouteBudget = { remaining: INITIAL_ROUTE_EVALUATION_BUDGET };
+  const optimizationRouteBudget = { remaining: OPTIMIZATION_ROUTE_EVALUATION_BUDGET };
+  const initial = createInitialPlacement(components, normalizedRegion, boardWidth, boardHeight, endpoints, warnings, constraints, reportProgress, board, initialRouteBudget);
   if (initial.placedCount === 0) {
     return { components, placedCount: 0, warnings };
   }
 
-  const optimized = optimizePlacement(initial.components, movableIds, normalizedRegion, board, endpoints, constraints, reportProgress);
+  const optimized = optimizePlacement(initial.components, movableIds, normalizedRegion, board, endpoints, constraints, reportProgress, optimizationRouteBudget);
   reportProgress?.({ percent: 100, phase: "complete", detail: "[autoplacement] 自动放置计算完成" });
   return {
     components: optimized,
@@ -114,7 +123,8 @@ function createInitialPlacement(
   warnings: string[],
   constraints: DesignConstraint[],
   reportProgress?: AutoPlacementProgressReporter,
-  boardConfig?: BoardSize
+  boardConfig?: BoardSize,
+  routeBudget: RouteEvaluationBudget = { remaining: INITIAL_ROUTE_EVALUATION_BUDGET }
 ) {
   const endpointMap = buildEndpointMap(endpoints);
   const netGraph = buildNetGraph(endpoints);
@@ -188,7 +198,7 @@ function createInitialPlacement(
       phase: "initial-placement",
       detail: `[autoplacement] 正在为 ${component.name} 生成初始放置候选（${index + 1}/${sortedNormal.length}）`
     });
-    const candidate = findPlacement(component, components, region, boardWidth, boardHeight, occupied, placedAnchors, placedByName, endpointMap, netGraph, endpoints, constraints, reportProgress, percent, board);
+    const candidate = findPlacement(component, components, region, boardWidth, boardHeight, occupied, placedAnchors, placedByName, endpointMap, netGraph, endpoints, constraints, reportProgress, percent, board, true, routeBudget);
     if (!candidate) {
       warnings.push(`${component.name} cannot fit in the selected placement region.`);
       continue;
@@ -226,7 +236,8 @@ function findPlacement(
   reportProgress?: AutoPlacementProgressReporter,
   progressPercent = 25,
   board: BoardSize = { width: boardWidth, height: boardHeight },
-  verifyRoutes = true
+  verifyRoutes = true,
+  routeBudget: RouteEvaluationBudget = { remaining: INITIAL_ROUTE_EVALUATION_BUDGET }
 ): PlacementCandidate | undefined {
   const componentRegion = constrainedRegionFor(component, region, constraints, board);
   const placedAirwires = buildPlacedAirwires(placedByName, endpointMap);
@@ -257,7 +268,11 @@ function findPlacement(
     .map((candidate) => placedByName.get(candidate.name) ?? candidate);
   const partialEndpoints = endpoints.filter((endpoint) => refs.has(endpoint.ref));
 
-  let best = shortlist[0];
+  const verifiable = shortlist.slice(0, routeBudget.remaining);
+  if (verifiable.length === 0) return shortlist[0];
+
+  let best = verifiable[0];
+  routeBudget.remaining -= 1;
   reportProgress?.({
     percent: progressPercent,
     phase: "candidate-routing",
@@ -272,7 +287,8 @@ function findPlacement(
     `${component.name} 候选 1/${shortlist.length}`
   );
 
-  shortlist.slice(1).forEach((candidate, index) => {
+  verifiable.slice(1).forEach((candidate, index) => {
+    routeBudget.remaining -= 1;
     reportProgress?.({
       percent: progressPercent,
       phase: "candidate-routing",
@@ -341,7 +357,8 @@ function optimizePlacement(
   board: BoardSize,
   endpoints: RoutedNetEndpoint[],
   constraints: DesignConstraint[],
-  reportProgress?: AutoPlacementProgressReporter
+  reportProgress: AutoPlacementProgressReporter | undefined,
+  routeBudget: RouteEvaluationBudget
 ) {
   const movable = components.filter((component) => movableIds.has(component.id)).slice(0, MAX_OPTIMIZATION_COMPONENTS);
   if (movable.length === 0 || endpoints.length === 0) {
@@ -352,6 +369,7 @@ function optimizePlacement(
   reportProgress?.({ percent: 52, phase: "optimization", detail: "[autoplacement] 正在评估初始整板布局" });
   let bestQuality = routeQualityForComponents(best, endpoints, board, reportProgress, 52, "初始整板布局");
 
+  routeBudget.remaining -= 1;
   for (let round = 0; round < OPTIMIZATION_ROUNDS; round += 1) {
     let improved = false;
     const focused = focusComponents(best, movableIds, bestQuality, endpoints);
@@ -368,8 +386,12 @@ function optimizePlacement(
         phase: "optimization",
         detail: `[autoplacement] 正在优化 ${component.name}（第 ${round + 1}/${OPTIMIZATION_ROUNDS} 轮）`
       });
-      const trials = generateLocalCandidates(best, component, movableIds, region, board, endpoints, constraints);
-      for (const [trialIndex, trial] of trials.entries()) {
+      const trials = generateLocalCandidates(best, component, movableIds, region, board, endpoints, constraints)
+        .map((trial) => ({ trial, estimate: estimateRouteLength(trial, endpoints) }))
+        .sort((a, b) => a.estimate - b.estimate)
+        .slice(0, routeBudget.remaining);
+      for (const [trialIndex, { trial }] of trials.entries()) {
+        routeBudget.remaining -= 1;
         const context = `${component.name} 优化候选 ${trialIndex + 1}/${trials.length}，第 ${round + 1}/${OPTIMIZATION_ROUNDS} 轮`;
         reportProgress?.({ percent, phase: "candidate-routing", detail: `[autoplacement] 正在用完整布线评估 ${context}` });
         const quality = routeQualityForComponents(trial, endpoints, board, reportProgress, percent, context);
@@ -385,8 +407,8 @@ function optimizePlacement(
       }
     }
 
-    if (!improved) {
-      const swap = findImprovingSwap(best, movableIds, region, board, endpoints, bestQuality, constraints, reportProgress, 95);
+    if (!improved && routeBudget.remaining > 0) {
+      const swap = findImprovingSwap(best, movableIds, region, board, endpoints, bestQuality, constraints, reportProgress, 95, routeBudget);
       if (swap) {
         best = swap.components;
         bestQuality = swap.quality;
@@ -448,12 +470,14 @@ function findImprovingSwap(
   endpoints: RoutedNetEndpoint[],
   currentQuality: RouteQuality,
   constraints: DesignConstraint[],
-  reportProgress?: AutoPlacementProgressReporter,
-  progressPercent = 95
+  reportProgress: AutoPlacementProgressReporter | undefined,
+  progressPercent: number,
+  routeBudget: RouteEvaluationBudget
 ) {
   const movable = components.filter((component) => movableIds.has(component.id)).slice(0, 12);
   for (let a = 0; a < movable.length; a += 1) {
     for (let b = a + 1; b < movable.length; b += 1) {
+      if (routeBudget.remaining <= 0) return undefined;
       const first = movable[a];
       const second = movable[b];
       const swapped = components.map((component) => {
@@ -471,6 +495,7 @@ function findImprovingSwap(
       const context = `${first.name} 与 ${second.name} 交换位置`;
       reportProgress?.({ percent: progressPercent, phase: "candidate-routing", detail: `[autoplacement] 正在用完整布线评估 ${context}` });
       const quality = routeQualityForComponents(swapped, endpoints, board, reportProgress, progressPercent, context);
+      routeBudget.remaining -= 1;
       if (compareQuality(quality, currentQuality) < 0) {
         return { components: swapped, quality };
       }
@@ -488,6 +513,12 @@ function routeQualityForComponents(
   context = "放置候选"
 ): RouteQuality {
   const endpoints = endpointsForComponents(endpointTemplates, components);
+  reportProgress?.({
+    percent: progressPercent,
+    phase: "candidate-routing",
+    routeEvaluation: "full",
+    detail: `[autoplacement] 正在完整评估布线质量：${context}`
+  });
   const routing = autoRouteBoard(board, endpoints, components, [], [], (routingProgress) => {
     const stageLabels = {
       round: "准备布线轮次",
@@ -531,6 +562,37 @@ function compareQuality(a: RouteQuality, b: RouteQuality) {
     a.leadStretchPenalty - b.leadStretchPenalty ||
     a.airwireCrossings - b.airwireCrossings
   );
+}
+
+function estimateRouteLength(components: PlacedComponent[], endpointTemplates: RoutedNetEndpoint[]) {
+  const byNet = new Map<string, Array<[number, number]>>();
+  endpointsForComponents(endpointTemplates, components).forEach((endpoint) => {
+    const points = byNet.get(endpoint.net) ?? [];
+    points.push(endpoint.grid);
+    byNet.set(endpoint.net, points);
+  });
+
+  let estimate = 0;
+  byNet.forEach((points) => {
+    const remaining = points.slice(1);
+    const connected = points.length > 0 ? [points[0]] : [];
+    while (remaining.length > 0 && connected.length > 0) {
+      let nearestIndex = 0;
+      let nearestDistance = Number.POSITIVE_INFINITY;
+      for (let index = 0; index < remaining.length; index += 1) {
+        for (const point of connected) {
+          const distance = manhattan(point, remaining[index]);
+          if (distance < nearestDistance) {
+            nearestDistance = distance;
+            nearestIndex = index;
+          }
+        }
+      }
+      estimate += nearestDistance;
+      connected.push(remaining.splice(nearestIndex, 1)[0]);
+    }
+  });
+  return estimate;
 }
 
 function generatePlacementPoseCandidates(component: PlacedComponent, includeDiagonal: boolean): PlacedComponent[] {

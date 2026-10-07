@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { autoPlaceComponents } from "../src/features/layout/autoPlacement.ts";
+import { autoPlaceComponents, type AutoPlacementProgress } from "../src/features/layout/autoPlacement.ts";
 import { resolveNetEndpoints } from "../src/features/import/netEndpointResolver.ts";
 import { createBreadboardDefinition } from "../src/features/board/breadboard.ts";
 import { createBoardModel, normalizeBoardDefinition } from "../src/features/board/factory.ts";
@@ -10,16 +10,24 @@ import { parseKicadNetlist } from "../src/features/import/kicadNetlistParser.ts"
 import { createPlacedComponentsFromParsed } from "../src/features/import/componentMapping.ts";
 import type { DesignConstraint, ImportState, PlacedComponent } from "../src/types/project.ts";
 
-function pipeline(seed: number, boardWidth: number, boardHeight: number, region: { x: number; y: number; width: number; height: number }, constraints: DesignConstraint[] = []) {
+function pipeline(seed: number, boardWidth: number, boardHeight: number, region: { x: number; y: number; width: number; height: number }, constraints: DesignConstraint[] = [], reportProgress?: (progress: AutoPlacementProgress) => void) {
   const board = createBreadboardDefinition(boardHeight, 1);
   const circuit = generateCircuit(seed);
   const bundle = parseKicadNetlist(circuit.text, `s${seed}.net`);
   const importState: ImportState = { components: bundle.components, nets: bundle.nets, warnings: bundle.warnings, pinInfo: bundle.pinInfo };
   const components = createPlacedComponentsFromParsed(importState, [], boardWidth);
   const endpoints = resolveNetEndpoints(importState, components);
-  const placed = autoPlaceComponents(components, region, boardWidth, boardHeight, endpoints, constraints, undefined, board);
+  const placed = autoPlaceComponents(components, region, boardWidth, boardHeight, endpoints, constraints, reportProgress, board);
   return { board, importState, placed, endpoints };
 }
+
+test("auto-placement keeps full route evaluations within its fixed budget", () => {
+  let fullRouteEvaluations = 0;
+  pipeline(1, 18, 40, { x: 0, y: 0, width: 18, height: 40 }, [], (progress) => {
+    if (progress.routeEvaluation === "full") fullRouteEvaluations += 1;
+  });
+  assert.ok(fullRouteEvaluations <= 32, `used ${fullRouteEvaluations} full route evaluations`);
+});
 
 function keepout(region: { x: number; y: number; width: number; height: number }): DesignConstraint {
   return {

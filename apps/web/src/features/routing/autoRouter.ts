@@ -226,7 +226,6 @@ export function autoRouteBoard(
     const result = buildRoutingStateFromRecords(records, plans, failedNets);
     const validation = validateRoutingResult(board, result, endpoints, components);
     result.drc = validation.drc;
-    result.warnings = [...result.warnings, ...validation.warnings];
     result.diagnostics = { failedNetDetails: validation.failedNetDetails };
     validation.failedNetDetails.forEach((detail) => failedNets.add(detail.net));
     validation.drc.errors.forEach((issue) => {
@@ -576,7 +575,6 @@ function autoRouteJumperOnlyBoard(
   result.drc = validation.drc;
   result.diagnostics = { failedNetDetails: validation.failedNetDetails };
   result.failedNets = validation.failedNetDetails.map((detail) => detail.net);
-  result.warnings = [...warnings, ...validation.warnings];
   return result;
 }
 
