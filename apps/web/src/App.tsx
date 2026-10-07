@@ -714,9 +714,23 @@ export function App() {
     rowSpacing?: number;
     sameSidePitch?: number;
   }) {
-    if (selectedComponentId) updateComponent(selectedComponentId, (component) => {
+    if (!selectedComponentId) return;
+    commitProject((current) => {
+      const component = current.components.find((item) => item.id === selectedComponentId);
+      if (!component) return current;
       const next = { ...component, ...patch };
-      return { ...next, pinOffsets: buildPinOffsetsForComponent(next) };
+      const updated = { ...next, pinOffsets: buildPinOffsetsForComponent(next) };
+      if (!component.mounted) {
+        // Floating parts (not yet placed) accept any property edit; placement
+        // rules apply when they are dropped on the board.
+        return { ...current, components: current.components.map((item) => item.id === component.id ? updated : item) };
+      }
+      if (isProjectPlacementValid(current, updated)) {
+        return { ...current, components: current.components.map((item) => item.id === component.id ? updated : item) };
+      }
+      // The new geometry no longer fits at the current spot: pop the part off
+      // the board (keep its position) so it can be re-placed manually.
+      return { ...current, components: current.components.map((item) => item.id === component.id ? { ...updated, mounted: false } : item) };
     });
   }
 
