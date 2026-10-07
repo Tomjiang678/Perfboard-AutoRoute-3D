@@ -3,6 +3,7 @@ import { activeConstraints } from "../constraints/model.ts";
 import { autoRouteBoard } from "../routing/autoRouter.ts";
 import { getBoardModel } from "../board/factory.ts";
 import { componentPinHoles, isPowerNet, rotateGridOffset } from "../board/placement.ts";
+import type { BoardModel, ElectricalNodeId } from "../board/types.ts";
 import { key, manhattan } from "../routing/routingGeometry.ts";
 import { isBendableTwoPin, preferredLeadSpan, spacingLimits } from "../project/componentTraits.ts";
 
@@ -65,6 +66,29 @@ interface RouteEvaluationBudget {
   remaining: number;
 }
 
+/**
+ * Inputs that stay constant while scoring every candidate of one component.
+ * The net/node index is built once per search and answers "does this net
+ * already own this electrical node?" without rescanning placed components.
+ */
+interface CrowdingAnchor {
+  position: [number, number];
+  /** Shares a net with the component being placed: allowed to sit closer. */
+  netPartner: boolean;
+}
+
+interface PlacementScoreContext {
+  region: PlacementRegion;
+  crowdingAnchors: CrowdingAnchor[];
+  placedByName: Map<string, PlacedComponent>;
+  endpointMap: EndpointMap;
+  netGraph: NetGraph;
+  placedAirwires: Airwire[];
+  constraints: DesignConstraint[];
+  boardModel: BoardModel;
+  netNodes: Map<string, Set<ElectricalNodeId>>;
+}
+
 type EndpointMap = Map<string, RoutedNetEndpoint[]>;
 type NetGraph = Map<string, Set<string>>;
 
@@ -77,6 +101,17 @@ const OPTIMIZATION_MOVE_CANDIDATES = 5;
 const MAX_OPTIMIZATION_COMPONENTS = 24;
 const DIAGONAL_SEARCH_RADIUS = 4;
 const DIAGONAL_LOCAL_CANDIDATES = 10;
+/**
+ * Breadboard jumper economics: a pin that joins an electrical node already
+ * owned by its own net (the same 5-hole row or power rail) needs no jumper at
+ * all, so reusing a node is rewarded strongly enough to beat airwire-length
+ * and crossing terms.
+ */
+const SHARED_NODE_REWARD = 260;
+/** Preferred clearance between unrelated parts, in grid cells. */
+const MIN_COMPONENT_SPACING = 4;
+/** Same-net partners may sit closer, so their crowding weight is reduced. */
+const NET_PARTNER_CROWDING_FACTOR = 0.25;
 
 export function autoPlaceComponents(
   components: PlacedComponent[],
@@ -133,13 +168,11 @@ function createInitialPlacement(
   const occupied = new Set<string>();
   const placedByName = new Map<string, PlacedComponent>();
   const placedPositions = new Map<string, PlacementCandidate>();
-  const placedAnchors: Array<[number, number]> = [];
   const board: BoardSize = boardConfig ?? { width: boardWidth, height: boardHeight };
 
   // Register locked (already placed) components as obstacles
   lockedComponents.forEach((component) => {
     placedByName.set(component.name, component);
-    placedAnchors.push(component.position);
     getComponentOccupiedCells(component).forEach(([x, y]) => occupied.add(key(x, y)));
   });
 
@@ -167,7 +200,7 @@ function createInitialPlacement(
       warnings.push(`${component.name} 的约束区域为空，无法落位。`);
       continue;
     }
-    const candidate = findPlacement(component, components, effectiveRegion, boardWidth, boardHeight, occupied, placedAnchors, placedByName, endpointMap, netGraph, endpoints, constraints, undefined, 10, board, false);
+    const candidate = findPlacement(component, components, effectiveRegion, boardWidth, boardHeight, occupied, placedByName, endpointMap, netGraph, endpoints, constraints, undefined, 10, board, false);
     if (!candidate) {
       warnings.push(`${component.name} 无法满足约束条件，无法落位。`);
       continue;
@@ -175,7 +208,6 @@ function createInitialPlacement(
     const placedComponent = { ...candidate.component, mounted: true };
     placedPositions.set(component.id, candidate);
     placedByName.set(component.name, placedComponent);
-    placedAnchors.push(candidate.position);
     getComponentOccupiedCells(placedComponent).forEach(([x, y]) => occupied.add(key(x, y)));
   }
 
@@ -198,7 +230,7 @@ function createInitialPlacement(
       phase: "initial-placement",
       detail: `[autoplacement] 正在为 ${component.name} 生成初始放置候选（${index + 1}/${sortedNormal.length}）`
     });
-    const candidate = findPlacement(component, components, region, boardWidth, boardHeight, occupied, placedAnchors, placedByName, endpointMap, netGraph, endpoints, constraints, reportProgress, percent, board, true, routeBudget);
+    const candidate = findPlacement(component, components, region, boardWidth, boardHeight, occupied, placedByName, endpointMap, netGraph, endpoints, constraints, reportProgress, percent, board, true, routeBudget);
     if (!candidate) {
       warnings.push(`${component.name} cannot fit in the selected placement region.`);
       continue;
@@ -207,7 +239,6 @@ function createInitialPlacement(
     const placedComponent = { ...candidate.component, mounted: true };
     placedPositions.set(component.id, candidate);
     placedByName.set(component.name, placedComponent);
-    placedAnchors.push(candidate.position);
     getComponentOccupiedCells(placedComponent).forEach(([x, y]) => occupied.add(key(x, y)));
   }
 
@@ -227,7 +258,6 @@ function findPlacement(
   boardWidth: number,
   boardHeight: number,
   occupied: Set<string>,
-  placedAnchors: Array<[number, number]>,
   placedByName: Map<string, PlacedComponent>,
   endpointMap: EndpointMap,
   netGraph: NetGraph,
@@ -241,6 +271,7 @@ function findPlacement(
 ): PlacementCandidate | undefined {
   const componentRegion = constrainedRegionFor(component, region, constraints, board);
   const placedAirwires = buildPlacedAirwires(placedByName, endpointMap);
+  const scoreContext = createScoreContext({ component, region, placedByName, endpointMap, netGraph, placedAirwires, constraints, board });
   const candidates = generatePlacementPoseCandidates(component, true)
     .filter((posed) => matchesOrientationConstraint(posed, constraints))
     .flatMap((posed) => {
@@ -252,7 +283,7 @@ function findPlacement(
         position,
         rotation: rotated.rotation,
         component: { ...rotated, position },
-        airwireScore: scorePlacement(position, rotated, placedAnchors, region, placedByName, endpointMap, netGraph, placedAirwires, constraints)
+        airwireScore: scorePlacement(position, rotated, scoreContext)
       }));
   }).sort((a, b) => a.airwireScore - b.airwireScore);
 
@@ -312,32 +343,110 @@ function findPlacement(
   return best;
 }
 
-function scorePlacement(
-  position: [number, number],
-  component: PlacedComponent,
-  placedAnchors: Array<[number, number]>,
-  region: PlacementRegion,
-  placedByName: Map<string, PlacedComponent>,
-  endpointMap: EndpointMap,
-  netGraph: NetGraph,
-  placedAirwires: Airwire[],
-  constraints: DesignConstraint[] = []
-) {
-  const center: [number, number] = [region.x + region.width / 2, region.y + region.height / 2];
+function createScoreContext(params: {
+  component: PlacedComponent;
+  region: PlacementRegion;
+  placedByName: Map<string, PlacedComponent>;
+  endpointMap: EndpointMap;
+  netGraph: NetGraph;
+  placedAirwires: Airwire[];
+  constraints: DesignConstraint[];
+  board: BoardSize;
+}): PlacementScoreContext {
+  const boardModel = getBoardModel(params.board);
+  return {
+    region: params.region,
+    crowdingAnchors: buildCrowdingAnchors(params.component, params.placedByName, params.endpointMap),
+    placedByName: params.placedByName,
+    endpointMap: params.endpointMap,
+    netGraph: params.netGraph,
+    placedAirwires: params.placedAirwires,
+    constraints: params.constraints,
+    boardModel,
+    netNodes: buildNetNodeIndex(params.placedByName, params.endpointMap, boardModel)
+  };
+}
+
+/**
+ * Anti-crowding anchors. Components that share a net with the candidate are
+ * flagged so the spacing penalty can be softened instead of vetoing the
+ * "sit on the same row" placements this score is meant to encourage.
+ */
+function buildCrowdingAnchors(component: PlacedComponent, placedByName: Map<string, PlacedComponent>, endpointMap: EndpointMap): CrowdingAnchor[] {
+  const componentNets = new Set((endpointMap.get(component.name) ?? []).map((endpoint) => endpoint.net));
+  const anchors: CrowdingAnchor[] = [];
+  placedByName.forEach((other) => {
+    const netPartner = componentNets.size > 0
+      && (endpointMap.get(other.name) ?? []).some((endpoint) => componentNets.has(endpoint.net));
+    anchors.push({ position: other.position, netPartner });
+  });
+  return anchors;
+}
+
+/** net -> electrical nodes already owned by a same-net pin (breadboards only). */
+function buildNetNodeIndex(placedByName: Map<string, PlacedComponent>, endpointMap: EndpointMap, boardModel: BoardModel) {
+  const netNodes = new Map<string, Set<ElectricalNodeId>>();
+  if (!boardModel.capabilities.hasInternalConnections) {
+    return netNodes;
+  }
+  placedByName.forEach((other) => {
+    const nets = pinNetsForComponent(other, endpointMap);
+    componentPinHoles(other).forEach((hole, pinIndex) => {
+      const net = nets[pinIndex + 1];
+      if (!net) {
+        return;
+      }
+      const node = boardModel.getElectricalNode(hole);
+      if (!node) {
+        return;
+      }
+      const nodes = netNodes.get(net) ?? new Set<ElectricalNodeId>();
+      nodes.add(node);
+      netNodes.set(net, nodes);
+    });
+  });
+  return netNodes;
+}
+
+/** Candidate pins that join an existing node of their own net need no jumper. */
+function countSameNetNodeReuse(placed: PlacedComponent, context: PlacementScoreContext) {
+  if (context.netNodes.size === 0) {
+    return 0;
+  }
+  const nets = pinNetsForComponent(placed, context.endpointMap);
+  return componentPinHoles(placed).reduce((reused, hole, pinIndex) => {
+    const net = nets[pinIndex + 1];
+    if (!net) {
+      return reused;
+    }
+    const node = context.boardModel.getElectricalNode(hole);
+    return node && context.netNodes.get(net)?.has(node) ? reused + 1 : reused;
+  }, 0);
+}
+
+function scorePlacement(position: [number, number], component: PlacedComponent, context: PlacementScoreContext) {
+  const center: [number, number] = [context.region.x + context.region.width / 2, context.region.y + context.region.height / 2];
   const centerDistance = distance(position, center);
   const borderDistance = Math.min(
-    position[0] - region.x,
-    region.x + region.width - 1 - position[0],
-    position[1] - region.y,
-    region.y + region.height - 1 - position[1]
+    position[0] - context.region.x,
+    context.region.x + context.region.width - 1 - position[0],
+    position[1] - context.region.y,
+    context.region.y + context.region.height - 1 - position[1]
   );
-  const network = scoreNetworkPlacement(position, component, placedByName, endpointMap);
-  const nearestDistance = placedAnchors.length > 0 ? Math.min(...placedAnchors.map((anchor) => distance(position, anchor))) : Number.POSITIVE_INFINITY;
-  const minimumSpacing = 4;
-  const crowdingPenalty = nearestDistance < minimumSpacing ? (minimumSpacing - nearestDistance) ** 2 * 80 : 0;
+  const placed = { ...component, position };
+  const network = scoreNetworkPlacement(placed, context);
+  const crowdingPenalty = context.crowdingAnchors.reduce((penalty, anchor) => {
+    const gap = distance(position, anchor.position);
+    if (gap >= MIN_COMPONENT_SPACING) {
+      return penalty;
+    }
+    const weight = anchor.netPartner ? NET_PARTNER_CROWDING_FACTOR : 1;
+    return penalty + (MIN_COMPONENT_SPACING - gap) ** 2 * 80 * weight;
+  }, 0);
   const edgePenalty = borderDistance <= 0 ? 12 : borderDistance <= 1 ? 4 : 0;
-  const crossingPenalty = countCandidateCrossings(network.candidateAirwires, placedAirwires);
-  const designConstraintPenalty = placementConstraintPenalty({ ...component, position }, placedByName, constraints);
+  const crossingPenalty = countCandidateCrossings(network.candidateAirwires, context.placedAirwires);
+  const designConstraintPenalty = placementConstraintPenalty(placed, context.placedByName, context.constraints);
+  const nodeReuse = countSameNetNodeReuse(placed, context);
 
   return (
     network.connectedLength * 6 +
@@ -345,7 +454,8 @@ function scorePlacement(
     crossingPenalty * 240 +
     crowdingPenalty +
     edgePenalty -
-    connectionDegree(component.name, netGraph) * 8 +
+    nodeReuse * SHARED_NODE_REWARD -
+    connectionDegree(component.name, context.netGraph) * 8 +
     designConstraintPenalty
   );
 }
@@ -438,8 +548,8 @@ function generateLocalCandidates(
   const endpointMap = buildEndpointMap(endpoints);
   const netGraph = buildNetGraph(endpoints);
   const placedByName = new Map(components.filter((candidate) => candidate.id !== component.id).map((candidate) => [candidate.name, candidate]));
-  const placedAnchors = components.filter((candidate) => candidate.id !== component.id).map((candidate) => candidate.position);
   const placedAirwires = buildPlacedAirwires(placedByName, endpointMap);
+  const scoreContext = createScoreContext({ component, region, placedByName, endpointMap, netGraph, placedAirwires, constraints, board });
   const rotationTrials = generatePlacementPoseCandidates(component, false)
     .filter((trial) => matchesOrientationConstraint(trial, constraints) && canPlaceAt(trial, trial.position, componentRegion, board.width, board.height, occupiedWithoutSelf, constraints, board, endpointMap, [...placedByName.values()]))
     .map((trial) => replaceComponent(components, trial));
@@ -450,13 +560,13 @@ function generateLocalCandidates(
       .filter((position) => matchesOrientationConstraint(rotated, constraints) && canPlaceAt(rotated, position, componentRegion, board.width, board.height, occupiedWithoutSelf, constraints, board, endpointMap, [...placedByName.values()]))
       .map((position) => ({
         component: { ...rotated, position },
-        score: scorePlacement(position, rotated, placedAnchors, region, placedByName, endpointMap, netGraph, placedAirwires, constraints)
+        score: scorePlacement(position, rotated, scoreContext)
       }));
   })
     .sort((a, b) => a.score - b.score)
     .slice(0, OPTIMIZATION_MOVE_CANDIDATES)
     .map((trial) => replaceComponent(components, trial.component));
-  const diagonalTrials = generateDiagonalCandidates(component, componentRegion, board, occupiedWithoutSelf, placedByName, endpointMap, netGraph, placedAirwires, placedAnchors, constraints)
+  const diagonalTrials = generateDiagonalCandidates(component, componentRegion, board, occupiedWithoutSelf, placedByName, endpointMap, netGraph, placedAirwires, constraints)
     .map((trial) => replaceComponent(components, trial.component));
 
   return [...rotationTrials, ...moveTrials, ...diagonalTrials].filter((trial) => isValidPlacement(trial, movableIds, region, board, constraints, endpoints));
@@ -620,13 +730,13 @@ function generateDiagonalCandidates(
   endpointMap: EndpointMap,
   netGraph: NetGraph,
   placedAirwires: Airwire[],
-  placedAnchors: Array<[number, number]>,
   constraints: DesignConstraint[]
 ) {
   if (!isStretchableTwoPin(component)) {
     return [];
   }
 
+  const scoreContext = createScoreContext({ component, region, placedByName, endpointMap, netGraph, placedAirwires, constraints, board });
   return generatePlacementPoseCandidates(component, true)
     .filter((candidate) => isDiagonalPlacement(candidate))
     .flatMap((candidate) => {
@@ -635,7 +745,7 @@ function generateDiagonalCandidates(
         .filter((position) => matchesOrientationConstraint(candidate, constraints) && canPlaceAt(candidate, position, region, board.width, board.height, occupiedWithoutSelf, constraints, board, endpointMap, [...placedByName.values()]))
         .map((position) => ({
           component: { ...candidate, position },
-          score: scorePlacement(position, candidate, placedAnchors, region, placedByName, endpointMap, netGraph, placedAirwires, constraints)
+          score: scorePlacement(position, candidate, scoreContext)
         }));
     })
     .sort((a, b) => a.score - b.score)
@@ -731,34 +841,34 @@ function nearbyPositions(center: [number, number], radius: number) {
   return positions.sort((a, b) => manhattan(a, center) - manhattan(b, center));
 }
 
-function scoreNetworkPlacement(
-  position: [number, number],
-  component: PlacedComponent,
-  placedByName: Map<string, PlacedComponent>,
-  endpointMap: EndpointMap
-) {
+function scoreNetworkPlacement(placed: PlacedComponent, context: PlacementScoreContext) {
   const candidateAirwires: Airwire[] = [];
   let connectedLength = 0;
   let unplacedNeighborCount = 0;
-  const componentEndpoints = endpointMap.get(component.name) ?? [];
-  const endpointsByNet = endpointsGroupedByNet(endpointMap);
+  const componentEndpoints = context.endpointMap.get(placed.name) ?? [];
+  const endpointsByNet = endpointsGroupedByNet(context.endpointMap);
 
   componentEndpoints.forEach((endpoint) => {
     if (isPowerNet(endpoint.net)) {
       return;
     }
-    const from = pinGridAt(component, position, endpoint.pin);
+    const from = pinGridAt(placed, placed.position, endpoint.pin);
     const netEndpoints = endpointsByNet.get(endpoint.net) ?? [];
     netEndpoints.forEach((other) => {
-      if (other.ref === component.name) {
+      if (other.ref === placed.name) {
         return;
       }
-      const otherComponent = placedByName.get(other.ref);
+      const otherComponent = context.placedByName.get(other.ref);
       if (!otherComponent) {
         unplacedNeighborCount += 0.25;
         return;
       }
       const to = pinGridAt(otherComponent, otherComponent.position, other.pin);
+      // Same electrical node: the board already connects them, so this pair
+      // costs neither wire length nor a crossing.
+      if (context.boardModel.areInternallyConnected(from, to)) {
+        return;
+      }
       connectedLength += manhattan(from, to);
       candidateAirwires.push({ from, to, net: endpoint.net });
     });
