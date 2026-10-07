@@ -250,8 +250,11 @@ export function App() {
 
   function handleRouteEditPoint(point: [number, number]) {
     if (pendingComponent) {
-      handlePlaceComponent(pendingComponent, point);
-      setPendingComponent(undefined);
+      // Keep the picked component pending when the spot is invalid so the
+      // user can click another hole instead of the pick silently vanishing.
+      if (handlePlaceComponent(pendingComponent, point)) {
+        setPendingComponent(undefined);
+      }
       return;
     }
     if (routeEditMode === "select") {
@@ -436,33 +439,35 @@ export function App() {
 
   function handlePlaceComponent(component: LibraryComponentDefinition, position: [number, number]) {
     const componentId = crypto.randomUUID();
+    if (!project) return false;
+    const placedComponent: PlacedComponent = {
+      id: componentId,
+      kind: component.kind,
+      label: component.label,
+      name: makeDefaultComponentName(component.label, project.components.length + 1),
+      value: "",
+      pinCount: component.pinCount,
+      leadSpacing: component.leadSpacing,
+      rowSpacing: component.rowSpacing,
+      sameSidePitch: component.sameSidePitch,
+      pinHeaderRows: component.pinHeaderRows,
+      pinHeaderColumns: component.pinHeaderColumns,
+      pinOffsets: component.pinOffsets,
+      position,
+      rotation: 0,
+      mounted: false
+    };
+    if (!isProjectPlacementValid(project, placedComponent)) {
+      return false;
+    }
     commitProject((current) => {
-      const placedComponent: PlacedComponent = {
-        id: componentId,
-        kind: component.kind,
-        label: component.label,
-        name: makeDefaultComponentName(component.label, current.components.length + 1),
-        value: "",
-        pinCount: component.pinCount,
-        leadSpacing: component.leadSpacing,
-        rowSpacing: component.rowSpacing,
-        sameSidePitch: component.sameSidePitch,
-        pinHeaderRows: component.pinHeaderRows,
-        pinHeaderColumns: component.pinHeaderColumns,
-        pinOffsets: component.pinOffsets,
-        position,
-        rotation: 0,
-        mounted: false
-      };
-      if (!isProjectPlacementValid(current, placedComponent)) {
-        return current;
-      }
       setSelectedComponentId(componentId);
       return {
         ...current,
         components: [...current.components, placedComponent]
       };
     });
+    return true;
   }
 
   function handleSelectComponent(componentId: string | undefined) {
@@ -918,7 +923,10 @@ function isProjectPlacementValid(project: PerfboardProject, candidate: PlacedCom
         if (samePoint(candidateHole, otherHole)) return false;
         if (!board.areInternallyConnected(candidateHole, otherHole)) continue;
         const otherNet = endpointNets.get(`${other.name}:${otherIndex + 1}`);
-        if (!candidateNet || !otherNet || candidateNet !== otherNet) return false;
+        // A brand-new part has no nets yet: allow tentative placement and let
+        // DRC flag conflicts once nets resolve. Only reject proven shorts.
+        if (!candidateNet || !otherNet) continue;
+        if (candidateNet !== otherNet) return false;
       }
     }
   }
