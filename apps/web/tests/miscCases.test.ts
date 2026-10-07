@@ -142,7 +142,53 @@ test("activeConstraints filters disabled and inactive entries", () => {
   assert.equal(activeConstraints([constraint, disabled, inactive]).length, 1);
 });
 
-/* ── pin resolver misc ────────────────────────────────────────────────── */
+/* ── spacing limits ───────────────────────────────────────────────────── */
+
+import { clampSpacing, spacingLimits } from "../src/features/project/componentTraits.ts";
+
+for (const [kind, min, max] of [
+  ["resistor", 2, 7],
+  ["inductor", 2, 7],
+  ["diode", 2, 6],
+  ["led", 1, 5],
+  ["radial_capacitor", 1, 4],
+  ["electrolytic_capacitor", 1, 4],
+  ["crystal", 2, 4],
+  ["fuse", 4, 8],
+  ["buzzer", 2, 4],
+  ["terminal_block", 1, 3],
+  ["to220", 1, 2],
+  ["to247", 2, 3],
+  ["bridge_rectifier", 1, 2]
+] as Array<[PlacedComponent["kind"], number, number]>) {
+  test(`lead spacing limits for ${kind} are ${min}..${max}`, () => {
+    const limits = spacingLimits(kind).leadSpacing;
+    assert.equal(limits.min, min);
+    assert.equal(limits.max, max);
+  });
+}
+
+test("DIP row spacing limits are 2..6 with pitch 1..2", () => {
+  assert.deepEqual(spacingLimits("dip").rowSpacing, { min: 2, max: 6 });
+  assert.deepEqual(spacingLimits("dip").sameSidePitch, { min: 1, max: 2 });
+});
+
+test("fixed-pitch packages lock spacing to 1..1", () => {
+  for (const kind of ["to92", "potentiometer", "slide_switch"] as PlacedComponent["kind"][]) {
+    assert.deepEqual(spacingLimits(kind).leadSpacing, { min: 1, max: 1 });
+    assert.deepEqual(spacingLimits(kind).rowSpacing, { min: 1, max: 1 });
+    assert.deepEqual(spacingLimits(kind).sameSidePitch, { min: 1, max: 1 });
+  }
+});
+
+test("clampSpacing clamps out-of-range values per kind", () => {
+  assert.equal(clampSpacing("resistor", 20, "leadSpacing"), 7);
+  assert.equal(clampSpacing("resistor", 0, "leadSpacing"), 2);
+  assert.equal(clampSpacing("fuse", 3, "leadSpacing"), 4);
+  assert.equal(clampSpacing("to92", 9, "leadSpacing"), 1);
+  assert.equal(clampSpacing("dip", 1, "rowSpacing"), 2);
+  assert.equal(clampSpacing("dip", 9, "sameSidePitch"), 2);
+});
 
 test("pinInfo power type is preserved for enrichment consumers", () => {
   const state: ImportState = {

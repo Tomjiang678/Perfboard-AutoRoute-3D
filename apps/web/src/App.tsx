@@ -26,6 +26,7 @@ import { removeRoutesToComponent } from "./features/routing/removeComponentRoute
 import { createProject } from "./features/project/projectFactory.ts";
 import { getBoardModel, normalizeBoardDefinition } from "./features/board/factory.ts";
 import { componentPinHoles } from "./features/board/placement.ts";
+import { clampSpacing } from "./features/project/componentTraits.ts";
 import type { PinNetAssignments } from "./features/board/types.ts";
 import type { BoardSize, DragMoveModifier, ImportState, KeyboardShortcuts, PerfboardProject, PlacedComponent, RoutedNetEndpoint, ThemeMode } from "./types/project.ts";
 import type { SelectedPin } from "./components/Perfboard3DViewport.tsx";
@@ -718,7 +719,13 @@ export function App() {
     commitProject((current) => {
       const component = current.components.find((item) => item.id === selectedComponentId);
       if (!component) return current;
-      const next = { ...component, ...patch };
+      const next = {
+        ...component,
+        ...patch,
+        leadSpacing: patch.leadSpacing !== undefined ? clampSpacing(component.kind, patch.leadSpacing, "leadSpacing") : component.leadSpacing,
+        rowSpacing: patch.rowSpacing !== undefined ? clampSpacing(component.kind, patch.rowSpacing, "rowSpacing") : component.rowSpacing,
+        sameSidePitch: patch.sameSidePitch !== undefined ? clampSpacing(component.kind, patch.sameSidePitch, "sameSidePitch") : component.sameSidePitch
+      };
       const updated = { ...next, pinOffsets: buildPinOffsetsForComponent(next) };
       if (!component.mounted) {
         // Floating parts (not yet placed) accept any property edit; placement

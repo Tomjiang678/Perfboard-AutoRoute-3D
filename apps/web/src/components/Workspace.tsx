@@ -2,6 +2,7 @@ import { Layers3 } from "lucide-react";
 import type { LibraryComponentDefinition } from "../features/project/componentLibrary.ts";
 import type { BoardSize, DragMoveModifier, PerfboardProject, RoutedNetEndpoint, ThemeMode } from "../types/project.ts";
 import { getBoardModel } from "../features/board/factory.ts";
+import { spacingLimits } from "../features/project/componentTraits.ts";
 import { Perfboard3DViewport, type SelectedPin } from "./Perfboard3DViewport.tsx";
 import type { RouteEditMode } from "./WorkspaceToolbar.tsx";
 
@@ -102,54 +103,56 @@ export function Workspace({
           dragMoveModifier={dragMoveModifier}
           onRouteEditPoint={onRouteEditPoint}
         />
-        {selectedComponent && (
-          <aside className="component-inspector">
-            <h2>元件属性</h2>
-            <label>
-              <span>名称</span>
-              <input
-                value={selectedComponent.name}
-                onChange={(event) => onUpdateSelected({ name: event.target.value })}
-              />
-            </label>
-            <label>
-              <span>参数</span>
-              <input
-                placeholder="例如 1kΩ / 100uF / TL062IP"
-                value={selectedComponent.value}
-                onChange={(event) => onUpdateSelected({ value: event.target.value })}
-              />
-            </label>
-            <label>
-              <span>脚距</span>
-              <input
-                type="number"
-                min={0}
-                max={20}
-                value={selectedComponent.leadSpacing}
-                onChange={(event) => onUpdateSelected({ leadSpacing: toGridNumber(event.target.value) })}
-              />
-            </label>
-            <label>
-              <span>异侧排距</span>
-              <input
-                type="number"
-                min={0}
-                max={20}
-                value={selectedComponent.rowSpacing}
-                onChange={(event) => onUpdateSelected({ rowSpacing: toGridNumber(event.target.value) })}
-              />
-            </label>
-            <label>
-              <span>同侧脚距</span>
-              <input
-                type="number"
-                min={1}
-                max={10}
-                value={selectedComponent.sameSidePitch}
-                onChange={(event) => onUpdateSelected({ sameSidePitch: Math.max(1, toGridNumber(event.target.value)) })}
-              />
-            </label>
+        {selectedComponent && (() => {
+          const limits = spacingLimits(selectedComponent.kind);
+          return (
+            <aside className="component-inspector">
+              <h2>元件属性</h2>
+              <label>
+                <span>名称</span>
+                <input
+                  value={selectedComponent.name}
+                  onChange={(event) => onUpdateSelected({ name: event.target.value })}
+                />
+              </label>
+              <label>
+                <span>参数</span>
+                <input
+                  placeholder="例如 1kΩ / 100uF / TL062IP"
+                  value={selectedComponent.value}
+                  onChange={(event) => onUpdateSelected({ value: event.target.value })}
+                />
+              </label>
+              <label>
+                <span>脚距（{limits.leadSpacing.min}–{limits.leadSpacing.max}）</span>
+                <input
+                  type="number"
+                  min={limits.leadSpacing.min}
+                  max={limits.leadSpacing.max}
+                  value={selectedComponent.leadSpacing}
+                  onChange={(event) => onUpdateSelected({ leadSpacing: toGridNumber(event.target.value) })}
+                />
+              </label>
+              <label>
+                <span>异侧排距（{limits.rowSpacing.min}–{limits.rowSpacing.max}）</span>
+                <input
+                  type="number"
+                  min={limits.rowSpacing.min}
+                  max={limits.rowSpacing.max}
+                  value={selectedComponent.rowSpacing}
+                  onChange={(event) => onUpdateSelected({ rowSpacing: toGridNumber(event.target.value) })}
+                />
+              </label>
+              <label>
+                <span>同侧脚距（{limits.sameSidePitch.min}–{limits.sameSidePitch.max}）</span>
+                <input
+                  type="number"
+                  min={limits.sameSidePitch.min}
+                  max={limits.sameSidePitch.max}
+                  value={selectedComponent.sameSidePitch}
+                  onChange={(event) => onUpdateSelected({ sameSidePitch: Math.max(1, toGridNumber(event.target.value)) })}
+                />
+              </label>
             <div className="inspector-meta">
               <span>
                 坐标 {selectedComponent.position[0]}, {selectedComponent.position[1]}
@@ -170,8 +173,9 @@ export function Workspace({
                 )}
               </div>
             )}
-          </aside>
-        )}
+            </aside>
+          );
+        })()}
       </section>
 
       <div className="status-strip">
