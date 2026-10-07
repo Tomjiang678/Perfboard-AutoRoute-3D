@@ -2,8 +2,11 @@ import {
   buildPinOffsetsForComponent,
   getLibraryComponentByKind
 } from "../project/componentLibrary.ts";
+import { UNKNOWN_COMPONENT_LABEL } from "../project/componentTraits.ts";
 import type { ImportState, LibraryComponentKind, ParsedComponent, PlacedComponent } from "../../types/project.ts";
 import { componentMappingRules, fallbackComponentMapping, ignoredComponentRules, normalizeComponentFields } from "./importConfig.ts";
+
+export const PLACEHOLDER_NOTE = "已按网表引脚生成占位排针";
 
 export function createPlacedComponentsFromParsed(
   importState: ImportState,
@@ -103,10 +106,10 @@ function mapParsedComponent(component: ParsedComponent, pinsFromNetlist: number 
 
   return {
     ...fallbackComponentMapping,
-    label: "UNK",
+    label: UNKNOWN_COMPONENT_LABEL,
     pinCount: Math.max(2, pinsFromNetlist ?? fallbackComponentMapping.pinCount),
     isFallback: true,
-    fallbackReason: `元件 ${component.ref} (${component.category}) 在库中没有对应封装，已按网表引脚生成占位排针。`
+    fallbackReason: `元件 ${component.ref} (${component.category}) 在库中没有对应封装，${PLACEHOLDER_NOTE}。`
   };
 }
 

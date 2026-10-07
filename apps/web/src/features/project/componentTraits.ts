@@ -7,6 +7,8 @@ export const bendableTwoPinKinds = kinds("resistor", "inductor", "radial_capacit
 export const threeInlinePinKinds = kinds("to92", "to220", "potentiometer", "slide_switch");
 export const transistorKinds = kinds("to92", "to39", "to220");
 
+export const UNKNOWN_COMPONENT_LABEL = "UNK";
+
 export function hasKind(component: Pick<PlacedComponent, "kind">, set: ReadonlySet<LibraryComponentKind>) {
   return set.has(component.kind);
 }
@@ -60,10 +62,10 @@ const SPACING_LIMITS: Partial<Record<LibraryComponentKind, SpacingLimits>> = {
   potentiometer: { leadSpacing: FIXED, rowSpacing: FIXED, sameSidePitch: FIXED },
   slide_switch: { leadSpacing: FIXED, rowSpacing: FIXED, sameSidePitch: FIXED },
   tactile_switch: { leadSpacing: { min: 2, max: 3 }, rowSpacing: { min: 2, max: 3 }, sameSidePitch: { min: 2, max: 3 } },
-  dip: { leadSpacing: FIXED, rowSpacing: { min: 2, max: 6 }, sameSidePitch: { min: 1, max: 2 } },
-  dip_switch: { leadSpacing: FIXED, rowSpacing: { min: 2, max: 6 }, sameSidePitch: { min: 1, max: 2 } },
-  seven_segment_display: { leadSpacing: FIXED, rowSpacing: { min: 2, max: 6 }, sameSidePitch: { min: 1, max: 2 } },
-  alphanumeric_display: { leadSpacing: FIXED, rowSpacing: { min: 2, max: 6 }, sameSidePitch: { min: 1, max: 2 } },
+  dip: { leadSpacing: FIXED, rowSpacing: { min: 3, max: 4 }, sameSidePitch: FIXED },
+  dip_switch: { leadSpacing: FIXED, rowSpacing: { min: 3, max: 4 }, sameSidePitch: FIXED },
+  seven_segment_display: { leadSpacing: FIXED, rowSpacing: { min: 3, max: 4 }, sameSidePitch: FIXED },
+  alphanumeric_display: { leadSpacing: FIXED, rowSpacing: { min: 3, max: 4 }, sameSidePitch: FIXED },
   pin_header: { leadSpacing: FIXED, rowSpacing: FIXED, sameSidePitch: { min: 1, max: 2 } }
 };
 

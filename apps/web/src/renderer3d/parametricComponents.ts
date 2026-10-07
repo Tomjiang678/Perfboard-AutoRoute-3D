@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { getLibraryComponentByKind } from "../features/project/componentLibrary.ts";
+import { UNKNOWN_COMPONENT_LABEL } from "../features/project/componentTraits.ts";
 
 export type ParametricComponentKind =
   | "resistor"
@@ -78,32 +80,40 @@ export function createParametricComponent(spec: ParametricComponentSpec) {
   return componentFactories[spec.kind](spec);
 }
 
+/**
+ * Single geometry source: renderers never invent pin layouts; they use the
+ * caller-provided offsets and fall back to the component library geometry.
+ */
+function pins(spec: ParametricComponentSpec): Array<[number, number]> {
+  return spec.pinOffsets ?? getLibraryComponentByKind(spec.kind, spec.pinCount)?.pinOffsets ?? [];
+}
+
 const componentFactories: Record<ParametricComponentKind, (spec: ParametricComponentSpec) => THREE.Group> = {
-  resistor: (s) => createAxialPart(s.label ?? "R", materials.resistorBody, 0.45, 2.2, true, s.pinOffsets),
-  inductor: (s) => createAxialInductor(s.label ?? "L", s.pinOffsets),
-  diode: (s) => createDiode(s.label ?? "D", s.pinOffsets),
-  led: (s) => createLed(s.color ?? 0xe83f3f, s.pinOffsets),
-  radial_capacitor: (s) => createRadialCapacitor(s.label ?? "C", false, s.pinOffsets),
-  electrolytic_capacitor: (s) => createRadialCapacitor(s.label ?? "C", true, s.pinOffsets),
-  to92: (s) => createTo92(s.label ?? "Q", s.pinOffsets),
-  to39: (s) => createTo39(s.label ?? "Q", s.pinOffsets),
-  to220: (s) => createTo220(s.label ?? "Q", s.pinOffsets),
-  to3: (s) => createTo3(s.label ?? "Q", s.pinOffsets),
-  to247: (s) => createTo247(s.label ?? "Q", s.pinOffsets),
-  bridge_rectifier: (s) => createBridgeRectifier(s.label ?? "BR", s.pinOffsets),
-  relay: (s) => createRelay(s.label ?? "RLY", s.pinCount ?? 5, s.pinOffsets),
-  crystal: (s) => createCrystal(s.label ?? "Y", s.pinOffsets),
-  fuse: (s) => createFuse(s.label ?? "F", s.pinOffsets),
-  dip: (s) => createDip(s.pinCount ?? 8, s.label ?? `DIP-${s.pinCount ?? 8}`, s.pinOffsets),
-  dip_switch: (s) => createDipSwitch(s.pinCount ?? 16, s.label ?? `DIPSW${Math.floor((s.pinCount ?? 16) / 2)}`, s.pinOffsets),
-  seven_segment_display: (s) => createSevenSegmentDisplay(s.label ?? "7SEG", s.pinOffsets),
-  alphanumeric_display: (s) => createAlphanumericDisplay(s.label ?? "ALNUM", s.pinOffsets),
-  pin_header: (s) => createPinHeader(s.pinCount ?? 4, s.pinOffsets, s.isFallback),
-  terminal_block: (s) => createTerminalBlock(s.pinCount ?? 2, s.pinOffsets),
-  slide_switch: (s) => createSlideSwitch(s.pinOffsets),
-  buzzer: (s) => createBuzzer(s.label ?? "BZ", s.pinOffsets),
-  tactile_switch: (s) => createTactileSwitch(s.pinOffsets),
-  potentiometer: (s) => createPotentiometer(s.pinOffsets)
+  resistor: (s) => createAxialPart(s.label ?? "R", materials.resistorBody, 0.45, 2.2, true, pins(s)),
+  inductor: (s) => createAxialInductor(s.label ?? "L", pins(s)),
+  diode: (s) => createDiode(s.label ?? "D", pins(s)),
+  led: (s) => createLed(s.color ?? 0xe83f3f, pins(s)),
+  radial_capacitor: (s) => createRadialCapacitor(s.label ?? "C", false, pins(s)),
+  electrolytic_capacitor: (s) => createRadialCapacitor(s.label ?? "C", true, pins(s)),
+  to92: (s) => createTo92(s.label ?? "Q", pins(s)),
+  to39: (s) => createTo39(s.label ?? "Q", pins(s)),
+  to220: (s) => createTo220(s.label ?? "Q", pins(s)),
+  to3: (s) => createTo3(s.label ?? "Q", pins(s)),
+  to247: (s) => createTo247(s.label ?? "Q", pins(s)),
+  bridge_rectifier: (s) => createBridgeRectifier(s.label ?? "BR", pins(s)),
+  relay: (s) => createRelay(s.label ?? "RLY", s.pinCount ?? 5, pins(s)),
+  crystal: (s) => createCrystal(s.label ?? "Y", pins(s)),
+  fuse: (s) => createFuse(s.label ?? "F", pins(s)),
+  dip: (s) => createDip(s.pinCount ?? 8, s.label ?? `DIP-${s.pinCount ?? 8}`, pins(s)),
+  dip_switch: (s) => createDipSwitch(s.pinCount ?? 16, s.label ?? `DIPSW${Math.floor((s.pinCount ?? 16) / 2)}`, pins(s)),
+  seven_segment_display: (s) => createSevenSegmentDisplay(s.label ?? "7SEG", pins(s)),
+  alphanumeric_display: (s) => createAlphanumericDisplay(s.label ?? "ALNUM", pins(s)),
+  pin_header: (s) => createPinHeader(s.pinCount ?? 4, pins(s), s.isFallback),
+  terminal_block: (s) => createTerminalBlock(s.pinCount ?? 2, pins(s)),
+  slide_switch: (s) => createSlideSwitch(pins(s)),
+  buzzer: (s) => createBuzzer(s.label ?? "BZ", pins(s)),
+  tactile_switch: (s) => createTactileSwitch(pins(s)),
+  potentiometer: (s) => createPotentiometer(pins(s))
 };
 
 function createAxialPart(
@@ -112,7 +122,7 @@ function createAxialPart(
   radius: number,
   length: number,
   addBands: boolean,
-  pinOffsets: Array<[number, number]> = [[-3, 0], [3, 0]]
+  pinOffsets: Array<[number, number]>
 ) {
   const group = new THREE.Group();
   const [leftPin, rightPin] = normalizeTwoPins(pinOffsets);
@@ -151,7 +161,7 @@ function createAxialPart(
   return group;
 }
 
-function createDiode(label: string, pinOffsets?: Array<[number, number]>) {
+function createDiode(label: string, pinOffsets: Array<[number, number]>) {
   const group = createAxialPart(label, materials.diodeBody, 0.42, 1.85, false, pinOffsets);
   const [leftPin, rightPin] = normalizeTwoPins(pinOffsets ?? [[-3, 0], [3, 0]]);
   const centerX = (leftPin[0] + rightPin[0]) / 2;
@@ -165,7 +175,7 @@ function createDiode(label: string, pinOffsets?: Array<[number, number]>) {
   return group;
 }
 
-function createLed(color: number, pinOffsets: Array<[number, number]> = [[0, 0], [1, 0]]) {
+function createLed(color: number, pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const [leftPin, rightPin] = normalizeTwoPins(pinOffsets);
   const centerX = (leftPin[0] + rightPin[0]) / 2;
@@ -192,7 +202,7 @@ function createLed(color: number, pinOffsets: Array<[number, number]> = [[0, 0],
 function createRadialCapacitor(
   label: string,
   polarized: boolean,
-  pinOffsets: Array<[number, number]> = [[0, 0], [1, 0]]
+  pinOffsets: Array<[number, number]>
 ) {
   const group = new THREE.Group();
   const [leftPin, rightPin] = normalizeTwoPins(pinOffsets);
@@ -256,7 +266,7 @@ function createRoundedCanGeometry(radius: number, height: number) {
   ], 48);
 }
 
-function createAxialInductor(label: string, pinOffsets: Array<[number, number]> = [[-3, 0], [3, 0]]) {
+function createAxialInductor(label: string, pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const [leftPin, rightPin] = normalizeTwoPins(pinOffsets);
   const centerX = (leftPin[0] + rightPin[0]) / 2;
@@ -301,7 +311,7 @@ function createAxialInductor(label: string, pinOffsets: Array<[number, number]> 
   return group;
 }
 
-function createTo92(label: string, pinOffsets: Array<[number, number]> = [[-1, 0], [0, 0], [1, 0]]) {
+function createTo92(label: string, pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const center = getPinCenter(pinOffsets);
 
@@ -329,7 +339,7 @@ function createTo92(label: string, pinOffsets: Array<[number, number]> = [[-1, 0
   return group;
 }
 
-function createTo220(label: string, pinOffsets: Array<[number, number]> = [[-1, 0], [0, 0], [1, 0]]) {
+function createTo220(label: string, pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
   const centerX = box.centerX;
@@ -353,7 +363,7 @@ function createTo220(label: string, pinOffsets: Array<[number, number]> = [[-1, 
   return group;
 }
 
-function createTo39(label: string, pinOffsets: Array<[number, number]> = [[-1, 0], [1, 0], [0, 1]]) {
+function createTo39(label: string, pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const center = getPinCenter(pinOffsets);
 
@@ -374,7 +384,7 @@ function createTo39(label: string, pinOffsets: Array<[number, number]> = [[-1, 0
   return group;
 }
 
-function createDip(pinCount: number, label: string, pinOffsets = makeDipPinOffsets(pinCount, 3)) {
+function createDip(pinCount: number, label: string, pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
   const bodyWidth = Math.max(2.4, box.width - 0.45);
@@ -393,7 +403,7 @@ function createDip(pinCount: number, label: string, pinOffsets = makeDipPinOffse
   return group;
 }
 
-function createDipSwitch(pinCount: number, label: string, pinOffsets = makeDipPinOffsets(pinCount, 3)) {
+function createDipSwitch(pinCount: number, label: string, pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
   const bodyWidth = Math.max(2.4, box.width - 0.25);
@@ -415,11 +425,11 @@ function createDipSwitch(pinCount: number, label: string, pinOffsets = makeDipPi
   return group;
 }
 
-function createSevenSegmentDisplay(label: string, pinOffsets: Array<[number, number]> = makeDipPinOffsets(10, 3)) {
+function createSevenSegmentDisplay(label: string, pinOffsets: Array<[number, number]>) {
   return createDisplay(label, pinOffsets, { minWidth: 3.2, minLength: 5.1, bodyColor: 0x1b2230, faceColor: 0x7f1d1d, barColor: 0xff3b30, barScale: 1, barOffset: 0, labelScale: 1.35 });
 }
 
-function createAlphanumericDisplay(label: string, pinOffsets: Array<[number, number]> = makeDipPinOffsets(14, 3)) {
+function createAlphanumericDisplay(label: string, pinOffsets: Array<[number, number]>) {
   return createDisplay(label, pinOffsets, { minWidth: 3.4, minLength: 6.2, bodyColor: 0x111827, faceColor: 0x1d4ed8, barColor: 0x60a5fa, barScale: 0.9, barOffset: -0.25, labelScale: 1.5, middleBar: true });
 }
 
@@ -480,7 +490,7 @@ function addSevenSegmentBars(group: THREE.Group, x: number, y: number, z: number
   vertical(0.72, 0.58);
 }
 
-function createPinHeader(pinCount: number, pinOffsets = makeLinearPinOffsets(pinCount), isFallback = false) {
+function createPinHeader(pinCount: number, pinOffsets: Array<[number, number]>, isFallback = false) {
   const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
   const baseWidth = Math.max(1, box.width + 0.6);
@@ -511,13 +521,13 @@ function createPinHeader(pinCount: number, pinOffsets = makeLinearPinOffsets(pin
   });
 
   if (isFallback) {
-    addTextLabel(group, "UNK", box.centerX, 1.26, box.centerZ + baseDepth * 0.28, 0xfacc15, Math.min(2.4, Math.max(1.2, baseWidth * 0.55)));
+    addTextLabel(group, UNKNOWN_COMPONENT_LABEL, box.centerX, 1.26, box.centerZ + baseDepth * 0.28, 0xfacc15, Math.min(2.4, Math.max(1.2, baseWidth * 0.55)));
   }
 
   return group;
 }
 
-function createTerminalBlock(pinCount: number, pinOffsets = makeLinearPinOffsets(pinCount)) {
+function createTerminalBlock(pinCount: number, pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
   const body = new THREE.Mesh(new THREE.BoxGeometry(Math.max(1.2, box.width + 0.8), 1.15, Math.max(1.15, box.height + 1.1)), materials.terminalGreen);
@@ -534,7 +544,7 @@ function createTerminalBlock(pinCount: number, pinOffsets = makeLinearPinOffsets
   return group;
 }
 
-function createSlideSwitch(pinOffsets: Array<[number, number]> = [[-1, 0], [0, 0], [1, 0]]) {
+function createSlideSwitch(pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
   const body = new THREE.Mesh(new THREE.BoxGeometry(Math.max(2.3, box.width + 0.8), 0.65, 1.1), materials.blackPlastic);
@@ -549,7 +559,7 @@ function createSlideSwitch(pinOffsets: Array<[number, number]> = [[-1, 0], [0, 0
   return group;
 }
 
-function createBuzzer(label: string, pinOffsets: Array<[number, number]> = [[0, 0], [2, 0]]) {
+function createBuzzer(label: string, pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const [leftPin, rightPin] = normalizeTwoPins(pinOffsets);
   const centerX = (leftPin[0] + rightPin[0]) / 2;
@@ -568,7 +578,7 @@ function createBuzzer(label: string, pinOffsets: Array<[number, number]> = [[0, 
   return group;
 }
 
-function createTactileSwitch(pinOffsets: Array<[number, number]> = [[0, 0], [2, 0], [0, 2], [2, 2]]) {
+function createTactileSwitch(pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
   const body = new THREE.Mesh(new THREE.BoxGeometry(box.width + 0.8, 0.45, box.height + 0.8), new THREE.MeshStandardMaterial({ color: 0xd1d5db, roughness: 0.34 }));
@@ -583,7 +593,7 @@ function createTactileSwitch(pinOffsets: Array<[number, number]> = [[0, 0], [2, 
   return group;
 }
 
-function createPotentiometer(pinOffsets: Array<[number, number]> = [[-1, 0], [0, 0], [1, 0]]) {
+function createPotentiometer(pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
   const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.6, 1.25), new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.3 }));
@@ -599,7 +609,7 @@ function createPotentiometer(pinOffsets: Array<[number, number]> = [[-1, 0], [0,
   return group;
 }
 
-function createTo3(label: string, pinOffsets: Array<[number, number]> = [[-1, 0], [1, 0], [0, 2]]) {
+function createTo3(label: string, pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const center = getPinCenter(pinOffsets);
 
@@ -623,7 +633,7 @@ function createTo3(label: string, pinOffsets: Array<[number, number]> = [[-1, 0]
   return group;
 }
 
-function createTo247(label: string, pinOffsets: Array<[number, number]> = [[-2, 0], [0, 0], [2, 0]]) {
+function createTo247(label: string, pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
   const centerX = box.centerX;
@@ -647,7 +657,7 @@ function createTo247(label: string, pinOffsets: Array<[number, number]> = [[-2, 
   return group;
 }
 
-function createBridgeRectifier(label: string, pinOffsets: Array<[number, number]> = [[-2, 0], [-1, 0], [0, 0], [1, 0]]) {
+function createBridgeRectifier(label: string, pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
 
@@ -665,7 +675,7 @@ function createBridgeRectifier(label: string, pinOffsets: Array<[number, number]
   return group;
 }
 
-function createRelay(label: string, pinCount: number, pinOffsets: Array<[number, number]> = [[0, 0], [1, 0], [0, 2], [1, 2], [2, 2]]) {
+function createRelay(label: string, pinCount: number, pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
   const bodyWidth = Math.max(2.6, box.width + 0.6);
@@ -694,7 +704,7 @@ function createRelay(label: string, pinCount: number, pinOffsets: Array<[number,
   return group;
 }
 
-function createCrystal(label: string, pinOffsets: Array<[number, number]> = [[0, 0], [2, 0]]) {
+function createCrystal(label: string, pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const [leftPin, rightPin] = normalizeTwoPins(pinOffsets);
   const centerX = (leftPin[0] + rightPin[0]) / 2;
@@ -727,7 +737,7 @@ function createCrystal(label: string, pinOffsets: Array<[number, number]> = [[0,
   return group;
 }
 
-function createFuse(label: string, pinOffsets: Array<[number, number]> = [[0, 0], [5, 0]]) {
+function createFuse(label: string, pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const [leftPin, rightPin] = normalizeTwoPins(pinOffsets);
   const centerX = (leftPin[0] + rightPin[0]) / 2;
@@ -851,22 +861,6 @@ function getPinBox(pinOffsets: Array<[number, number]>) {
 
 function distance2d(a: [number, number], b: [number, number]) {
   return Math.hypot(a[0] - b[0], a[1] - b[1]);
-}
-
-function makeLinearPinOffsets(pinCount: number) {
-  return Array.from({ length: pinCount }, (_, index) => [index, 0] as [number, number]);
-}
-
-function makeDipPinOffsets(pinCount: number, rowSpacing: number) {
-  const pinsPerSide = Math.ceil(pinCount / 2);
-  const offsets: Array<[number, number]> = [];
-  for (let index = 0; index < pinsPerSide; index += 1) {
-    offsets.push([0, index]);
-  }
-  for (let index = pinsPerSide - 1; index >= 0; index -= 1) {
-    offsets.push([rowSpacing, index]);
-  }
-  return offsets;
 }
 
 function addTextLabel(group: THREE.Group, text: string, x: number, y: number, z: number, color: number, width: number) {

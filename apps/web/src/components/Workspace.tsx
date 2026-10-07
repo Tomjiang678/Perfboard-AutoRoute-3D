@@ -3,6 +3,7 @@ import type { LibraryComponentDefinition } from "../features/project/componentLi
 import type { BoardSize, DragMoveModifier, PerfboardProject, RoutedNetEndpoint, ThemeMode } from "../types/project.ts";
 import { getBoardModel } from "../features/board/factory.ts";
 import { spacingLimits } from "../features/project/componentTraits.ts";
+import { PLACEHOLDER_NOTE } from "../features/import/componentMapping.ts";
 import { Perfboard3DViewport, type SelectedPin } from "./Perfboard3DViewport.tsx";
 import type { RouteEditMode } from "./WorkspaceToolbar.tsx";
 
@@ -173,7 +174,7 @@ export function Workspace({
             {selectedComponent.isFallback && (
               <div className="fallback-component-note">
                 <strong>库中无对应封装</strong>
-                <span>{selectedComponent.fallbackReason ?? `已将 ${selectedComponent.name} 生成为占位排针。`}</span>
+                <span>{selectedComponent.fallbackReason ?? `已将 ${selectedComponent.name} ${PLACEHOLDER_NOTE}。`}</span>
                 {selectedComponent.fallbackPinMap && (
                   <small>临时脚位：{formatFallbackPinMap(selectedComponent.fallbackPinMap)}</small>
                 )}

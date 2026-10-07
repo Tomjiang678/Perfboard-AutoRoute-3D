@@ -15,19 +15,22 @@ export interface LibraryComponentDefinition {
   pinOffsets: Array<[number, number]>;
 }
 
-export const componentLibrary: LibraryComponentDefinition[] = [
+// Geometry is defined in exactly one place (buildPinOffsetsForComponent):
+// entries here only declare the spacing parameters and derive their pin
+// offsets through the shared builder.
+const rawLibrary: Array<Omit<LibraryComponentDefinition, "pinOffsets"> & { pinOffsets?: Array<[number, number]> }> = [
   makeTwoPin("resistor", "R", "电阻", 3),
   makeTwoPin("inductor", "L", "电感", 3),
   makeTwoPin("diode", "D", "二极管", 3),
   makeTwoPin("led", "LED", "LED", 1),
   makeTwoPin("radial_capacitor", "C", "普通电容", 1),
   makeTwoPin("electrolytic_capacitor", "EC", "电解电容", 1),
-  { kind: "to92", label: "Q", title: "TO-92", leadSpacing: 1, rowSpacing: 0, sameSidePitch: 1, pinOffsets: [[-1, 0], [0, 0], [1, 0]] },
-  { kind: "to39", label: "Q", title: "TO-39", leadSpacing: 1, rowSpacing: 1, sameSidePitch: 1, pinOffsets: [[-1, 0], [1, 0], [0, 1]] },
-  { kind: "to220", label: "Q", title: "TO-220", leadSpacing: 1, rowSpacing: 0, sameSidePitch: 1, pinOffsets: [[-1, 0], [0, 0], [1, 0]] },
-  { kind: "to3", label: "Q", title: "TO-3", pinCount: 3, leadSpacing: 2, rowSpacing: 2, sameSidePitch: 1, pinOffsets: [[-1, 0], [1, 0], [0, 2]] },
-  { kind: "to247", label: "Q", title: "TO-247", leadSpacing: 2, rowSpacing: 0, sameSidePitch: 2, pinOffsets: [[-2, 0], [0, 0], [2, 0]] },
-  { kind: "bridge_rectifier", label: "BR", title: "整流桥堆", pinCount: 4, leadSpacing: 1, rowSpacing: 0, sameSidePitch: 1, pinOffsets: [[-2, 0], [-1, 0], [0, 0], [1, 0]] },
+  { kind: "to92", label: "Q", title: "TO-92", pinCount: 3, leadSpacing: 1, rowSpacing: 0, sameSidePitch: 1 },
+  { kind: "to39", label: "Q", title: "TO-39", pinCount: 3, leadSpacing: 1, rowSpacing: 1, sameSidePitch: 1 },
+  { kind: "to220", label: "Q", title: "TO-220", pinCount: 3, leadSpacing: 1, rowSpacing: 0, sameSidePitch: 1 },
+  { kind: "to3", label: "Q", title: "TO-3", pinCount: 3, leadSpacing: 2, rowSpacing: 2, sameSidePitch: 1 },
+  { kind: "to247", label: "Q", title: "TO-247", pinCount: 3, leadSpacing: 2, rowSpacing: 0, sameSidePitch: 2 },
+  { kind: "bridge_rectifier", label: "BR", title: "整流桥堆", pinCount: 4, leadSpacing: 1, rowSpacing: 0, sameSidePitch: 1 },
   makeRelay("RLY-SPDT", "继电器 SPDT", 5),
   makeRelay("RLY-DPDT", "继电器 DPDT", 8),
   makeTwoPin("crystal", "Y", "晶振 HC-49", 2),
@@ -42,11 +45,13 @@ export const componentLibrary: LibraryComponentDefinition[] = [
   makeDisplay("ALNUM", "字母数字显示器", "alphanumeric_display", 14, 3, 1),
   createPinHeaderDefinition(1, 4),
   makeTwoPin("terminal_block", "TB", "接线端子", 1, 2),
-  { kind: "slide_switch", label: "SW", title: "拨动开关 SPDT", pinCount: 3, leadSpacing: 1, rowSpacing: 0, sameSidePitch: 1, pinOffsets: [[-1, 0], [0, 0], [1, 0]] },
+  { kind: "slide_switch", label: "SW", title: "拨动开关 SPDT", pinCount: 3, leadSpacing: 1, rowSpacing: 0, sameSidePitch: 1 },
   makeTwoPin("buzzer", "BZ", "蜂鸣器", 2),
-  { kind: "tactile_switch", label: "SW", title: "轻触按键", leadSpacing: 2, rowSpacing: 2, sameSidePitch: 2, pinOffsets: [[0, 0], [2, 0], [0, 2], [2, 2]] },
-  { kind: "potentiometer", label: "RV", title: "电位器", leadSpacing: 1, rowSpacing: 0, sameSidePitch: 1, pinOffsets: [[-1, 0], [0, 0], [1, 0]] }
+  { kind: "tactile_switch", label: "SW", title: "轻触按键", pinCount: 4, leadSpacing: 2, rowSpacing: 2, sameSidePitch: 2 },
+  { kind: "potentiometer", label: "RV", title: "电位器", pinCount: 3, leadSpacing: 1, rowSpacing: 0, sameSidePitch: 1 }
 ];
+
+export const componentLibrary: LibraryComponentDefinition[] = rawLibrary.map(finalizeLibraryEntry);
 
 export const componentLibraryByKey = new Map(
   componentLibrary.map((component) => [makeLibraryDragKey(component), component])
@@ -59,6 +64,11 @@ export function getLibraryComponentByKind(kind: LibraryComponentKind, pinCount?:
 
 export function makeLibraryDragKey(component: LibraryComponentDefinition) {
   return `${component.kind}:${component.pinCount ?? ""}:${component.label}`;
+}
+
+/** Single geometry source: derives pin offsets for any library entry. */
+function finalizeLibraryEntry<T extends Omit<LibraryComponentDefinition, "pinOffsets"> & { pinOffsets?: Array<[number, number]> }>(entry: T): LibraryComponentDefinition {
+  return { ...entry, pinOffsets: entry.pinOffsets ?? buildPinOffsetsForComponent(entry) };
 }
 
 function makeDynamicLibraryComponent(
@@ -86,29 +96,27 @@ function makeDynamicLibraryComponent(
     // 3-pin TO-92/TO-220 is the common case; netlists occasionally use 4/5-pin
     // variants, which become an inline single-row package with the same body.
     const pitch = kind === "to247" ? 2 : 1;
-    return {
+    return finalizeLibraryEntry({
       kind,
       label: "Q",
       title: kind === "to92" ? `TO-92-${pinCount}` : kind === "to247" ? `TO-247-${pinCount}` : `TO-220-${pinCount}`,
       pinCount,
       leadSpacing: pitch,
       rowSpacing: 0,
-      sameSidePitch: pitch,
-      pinOffsets: inlinePinOffsets(pinCount, pitch)
-    };
+      sameSidePitch: pitch
+    });
   }
 
   if (kind === "bridge_rectifier") {
-    return {
+    return finalizeLibraryEntry({
       kind,
       label: "BR",
       title: `桥堆 ${pinCount} 脚`,
       pinCount,
       leadSpacing: 1,
       rowSpacing: 0,
-      sameSidePitch: 1,
-      pinOffsets: inlinePinOffsets(pinCount, 1)
-    };
+      sameSidePitch: 1
+    });
   }
 
   if (kind === "relay") {
@@ -148,7 +156,7 @@ export function buildPinOffsetsForComponent(component: {
   }
 
   if (component.kind === "to3") {
-    return [[-1, 0], [1, 0], [0, 2]];
+    return [[-1, 0], [1, 0], [0, component.rowSpacing || 2]];
   }
 
   if (component.kind === "bridge_rectifier") {
@@ -187,16 +195,15 @@ function makeTwoPin(
   leadSpacing: number,
   pinCount?: number
 ): LibraryComponentDefinition {
-  return {
+  return finalizeLibraryEntry({
     kind,
     label,
     title,
     pinCount,
     leadSpacing,
     rowSpacing: 0,
-    sameSidePitch: 1,
-    pinOffsets: [[0, 0], [leadSpacing, 0]]
-  };
+    sameSidePitch: 1
+  });
 }
 
 function inlinePinOffsets(pinCount: number, pitch = 1): Array<[number, number]> {
@@ -205,16 +212,15 @@ function inlinePinOffsets(pinCount: number, pitch = 1): Array<[number, number]> 
 }
 
 function makeRelay(label: string, title: string, pinCount: number): LibraryComponentDefinition {
-  return {
+  return finalizeLibraryEntry({
     kind: "relay",
     label,
     title,
     pinCount,
     leadSpacing: 1,
     rowSpacing: 1,
-    sameSidePitch: 1,
-    pinOffsets: relayPinOffsets(pinCount)
-  };
+    sameSidePitch: 1
+  });
 }
 
 function relayPinOffsets(pinCount: number): Array<[number, number]> {
@@ -267,20 +273,23 @@ function makeDualRow(
   rowSpacing: number,
   sameSidePitch: number
 ): LibraryComponentDefinition {
-  return {
+  return finalizeLibraryEntry({
     kind,
     label,
     title,
     pinCount,
     leadSpacing: rowSpacing,
     rowSpacing,
-    sameSidePitch,
-    pinOffsets: makeDipPinOffsetsWithPitch(pinCount, rowSpacing, sameSidePitch)
-  };
+    sameSidePitch
+  });
 }
 
-function makeDipPinOffsetsWithPitch(pinCount: number, rowSpacing: number, sameSidePitch: number) {
-  const pinsPerSide = Math.ceil(pinCount / 2);
+export function dipPinsPerSide(pinCount: number) {
+  return Math.ceil(pinCount / 2);
+}
+
+export function makeDipPinOffsetsWithPitch(pinCount: number, rowSpacing: number, sameSidePitch: number) {
+  const pinsPerSide = dipPinsPerSide(pinCount);
   const offsets: Array<[number, number]> = [];
   for (let index = 0; index < pinsPerSide; index += 1) {
     offsets.push([0, index * sameSidePitch]);

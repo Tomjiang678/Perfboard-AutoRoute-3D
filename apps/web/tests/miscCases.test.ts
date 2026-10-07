@@ -168,9 +168,9 @@ for (const [kind, min, max] of [
   });
 }
 
-test("DIP row spacing limits are 2..6 with pitch 1..2", () => {
-  assert.deepEqual(spacingLimits("dip").rowSpacing, { min: 2, max: 6 });
-  assert.deepEqual(spacingLimits("dip").sameSidePitch, { min: 1, max: 2 });
+test("DIP row spacing limits are 3..4 with fixed pitch", () => {
+  assert.deepEqual(spacingLimits("dip").rowSpacing, { min: 3, max: 4 });
+  assert.deepEqual(spacingLimits("dip").sameSidePitch, { min: 1, max: 1 });
 });
 
 test("fixed-pitch packages lock spacing to 1..1", () => {
@@ -186,8 +186,9 @@ test("clampSpacing clamps out-of-range values per kind", () => {
   assert.equal(clampSpacing("resistor", 0, "leadSpacing"), 2);
   assert.equal(clampSpacing("fuse", 3, "leadSpacing"), 4);
   assert.equal(clampSpacing("to92", 9, "leadSpacing"), 1);
-  assert.equal(clampSpacing("dip", 1, "rowSpacing"), 2);
-  assert.equal(clampSpacing("dip", 9, "sameSidePitch"), 2);
+  assert.equal(clampSpacing("dip", 1, "rowSpacing"), 3);
+  assert.equal(clampSpacing("dip", 9, "rowSpacing"), 4);
+  assert.equal(clampSpacing("dip", 9, "sameSidePitch"), 1);
 });
 
 test("maximumLeadSpan follows the per-kind limits", () => {

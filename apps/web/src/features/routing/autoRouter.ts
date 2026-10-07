@@ -29,6 +29,8 @@ import {
 } from "./routingGeometry.ts";
 import { getBoardModel } from "../board/factory.ts";
 import { componentPinHoles, isPowerNet, pinGridPosition, rotateGridOffset } from "../board/placement.ts";
+import { dipPinsPerSide } from "../project/componentLibrary.ts";
+import { centerBridgeKinds } from "../project/componentTraits.ts";
 import type { BoardModel } from "../board/types.ts";
 
 interface NetPlan {
@@ -1454,13 +1456,15 @@ function addRouteNet(routeNetsByCell: Map<string, Set<string>>, cell: string, ne
   routeNetsByCell.set(cell, nets);
 }
 
+export const MANUAL_NET_NAME = "MANUAL";
+
 function resolveManualRouteNet(
   routeNet: string,
   points: GridPoint[],
   expectedNetByCell: Map<string, Set<string>>,
   routeNetsByCell: Map<string, Set<string>>
 ) {
-  if (routeNet !== "MANUAL") {
+  if (routeNet !== MANUAL_NET_NAME) {
     return routeNet;
   }
 
@@ -1469,7 +1473,7 @@ function resolveManualRouteNet(
     const cell = key(point[0], point[1]);
     expectedNetByCell.get(cell)?.forEach((net) => candidates.add(net));
     routeNetsByCell.get(cell)?.forEach((net) => {
-      if (net !== "MANUAL") {
+      if (net !== MANUAL_NET_NAME) {
         candidates.add(net);
       }
     });
@@ -1592,9 +1596,9 @@ function formatAdjacentPinWarning(ref: string, endpoints: RoutedNetEndpoint[]) {
 
 function checkDipPinGeometry(components: PlacedComponent[]) {
   const warnings: string[] = [];
-  components.filter((component) => component.kind === "dip" || component.kind === "dip_switch" || component.kind === "seven_segment_display" || component.kind === "alphanumeric_display").forEach((component) => {
+  components.filter((component) => centerBridgeKinds.has(component.kind)).forEach((component) => {
     const pinCount = component.pinCount ?? component.pinOffsets.length;
-    const pinsPerSide = Math.ceil(pinCount / 2);
+    const pinsPerSide = dipPinsPerSide(pinCount);
     const left = component.pinOffsets.slice(0, pinsPerSide);
     const right = component.pinOffsets.slice(pinsPerSide);
     const leftX = left[0]?.[0];

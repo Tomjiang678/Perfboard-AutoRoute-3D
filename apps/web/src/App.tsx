@@ -20,7 +20,7 @@ import {
 } from "./features/constraints/execution.ts";
 import { bendComponentPin, pinGridPosition } from "./features/layout/manualPlacement.ts";
 import { resolveNetEndpoints } from "./features/import/netEndpointResolver.ts";
-import { autoRouteBoard, validateRoutingResult } from "./features/routing/autoRouter.ts";
+import { autoRouteBoard, validateRoutingResult, MANUAL_NET_NAME } from "./features/routing/autoRouter.ts";
 import { expandOrthogonalPath } from "./features/routing/routingGeometry.ts";
 import { removeRoutesToComponent } from "./features/routing/removeComponentRoutes.ts";
 import { createProject } from "./features/project/projectFactory.ts";
@@ -606,7 +606,7 @@ export function App() {
       if (!getBoardModel(current.board).capabilities.routePrimitives.has("bottom_trace")) {
         return current;
       }
-      const net = current.selectedNetName ?? "MANUAL";
+      const net = current.selectedNetName ?? MANUAL_NET_NAME;
       return {
         ...current,
         routing: {
@@ -628,7 +628,7 @@ export function App() {
 
   function handleAddJumper(from: [number, number], to: [number, number]) {
     commitProject((current) => {
-      const net = current.selectedNetName ?? "MANUAL";
+      const net = current.selectedNetName ?? MANUAL_NET_NAME;
       const nextFrom = relocateJumperEndpoint(current, from);
       const nextTo = relocateJumperEndpoint(current, to);
       if (!nextFrom || !nextTo || samePoint(nextFrom, nextTo)) {
