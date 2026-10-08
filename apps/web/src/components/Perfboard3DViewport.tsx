@@ -938,18 +938,18 @@ function createRouteObjects(routing: RoutingState, board: BoardSize, components:
   if ((board.kind ?? "perfboard") === "breadboard") {
     const levels = computeJumperCrossLevels(routing.jumpers, components);
     routing.jumpers.forEach((jumper, index) => {
-      topOverlay.add(createBreadboardJumper(jumper.from, jumper.to, board, createJumperMaterials(jumper.net), levels[index]));
+      topOverlay.add(createBreadboardJumper(jumper.from, jumper.to, board, createJumperMaterials(), levels[index]));
     });
   } else {
     routing.traces.forEach((trace) => {
-      const materials = createJumperMaterials(trace.net, 0xc2c8ce);
+      const materials = createJumperMaterials(0xc2c8ce);
       for (let index = 1; index < trace.points.length; index += 1) {
         bottomOverlay.add(createOutlinedRouteSegment(trace.points[index - 1], trace.points[index], board, -0.58, materials, 0.13, 40));
       }
     });
     const levels = computeJumperCrossLevels(routing.jumpers, components);
     routing.jumpers.forEach((jumper, index) => {
-      bottomOverlay.add(createBottomJumper(jumper.from, jumper.to, board, createJumperMaterials(jumper.net, 0xffc857), levels[index]));
+      bottomOverlay.add(createBottomJumper(jumper.from, jumper.to, board, createJumperMaterials(0xffc857), levels[index]));
     });
   }
 
@@ -966,10 +966,10 @@ function updateRouteOverlayVisibility(routes: THREE.Group, camera: THREE.Camera,
   });
 }
 
-const BREADBOARD_JUMPER_COLORS = [0xd92d20, 0xf5c518, 0x2563eb, 0x16a34a];
+const BREADBOARD_JUMPER_COLOR = 0xf5c518;
 const BREADBOARD_JUMPER_BASE_Y = 0.32;
 
-function createJumperMaterials(net: string, coreColor = BREADBOARD_JUMPER_COLORS[netColorIndex(net)]) {
+function createJumperMaterials(coreColor = BREADBOARD_JUMPER_COLOR) {
   return {
     outline: new THREE.MeshBasicMaterial({ color: 0x17212b, depthTest: false, depthWrite: false }),
     halo: new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, depthWrite: false }),
@@ -998,14 +998,6 @@ function createOutlinedRouteSegment(
   core.renderOrder = renderOrder + 2;
   group.add(outline, halo, core);
   return group;
-}
-
-function netColorIndex(net: string) {
-  let hash = 0;
-  for (let index = 0; index < net.length; index += 1) {
-    hash = ((hash << 5) - hash + net.charCodeAt(index)) | 0;
-  }
-  return Math.abs(hash) % BREADBOARD_JUMPER_COLORS.length;
 }
 
 function computeJumperCrossLevels(jumpers: JumperRoute[], components: PlacedComponent[]) {

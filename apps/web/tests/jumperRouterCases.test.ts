@@ -48,6 +48,7 @@ for (const holeCount of [3, 4, 5, 6]) {
     );
     const routing = autoRouteBoard(board, endpoints, []);
     const result = validate(board, routing, endpoints);
+    assert.equal(routing.jumpers.length, holeCount - 1, "a net on distinct breadboard nodes needs exactly nodes - 1 jumpers");
     assert.equal(result.drc.errors.length, 0);
     assert.ok(result.drc.pinStatuses.every((status) => status.status === "CONNECTED"));
   });

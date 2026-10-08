@@ -2,8 +2,8 @@ import type { BoardSize, ConstraintRegion, DesignConstraint, PlacedComponent, Ro
 import { activeConstraints } from "../constraints/model.ts";
 import { autoRouteBoard } from "../routing/autoRouter.ts";
 import { getBoardModel } from "../board/factory.ts";
-import { componentPinHoles, isPowerNet, layoutFromComponent, pinsConflict, placementHasPinConflicts, rotateGridOffset } from "../board/placement.ts";
-import type { BoardModel, ElectricalNodeId } from "../board/types.ts";
+import { componentPinHoles, layoutFromComponent, pinsConflict, placementHasPinConflicts, rotateGridOffset } from "../board/placement.ts";
+import type { BoardModel, ElectricalNodeId, GridPoint } from "../board/types.ts";
 import { key, manhattan } from "../routing/routingGeometry.ts";
 import { isBendableTwoPin, preferredLeadSpan, spacingLimits } from "../project/componentTraits.ts";
 
@@ -270,7 +270,7 @@ function findPlacement(
   routeBudget: RouteEvaluationBudget = { remaining: INITIAL_ROUTE_EVALUATION_BUDGET }
 ): PlacementCandidate | undefined {
   const componentRegion = constrainedRegionFor(component, region, constraints, board);
-  const placedAirwires = buildPlacedAirwires(placedByName, endpointMap);
+  const placedAirwires = buildPlacedAirwires(placedByName, endpointMap, getBoardModel(board));
   const scoreContext = createScoreContext({ component, region, placedByName, endpointMap, netGraph, placedAirwires, constraints, board });
   const candidates = generatePlacementPoseCandidates(component, true)
     .filter((posed) => matchesOrientationConstraint(posed, constraints))
@@ -414,14 +414,18 @@ function countSameNetNodeReuse(placed: PlacedComponent, context: PlacementScoreC
     return 0;
   }
   const nets = pinNetsForComponent(placed, context.endpointMap);
-  return componentPinHoles(placed).reduce((reused, hole, pinIndex) => {
+  const reusedNodes = new Set<string>();
+  componentPinHoles(placed).forEach((hole, pinIndex) => {
     const net = nets[pinIndex + 1];
     if (!net) {
-      return reused;
+      return;
     }
     const node = context.boardModel.getElectricalNode(hole);
-    return node && context.netNodes.get(net)?.has(node) ? reused + 1 : reused;
-  }, 0);
+    if (node && context.netNodes.get(net)?.has(node)) {
+      reusedNodes.add(`${net}\u0000${node}`);
+    }
+  });
+  return reusedNodes.size;
 }
 
 function scorePlacement(position: [number, number], component: PlacedComponent, context: PlacementScoreContext) {
@@ -497,8 +501,8 @@ function optimizePlacement(
         detail: `[autoplacement] 正在优化 ${component.name}（第 ${round + 1}/${OPTIMIZATION_ROUNDS} 轮）`
       });
       const trials = generateLocalCandidates(best, component, movableIds, region, board, endpoints, constraints)
-        .map((trial) => ({ trial, estimate: estimateRouteLength(trial, endpoints) }))
-        .sort((a, b) => a.estimate - b.estimate)
+        .map((trial) => ({ trial, estimate: estimateRouteCost(trial, endpoints, board) }))
+        .sort((a, b) => a.estimate.jumperCount - b.estimate.jumperCount || a.estimate.length - b.estimate.length)
         .slice(0, routeBudget.remaining);
       for (const [trialIndex, { trial }] of trials.entries()) {
         routeBudget.remaining -= 1;
@@ -548,7 +552,7 @@ function generateLocalCandidates(
   const endpointMap = buildEndpointMap(endpoints);
   const netGraph = buildNetGraph(endpoints);
   const placedByName = new Map(components.filter((candidate) => candidate.id !== component.id).map((candidate) => [candidate.name, candidate]));
-  const placedAirwires = buildPlacedAirwires(placedByName, endpointMap);
+  const placedAirwires = buildPlacedAirwires(placedByName, endpointMap, getBoardModel(board));
   const scoreContext = createScoreContext({ component, region, placedByName, endpointMap, netGraph, placedAirwires, constraints, board });
   const rotationTrials = generatePlacementPoseCandidates(component, false)
     .filter((trial) => matchesOrientationConstraint(trial, constraints) && canPlaceAt(trial, trial.position, componentRegion, board.width, board.height, occupiedWithoutSelf, constraints, board, endpointMap, [...placedByName.values()]))
@@ -645,17 +649,17 @@ function routeQualityForComponents(
       detail: `[autoplacement] ${context}：${stageLabels[routingProgress.stage]} ${routingProgress.round}/${routingProgress.totalRounds}${net}${expanded}`
     });
   });
-  return qualityFromRouting(routing, components, endpoints);
+  return qualityFromRouting(routing, components, endpoints, board);
 }
 
-function qualityFromRouting(routing: RoutingState, components: PlacedComponent[], endpoints: RoutedNetEndpoint[]): RouteQuality {
+function qualityFromRouting(routing: RoutingState, components: PlacedComponent[], endpoints: RoutedNetEndpoint[], board: BoardSize): RouteQuality {
   return {
     failedNetCount: routing.failedNets.length,
     jumperCount: routing.jumpers.length,
     jumperLength: routing.jumpers.reduce((sum, jumper) => sum + manhattan(jumper.from, jumper.to), 0),
     bottomLength: routing.traces.reduce((sum, trace) => sum + pathLength(trace.points), 0),
     bendCount: routing.traces.reduce((sum, trace) => sum + countBends(trace.points), 0),
-    airwireCrossings: countAirwireCrossings(components, endpoints),
+    airwireCrossings: countAirwireCrossings(components, endpoints, board),
     diagonalPlacementCount: components.filter(isDiagonalPlacement).length,
     leadStretchPenalty: components.reduce((sum, component) => sum + leadStretchPenalty(component), 0)
   };
@@ -674,35 +678,56 @@ function compareQuality(a: RouteQuality, b: RouteQuality) {
   );
 }
 
-function estimateRouteLength(components: PlacedComponent[], endpointTemplates: RoutedNetEndpoint[]) {
-  const byNet = new Map<string, Array<[number, number]>>();
-  endpointsForComponents(endpointTemplates, components).forEach((endpoint) => {
-    const points = byNet.get(endpoint.net) ?? [];
+function estimateRouteCost(components: PlacedComponent[], endpointTemplates: RoutedNetEndpoint[], board: BoardSize) {
+  const endpoints = endpointsForComponents(endpointTemplates, components);
+  const boardModel = getBoardModel(board);
+  const byNet = new Map<string, Map<string, GridPoint[]>>();
+  endpoints.forEach((endpoint) => {
+    const node = boardModel.getElectricalNode(endpoint.grid);
+    const nodeKey = node ?? `unresolved:${endpoint.ref}:${endpoint.pin}`;
+    const groups = byNet.get(endpoint.net) ?? new Map<string, GridPoint[]>();
+    const points = groups.get(nodeKey) ?? [];
     points.push(endpoint.grid);
-    byNet.set(endpoint.net, points);
+    groups.set(nodeKey, points);
+    byNet.set(endpoint.net, groups);
   });
 
-  let estimate = 0;
-  byNet.forEach((points) => {
-    const remaining = points.slice(1);
-    const connected = points.length > 0 ? [points[0]] : [];
-    while (remaining.length > 0 && connected.length > 0) {
-      let nearestIndex = 0;
-      let nearestDistance = Number.POSITIVE_INFINITY;
-      for (let index = 0; index < remaining.length; index += 1) {
-        for (const point of connected) {
-          const distance = manhattan(point, remaining[index]);
-          if (distance < nearestDistance) {
-            nearestDistance = distance;
-            nearestIndex = index;
+  let jumperCount = 0;
+  let length = 0;
+  byNet.forEach((groups) => {
+    const nodes = [...groups.values()];
+    if (board.kind === "breadboard") {
+      jumperCount += Math.max(0, nodes.length - 1);
+    }
+    length += minimumGroupSpanningLength(nodes);
+  });
+  return { jumperCount, length };
+}
+
+function minimumGroupSpanningLength(groups: GridPoint[][]) {
+  const remaining = groups.slice(1);
+  const connected = groups.length > 0 ? [groups[0]] : [];
+  let length = 0;
+  while (remaining.length > 0 && connected.length > 0) {
+    let nearestIndex = 0;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < remaining.length; index += 1) {
+      for (const connectedGroup of connected) {
+        for (const from of connectedGroup) {
+          for (const to of remaining[index]) {
+            const distance = manhattan(from, to);
+            if (distance < nearestDistance) {
+              nearestDistance = distance;
+              nearestIndex = index;
+            }
           }
         }
       }
-      estimate += nearestDistance;
-      connected.push(remaining.splice(nearestIndex, 1)[0]);
     }
-  });
-  return estimate;
+    length += nearestDistance;
+    connected.push(remaining.splice(nearestIndex, 1)[0]);
+  }
+  return length;
 }
 
 function generatePlacementPoseCandidates(component: PlacedComponent, includeDiagonal: boolean): PlacedComponent[] {
@@ -755,11 +780,7 @@ function generateDiagonalCandidates(
 function focusComponents(components: PlacedComponent[], movableIds: Set<string>, quality: RouteQuality, endpoints: RoutedNetEndpoint[]) {
   const failedOrJumperNets = new Set<string>();
   if (quality.failedNetCount > 0 || quality.jumperCount > 0) {
-    endpoints.forEach((endpoint) => {
-      if (!isPowerNet(endpoint.net)) {
-        failedOrJumperNets.add(endpoint.net);
-      }
-    });
+    endpoints.forEach((endpoint) => failedOrJumperNets.add(endpoint.net));
   }
   const movable = components.filter((component) => movableIds.has(component.id));
   return [...movable].sort((a, b) => relevantEndpointCount(b, endpoints, failedOrJumperNets) - relevantEndpointCount(a, endpoints, failedOrJumperNets));
@@ -845,33 +866,52 @@ function scoreNetworkPlacement(placed: PlacedComponent, context: PlacementScoreC
   const candidateAirwires: Airwire[] = [];
   let connectedLength = 0;
   let unplacedNeighborCount = 0;
-  const componentEndpoints = context.endpointMap.get(placed.name) ?? [];
   const endpointsByNet = endpointsGroupedByNet(context.endpointMap);
 
-  componentEndpoints.forEach((endpoint) => {
-    if (isPowerNet(endpoint.net)) {
-      return;
-    }
-    const from = pinGridAt(placed, placed.position, endpoint.pin);
-    const netEndpoints = endpointsByNet.get(endpoint.net) ?? [];
-    netEndpoints.forEach((other) => {
-      if (other.ref === placed.name) {
+  endpointsByNet.forEach((netEndpoints, net) => {
+    const existingNodes = new Map<string, GridPoint[]>();
+    const candidateNodes = new Map<string, GridPoint[]>();
+    const unplacedRefs = new Set<string>();
+    netEndpoints.forEach((endpoint) => {
+      const component = endpoint.ref === placed.name ? placed : context.placedByName.get(endpoint.ref);
+      if (!component) {
+        unplacedRefs.add(endpoint.ref);
         return;
       }
-      const otherComponent = context.placedByName.get(other.ref);
-      if (!otherComponent) {
-        unplacedNeighborCount += 0.25;
-        return;
-      }
-      const to = pinGridAt(otherComponent, otherComponent.position, other.pin);
-      // Same electrical node: the board already connects them, so this pair
-      // costs neither wire length nor a crossing.
-      if (context.boardModel.areInternallyConnected(from, to)) {
-        return;
-      }
-      connectedLength += manhattan(from, to);
-      candidateAirwires.push({ from, to, net: endpoint.net });
+      const point = pinGridAt(component, component.position, endpoint.pin);
+      const electricalNode = context.boardModel.getElectricalNode(point);
+      const nodeKey = electricalNode ?? `unresolved:${point[0]},${point[1]}`;
+      const nodes = endpoint.ref === placed.name ? candidateNodes : existingNodes;
+      const points = nodes.get(nodeKey) ?? [];
+      points.push(point);
+      nodes.set(nodeKey, points);
     });
+    unplacedNeighborCount += unplacedRefs.size * 0.25;
+
+    let connectedPoints = [...existingNodes.values()].flat();
+    const remaining: GridPoint[][] = [];
+    candidateNodes.forEach((points, node) => {
+      if (existingNodes.has(node)) connectedPoints.push(...points);
+      else remaining.push(points);
+    });
+    if (connectedPoints.length === 0 && remaining.length > 0) {
+      connectedPoints = remaining.shift() ?? [];
+    }
+    while (remaining.length > 0 && connectedPoints.length > 0) {
+      let best: { from: GridPoint; to: GridPoint; distance: number; targetIndex: number } | undefined;
+      remaining.forEach((toNode, targetIndex) => {
+        connectedPoints.forEach((from) => toNode.forEach((to) => {
+          const distance = manhattan(from, to);
+          if (!best || distance < best.distance) best = { from, to, distance, targetIndex };
+        }));
+      });
+      if (!best) break;
+      connectedLength += best.distance;
+      if (best.distance > 0) {
+        candidateAirwires.push({ from: best.from, to: best.to, net });
+      }
+      connectedPoints.push(...remaining.splice(best.targetIndex, 1)[0]);
+    }
   });
 
   return { connectedLength, unplacedNeighborCount, candidateAirwires };
@@ -1303,9 +1343,6 @@ function buildNetGraph(endpoints: RoutedNetEndpoint[]): NetGraph {
   const graph: NetGraph = new Map();
   const byNet = new Map<string, Set<string>>();
   endpoints.forEach((endpoint) => {
-    if (isPowerNet(endpoint.net)) {
-      return;
-    }
     const refs = byNet.get(endpoint.net) ?? new Set<string>();
     refs.add(endpoint.ref);
     byNet.set(endpoint.net, refs);
@@ -1333,34 +1370,43 @@ function connectionDegree(ref: string, graph: NetGraph) {
   return graph.get(ref)?.size ?? 0;
 }
 
-function buildPlacedAirwires(placedByName: Map<string, PlacedComponent>, endpointMap: EndpointMap) {
+function buildPlacedAirwires(placedByName: Map<string, PlacedComponent>, endpointMap: EndpointMap, boardModel: BoardModel) {
   const airwires: Airwire[] = [];
   const byNet = endpointsGroupedByNet(endpointMap);
   byNet.forEach((netEndpoints, net) => {
-    if (isPowerNet(net)) {
-      return;
-    }
-    for (let a = 0; a < netEndpoints.length; a += 1) {
-      for (let b = a + 1; b < netEndpoints.length; b += 1) {
-        const firstComponent = placedByName.get(netEndpoints[a].ref);
-        const secondComponent = placedByName.get(netEndpoints[b].ref);
-        if (!firstComponent || !secondComponent) {
-          continue;
-        }
-        airwires.push({
-          from: pinGridAt(firstComponent, firstComponent.position, netEndpoints[a].pin),
-          to: pinGridAt(secondComponent, secondComponent.position, netEndpoints[b].pin),
-          net
-        });
-      }
+    const groups = new Map<string, GridPoint[]>();
+    netEndpoints.forEach((endpoint) => {
+      const component = placedByName.get(endpoint.ref);
+      if (!component) return;
+      const point = pinGridAt(component, component.position, endpoint.pin);
+      const node = boardModel.getElectricalNode(point);
+      const nodeKey = node ?? `unresolved:${point[0]},${point[1]}`;
+      const points = groups.get(nodeKey) ?? [];
+      points.push(point);
+      groups.set(nodeKey, points);
+    });
+
+    const remaining = [...groups.values()];
+    const connected = remaining.splice(0, 1);
+    while (remaining.length > 0 && connected.length > 0) {
+      let best: { from: GridPoint; to: GridPoint; distance: number; targetIndex: number } | undefined;
+      connected.forEach((fromGroup) => remaining.forEach((toGroup, targetIndex) => {
+        fromGroup.forEach((from) => toGroup.forEach((to) => {
+          const distance = manhattan(from, to);
+          if (!best || distance < best.distance) best = { from, to, distance, targetIndex };
+        }));
+      }));
+      if (!best) break;
+      if (best.distance > 0) airwires.push({ from: best.from, to: best.to, net });
+      connected.push(remaining.splice(best.targetIndex, 1)[0]);
     }
   });
   return airwires;
 }
 
-function countAirwireCrossings(components: PlacedComponent[], endpoints: RoutedNetEndpoint[]) {
+function countAirwireCrossings(components: PlacedComponent[], endpoints: RoutedNetEndpoint[], board: BoardSize) {
   const byName = new Map(components.map((component) => [component.name, component]));
-  return countCandidateCrossings(buildPlacedAirwires(byName, buildEndpointMap(endpoints)), []);
+  return countCandidateCrossings(buildPlacedAirwires(byName, buildEndpointMap(endpoints), getBoardModel(board)), []);
 }
 
 function countCandidateCrossings(candidateAirwires: Airwire[], placedAirwires: Airwire[]) {
