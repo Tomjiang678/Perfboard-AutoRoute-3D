@@ -15,6 +15,9 @@ declare global {
           body?: string;
         }): Promise<{ ok: boolean; status: number; statusText: string; body: string }>;
       };
+      projectFiles: {
+        onOpen(callback: (file: { filePath?: string; content?: string; message?: string }) => void): () => void;
+      };
     };
   }
 }

@@ -3,6 +3,62 @@ const fs = require("fs/promises");
 const path = require("path");
 
 const AI_CONFIG_FILE = "ai-config.json";
+const PROJECT_FILE_EXTENSION = ".json";
+const pendingProjectFiles = [];
+let mainWindow;
+let rendererReady = false;
+
+app.setName("ProtoRoute 3D");
+
+function projectFileFromArgs(args) {
+  return args.find((arg) => typeof arg === "string" &&
+    path.extname(arg).toLowerCase() === PROJECT_FILE_EXTENSION &&
+    !arg.startsWith("--"));
+}
+
+function queueProjectFile(filePath) {
+  if (!filePath || path.extname(filePath).toLowerCase() !== PROJECT_FILE_EXTENSION) return;
+  pendingProjectFiles.push(path.resolve(filePath));
+  dispatchProjectFiles();
+}
+
+async function dispatchProjectFiles() {
+  if (!rendererReady || !mainWindow || mainWindow.isDestroyed()) return;
+  while (pendingProjectFiles.length) {
+    const filePath = pendingProjectFiles.shift();
+    try {
+      const content = await fs.readFile(filePath, "utf8");
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("project:open-file", { filePath, content });
+      }
+    } catch (error) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("project:open-file-error", {
+          filePath,
+          message: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+  }
+}
+
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  queueProjectFile(projectFileFromArgs(process.argv.slice(1)));
+  app.on("second-instance", (_event, argv) => {
+    queueProjectFile(projectFileFromArgs(argv.slice(1)));
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+  app.on("open-file", (event, filePath) => {
+    event.preventDefault();
+    queueProjectFile(filePath);
+  });
+}
 
 function aiConfigPath() {
   return path.join(app.getPath("userData"), AI_CONFIG_FILE);
@@ -49,7 +105,7 @@ async function requestAiApi(_event, request) {
 }
 
 function createWindow() {
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1000,
@@ -63,7 +119,11 @@ function createWindow() {
     }
   });
 
-  win.loadFile(path.join(__dirname, "../dist/index.html"));
+  mainWindow.on("closed", () => {
+    mainWindow = undefined;
+    rendererReady = false;
+  });
+  mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
 }
 
 app.whenReady().then(() => {
@@ -73,7 +133,11 @@ app.whenReady().then(() => {
   ipcMain.handle("ai-config:load", readAiConfig);
   ipcMain.handle("ai-config:save", writeAiConfig);
   ipcMain.handle("ai-api:request", requestAiApi);
-  createWindow();
+  ipcMain.on("project:renderer-ready", () => {
+    rendererReady = true;
+    dispatchProjectFiles();
+  });
+  if (hasSingleInstanceLock) createWindow();
 });
 
 app.on("window-all-closed", () => {

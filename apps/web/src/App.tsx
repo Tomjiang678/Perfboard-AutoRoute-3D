@@ -110,6 +110,14 @@ export function App() {
     }
   }, []);
 
+  useEffect(() => window.perfboardDesktop?.projectFiles.onOpen((file) => {
+    if (file.content !== undefined) {
+      handleOpenProjectText(file.content);
+    } else {
+      window.alert(`无法打开工程文件：${file.filePath ?? ""}\n${file.message ?? "读取失败"}`);
+    }
+  }), []);
+
   useEffect(() => {
     if (!project) {
       return;
@@ -357,7 +365,14 @@ export function App() {
 
   async function handleOpenProject(file: File) {
     try {
-      const text = await file.text();
+      handleOpenProjectText(await file.text());
+    } catch {
+      window.alert("无法打开工程文件，请确认是导出的 JSON 工程。");
+    }
+  }
+
+  function handleOpenProjectText(text: string) {
+    try {
       const next = withMigratedConstraints(JSON.parse(text) as PerfboardProject);
       replaceProject(next);
       setSelectedComponentId(undefined);
