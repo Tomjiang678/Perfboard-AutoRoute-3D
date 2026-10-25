@@ -3,6 +3,7 @@
   "version": "2.0.0",
   "description": "A 3D perfboard component placement, routing, jumper planning, and DRC tool.",
   "author": "zhuohanjiang",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",

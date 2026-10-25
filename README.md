@@ -72,7 +72,7 @@ data                     器件、封装、示例数据预留目录
 进入 Web 项目目录：
 
 ```powershell
-cd D:\jzh_doc\prefboard(breadboard)_auto_routing\apps\web
+cd apps/web
 ```
 
 安装依赖：
@@ -116,7 +116,7 @@ npm.cmd run preview
 进入 Web 项目目录：
 
 ```powershell
-cd D:\jzh_doc\prefboard(breadboard)_auto_routing\apps\web
+cd apps/web
 ```
 
 安装依赖：
@@ -178,3 +178,7 @@ apps/web/release/win-unpacked/ProtoRoute 3D.exe
 - 手工修线后应继续增强自动 DRC 复检和错误定位交互。
 - Python 后端目前尚未接入，布线算法主要在前端 TypeScript 内运行。
 - Electron EXE 体积会较大，这是 Electron 的正常代价。
+
+## 许可证
+
+本项目采用 [MIT License](LICENSE) 开源。你可以自由使用、复制、修改和分发本项目，但须保留原始版权声明和许可证声明。
