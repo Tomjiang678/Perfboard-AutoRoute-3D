@@ -14,6 +14,7 @@ export interface WorkspaceToolbarProps {
   hasComponents: boolean;
   hasImportedComponents: boolean;
   hasDrc: boolean;
+  canClearRoutes: boolean;
   shortcuts: KeyboardShortcuts;
   openMenu?: string;
   onOpenMenu: (label: string | undefined) => void;
@@ -34,6 +35,7 @@ export interface WorkspaceToolbarProps {
   onCreateComponentsFromImport: () => void;
   onOpenAutoPlacement: () => void;
   onAutoRoute: () => void;
+  onClearRoutes: () => void;
   onRunDrc: () => void;
   onClearDrc: () => void;
   onPickComponent: (component: LibraryComponentDefinition) => void;
@@ -47,6 +49,7 @@ export function WorkspaceToolbar({
   hasComponents,
   hasImportedComponents,
   hasDrc,
+  canClearRoutes,
   shortcuts,
   openMenu,
   onOpenMenu,
@@ -67,6 +70,7 @@ export function WorkspaceToolbar({
   onCreateComponentsFromImport,
   onOpenAutoPlacement,
   onAutoRoute,
+  onClearRoutes,
   onRunDrc,
   onClearDrc,
   onPickComponent
@@ -125,6 +129,9 @@ export function WorkspaceToolbar({
         <MenuButton danger active={routeEditMode === "erase"} shortcut={shortcutLabel(shortcuts.erase)} onClick={() => onToggleRouteEditMode("erase")}>
           删线
         </MenuButton>
+        <MenuButton danger disabled={!canClearRoutes} title="清除全部走锡、跳线与 DRC 标记，保留元件与摆放" onClick={onClearRoutes}>
+          清除布线
+        </MenuButton>
       </ToolbarMenu>
 
       <ToolbarMenu label="检查" openMenu={openMenu} onOpenMenu={onOpenMenu}>
@@ -178,6 +185,7 @@ function MenuButton({
   disabled,
   icon,
   shortcut,
+  title,
   children,
   onClick
 }: {
@@ -186,6 +194,7 @@ function MenuButton({
   disabled?: boolean;
   icon?: ReactNode;
   shortcut?: string;
+  title?: string;
   children: ReactNode;
   onClick: () => void;
 }) {
@@ -193,6 +202,7 @@ function MenuButton({
     <button
       className={["toolbar-menu-item", active ? "active" : "", danger ? "danger" : ""].filter(Boolean).join(" ")}
       type="button"
+      title={title}
       disabled={disabled}
       onClick={(event) => {
         onClick();

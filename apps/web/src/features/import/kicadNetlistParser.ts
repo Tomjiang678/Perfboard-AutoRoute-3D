@@ -1,5 +1,6 @@
 import type { ImportState, ImportWarning, ParsedComponent, ParsedNet } from "../../types/project.ts";
-import { devicePinModels, type DevicePinModel } from "./importConfig.ts";
+import { findDevicePinModel, pinNameFromModel } from "./pinModels.ts";
+import { isProtelNetlist, parseProtelNetlist } from "./protelNetlist.ts";
 
 export interface ParsedImportBundle {
   components: ParsedComponent[];
@@ -19,11 +20,17 @@ interface LibPartPins {
   types: Map<number, string>;
 }
 
+/**
+ * Import entry point. The format is sniffed from the content rather than the
+ * extension so 嘉立创/立创EDA exports (Protel 2, `.net`) and KiCad exports (both
+ * `.net`) land on the right parser; anything else is treated as KiCad and will
+ * report a parse error through the usual warning path.
+ */
 export async function parseImportFiles(files: File[]): Promise<ParsedImportBundle> {
   const bundle: ParsedImportBundle = { components: [], nets: [], pinInfo: {}, warnings: [] };
   for (const file of files) {
     const text = await file.text();
-    mergeBundle(bundle, parseKicadNetlist(text, file.name));
+    mergeBundle(bundle, isProtelNetlist(text) ? parseProtelNetlist(text, file.name) : parseKicadNetlist(text, file.name));
   }
   return bundle;
 }
@@ -285,24 +292,6 @@ function componentFootprint(comp: SExprNode): string {
 }
 
 /* ── Device pin model enrichment ──────────────────────────────────────── */
-
-function findDevicePinModel(value: string, category: string): DevicePinModel | undefined {
-  const candidates = [value, category.split(":")[1] ?? ""].filter(Boolean);
-  for (const candidate of candidates) {
-    const model = devicePinModels.find((entry) => entry.match.test(candidate));
-    if (model) return model;
-  }
-  return undefined;
-}
-
-function pinNameFromModel(model: DevicePinModel | undefined, pin: number): string {
-  if (!model) return "";
-  const allUnits = Object.fromEntries(
-    Object.values(model.units).flatMap((unit) => Object.entries(unit))
-  );
-  const entry = Object.entries(allUnits).find(([, physical]) => physical === pin);
-  return entry?.[0] ?? "";
-}
 
 function naturalCompare(a: string, b: string) {
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });

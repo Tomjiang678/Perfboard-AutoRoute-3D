@@ -11,13 +11,14 @@ interface HeaderBarProps {
   onNewProject: () => void;
   onSaveProject: () => void;
   onOpenProject: (file: File) => void;
+  onClearProject: () => void;
   onUndo: () => void;
   canUndo: boolean;
   onOpenSettings: () => void;
   toolbar?: WorkspaceToolbarProps;
 }
 
-export function HeaderBar({ projectName, theme, onToggleTheme, onNewProject, onSaveProject, onOpenProject, onUndo, canUndo, onOpenSettings, toolbar }: HeaderBarProps) {
+export function HeaderBar({ projectName, theme, onToggleTheme, onNewProject, onSaveProject, onOpenProject, onClearProject, onUndo, canUndo, onOpenSettings, toolbar }: HeaderBarProps) {
   function handleProjectAction(event: ChangeEvent<HTMLSelectElement>) {
     const value = event.target.value;
     event.target.value = "";
@@ -26,6 +27,9 @@ export function HeaderBar({ projectName, theme, onToggleTheme, onNewProject, onS
     }
     if (value === "open") {
       document.getElementById("project-open-input")?.click();
+    }
+    if (value === "clear") {
+      onClearProject();
     }
   }
 
@@ -50,6 +54,7 @@ export function HeaderBar({ projectName, theme, onToggleTheme, onNewProject, onS
           <option value="" disabled>Project</option>
           <option value="new">New</option>
           <option value="open">Open</option>
+          <option value="clear">清空工程</option>
         </select>
         <input
           id="project-open-input"

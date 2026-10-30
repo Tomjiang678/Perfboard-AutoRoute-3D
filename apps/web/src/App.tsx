@@ -305,6 +305,7 @@ export function App() {
     hasComponents,
     hasImportedComponents,
     hasDrc,
+    canClearRoutes: project.routing.traces.length > 0 || project.routing.jumpers.length > 0 || Boolean(project.routing.drc),
     shortcuts: settings.shortcuts,
     openMenu: toolbarOpenMenu,
     onOpenMenu: setToolbarOpenMenu,
@@ -325,6 +326,7 @@ export function App() {
     onCreateComponentsFromImport: handleCreateComponentsFromImport,
     onOpenAutoPlacement: autoPlacement.open,
     onAutoRoute: handleAutoRoute,
+    onClearRoutes: handleClearRoutes,
     onRunDrc: handleRunDrc,
     onClearDrc: handleClearDrc,
     onPickComponent: handlePickComponent
@@ -573,6 +575,35 @@ export function App() {
     });
   }
 
+  /** Removes all copper and DRC marks, keeping components and their placement. */
+  function handleClearRoutes() {
+    if (!projectRef.current) return;
+    if (!window.confirm("清除全部走锡、跳线与 DRC 标记？元件与摆放位置会保留。")) return;
+    commitProject((current) => ({
+      ...current,
+      // Routing warnings describe copper that no longer exists, so they go too.
+      routing: { traces: [], jumpers: [], failedNets: [], warnings: [] }
+    }));
+    setRouteDraftStart(undefined);
+  }
+
+  /** Removes every component and all copper; the netlist stays so parts can be regenerated. */
+  function handleClearProject() {
+    if (!projectRef.current) return;
+    if (!window.confirm("清空工程：删除全部元件与走线？导入的网表记录会保留，可重新生成元件。")) return;
+    commitProject((current) => ({
+      ...current,
+      components: [],
+      selectedNetName: undefined,
+      routing: { traces: [], jumpers: [], failedNets: [], warnings: [] }
+    }));
+    setSelectedComponentId(undefined);
+    setSelectedPin(undefined);
+    setPendingComponent(undefined);
+    setRouteEditMode("select");
+    setRouteDraftStart(undefined);
+  }
+
   function handleRunDrc() {
     commitProject((current) => {
       const endpoints = resolveNetEndpoints(current.importState, current.components);
@@ -752,6 +783,7 @@ export function App() {
         onNewProject={() => setIsCreatingProject(true)}
         onSaveProject={handleExportProject}
         onOpenProject={handleOpenProject}
+        onClearProject={handleClearProject}
         onUndo={handleUndo}
         canUndo={undoCount > 0}
         onOpenSettings={() => setIsSettingsOpen(true)}

@@ -25,7 +25,8 @@ ProtoRoute 3D 是一个面向洞洞板和免焊面包板的 3D 元件布局、�
 
 ### 网表导入与元件映射
 
-- 当前导入器支持 KiCad Eeschema 导出的 S-expression `.net` 网表；文件选择器同时接受 `.txt` 后缀的同格式文本。
+- 导入器支持 KiCad Eeschema 导出的 S-expression `.net` 网表，也支持嘉立创 EDA / 立创EDA 导出的 Protel 2 网表（`.net`）：按内容自动识别（文件头 `PROTEL NETLIST`，缺失时按 `DESIGNATOR` 块结构兜底），无需转换；文件选择器同时接受 `.txt` 后缀的文本。
+- Protel 网表没有库字段，导入时按位号前缀与值/封装关键词推断元件类别，并从内置器件引脚模型补齐引脚名与电源脚；推断不出封装的元件仍走回退封装并给出警告。
 - 可同时导入多个网表，也可重新导入或移除文件；界面会显示元件、网络、节点、已映射引脚和缺失引脚统计。
 - 从网表中的 `libparts`、封装和引脚信息生成物理元件，并通过生成的 KiCad 引脚模型库补充引脚名称和电源脚信息。
 - 无法精确识别的器件会使用回退封装并给出警告，不会静默假定映射正确。
@@ -47,6 +48,7 @@ ProtoRoute 3D 是一个面向洞洞板和免焊面包板的 3D 元件布局、�
 - 自动布线后会基于实际连接图复查结果；也可单独运行 DRC。
 - DRC 覆盖未连接引脚、异网短路、走线交叉/重叠、无效孔位、孔位占用、跳线端点冲突、面包板放置规则和可疑 IC 相邻脚短接等问题。
 - 自动布线后仍可手工补走锡、加跳线或删线；手工线路会作为锁定线路参与后续自动布线。
+- 支持**清除布线**（`布线 -> 清除布线`）：清空走锡、跳线与 DRC 标记，保留元件与摆放；`Project -> 清空工程` 会连元件一起清掉。两者都带确认，也都可以撤销。
 
 ### AI 自然语言约束助手
 
@@ -177,6 +179,7 @@ tools                    KiCad 引脚模型生成工具及已弃用的 Multisim 
 apps/web/src/App.tsx                               应用状态与操作入口
 apps/web/src/features/board                        洞洞板/面包板模型与规则
 apps/web/src/features/import/kicadNetlistParser.ts KiCad 网表解析
+apps/web/src/features/import/protelNetlist.ts     嘉立创 / Protel 2 网表解析
 apps/web/src/features/layout/autoPlacement.ts      自动放置与布局优化
 apps/web/src/features/routing/autoRouter.ts        自动布线与 DRC
 apps/web/src/features/constraints                  结构化约束解析与执行
@@ -188,7 +191,7 @@ apps/web/src/renderer3d/parametricComponents.ts    参数化 3D 元件
 
 ## 当前限制
 
-- 当前只实现了 KiCad Eeschema S-expression 网表导入；规划文档中提到的 BOM、SPICE、Multisim 报告和 `.ms14` 导入尚未接入应用。
+- 当前只实现了 KiCad S-expression 网表与 Protel 2 网表（嘉立创 / 立创EDA）；规划文档中提到的 BOM、SPICE、Multisim 报告和 `.ms14` 导入尚未接入应用。
 - `backend`、`packages` 和 `data` 中有多处为未来拆分预留的目录，不能视为已经启用的独立后端或软件包。
 - 自动放置和自动布线是面向项目的启发式实现，不保证得到全局最优解或完成所有复杂网络。
 - 3D 元件是按封装类别生成的参数化模型，不追求具体厂商型号的外观还原。
