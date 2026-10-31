@@ -64,6 +64,18 @@ export type ConstraintDraft =
       net: string;
       maxJumpers: number;
       explanation?: string;
+    }
+  | {
+      kind: "component_adapter";
+      strength: ConstraintStrength;
+      componentRefs: string[];
+      /** 缺省字段按芯片默认值补齐；脚数固定等于芯片脚数，不能指定 */
+      width?: number;
+      height?: number;
+      rowSpacing?: number;
+      /** true = 摘掉转接板 */
+      remove?: boolean;
+      explanation?: string;
     };
 
 export interface AiConstraintResponse {

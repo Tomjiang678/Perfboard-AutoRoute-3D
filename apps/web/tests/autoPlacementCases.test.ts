@@ -52,10 +52,25 @@ for (let seed = 1; seed <= 6; seed += 1) {
   });
 }
 
-test("auto-placement respects the region height (only rows inside)", () => {
+test("auto-placement keeps unplaced components inside the region or reports them", () => {
   const { placed } = pipeline(2, 18, 40, { x: 0, y: 10, width: 18, height: 15 });
   for (const component of placed.components) {
-    assert.ok(component.position[1] >= 10 && component.position[1] < 25, `${component.name} at ${component.position}`);
+    const inside = component.position[1] >= 10 && component.position[1] < 25;
+    const reported = placed.unplaced.includes(component.name);
+    assert.ok(inside || reported, `${component.name} at ${component.position} 既不在区域内，也没有被报告为放不下`);
+  }
+});
+
+test("auto-placement reports every component it could not place", () => {
+  const { placed } = pipeline(2, 18, 40, { x: 0, y: 10, width: 18, height: 15 });
+  assert.ok(placed.unplaced.length > 0, "这组数据本来就放不下，应当报告 unplaced");
+  for (const name of placed.unplaced) {
+    const component = placed.components.find((item) => item.name === name);
+    assert.ok(component, `${name} 不在结果里`);
+    assert.equal(component.mounted, false, `${name} 被报告为放不下，却标记成已放置`);
+  }
+  for (const component of placed.components.filter((item) => item.mounted)) {
+    assert.ok(!placed.unplaced.includes(component.name), `${component.name} 同时出现在已放置和放不下列表里`);
   }
 });
 

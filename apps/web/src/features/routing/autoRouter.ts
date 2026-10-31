@@ -15,6 +15,8 @@ import {
   adjacentCells,
   edgeKey,
   expandOrthogonalPath,
+  pathHasInvalidPoints,
+  cellsAlongSegment,
   formatSegment,
   inBounds,
   key,
@@ -29,8 +31,10 @@ import {
 } from "./routingGeometry.ts";
 import { getBoardModel } from "../board/factory.ts";
 import { componentPinHoles, isPowerNet, pinGridPosition, rotateGridOffset } from "../board/placement.ts";
+import { componentBoardPinCount } from "../project/adapter.ts";
 import { dipPinsPerSide } from "../project/componentLibrary.ts";
 import { centerBridgeKinds } from "../project/componentTraits.ts";
+import { activeConstraints } from "../constraints/model.ts";
 import type { BoardModel } from "../board/types.ts";
 
 interface NetPlan {
@@ -149,8 +153,7 @@ const MAX_RIP_UPS_PER_FAILURE = 3;
 const MAX_TOTAL_RIP_UPS = 18;
 const MAX_ESCAPES_PER_PIN = 3;
 
-export function autoRouteBoard(
-  board: BoardSize,
+export function autoRouteBoard(  board: BoardSize,
   endpoints: RoutedNetEndpoint[],
   components: PlacedComponent[] = [],
   fixedTraces: BottomTrace[] = [],
@@ -181,6 +184,7 @@ export function autoRouteBoard(
     const edgeOwner = new Map<string, RouteOwner>();
     const failedNets = new Set<string>();
     seedFixedTraces(fixedTraces, records, routeOwner, edgeOwner);
+    seedFixedJumpers(fixedJumpers, records, routeOwner, edgeOwner);
     seedRoutingKeepouts(board, constraints, routeOwner);
     const queue = sortNetPlans(plans, congestionBias);
     let didRipUp = false;
@@ -224,7 +228,7 @@ export function autoRouteBoard(
     }
 
     const result = buildRoutingStateFromRecords(records, plans, failedNets);
-    const validation = validateRoutingResult(board, result, endpoints, components);
+    const validation = validateRoutingResult(board, result, endpoints, components, constraints);
     result.drc = validation.drc;
     result.diagnostics = { failedNetDetails: validation.failedNetDetails };
     validation.failedNetDetails.forEach((detail) => failedNets.add(detail.net));
@@ -600,8 +604,8 @@ function findClosestAvailableHolePair(
 }
 
 function jumperBlockedByConstraint(from: GridPoint, to: GridPoint, constraints: DesignConstraint[]) {
-  return constraints.some((constraint) => {
-    if (!constraint.enabled || constraint.status !== "active" || constraint.kind !== "region_keepout" || !constraint.blockJumpers) return false;
+  return activeConstraints(constraints).some((constraint) => {
+    if (constraint.kind !== "region_keepout" || constraint.strength !== "hard" || !constraint.blockJumpers) return false;
     const { x, y, width, height } = constraint.region;
     const left = x - 0.49;
     const right = x + width - 0.51;
@@ -712,10 +716,36 @@ function seedFixedTraces(
 ) {
   traces.forEach((trace) => {
     const priority = Number.MAX_SAFE_INTEGER;
-    const record: RouteRecord = { id: trace.id, net: trace.net, traces: [{ ...trace, locked: true }], jumpers: [], priority };
+    // 固定线路可能只存两个端点：占孔和边占用都必须按展开后的逐格路径登记，
+    // 否则新走锡会直接穿过中间那些孔。
+    const points = expandOrthogonalPath(trace.points);
+    const record: RouteRecord = { id: trace.id, net: trace.net, traces: [{ ...trace, points, locked: true }], jumpers: [], priority };
     records.set(record.id, record);
-    trace.points.forEach(([x, y]) => routeOwner.set(key(x, y), { net: trace.net, routeId: trace.id, priority }));
-    traceEdges(trace.points).forEach((edge) => edgeOwner.set(edge, { net: trace.net, routeId: trace.id, priority }));
+    points.forEach(([x, y]) => routeOwner.set(key(x, y), { net: trace.net, routeId: trace.id, priority }));
+    traceEdges(points).forEach((edge) => edgeOwner.set(edge, { net: trace.net, routeId: trace.id, priority }));
+  });
+}
+
+/** 锁定跳线同样属于用户已有的走线，必须原样保留并占住两个端点。 */
+function seedFixedJumpers(
+  jumpers: JumperRoute[],
+  records: Map<string, RouteRecord>,
+  routeOwner: Map<string, RouteOwner>,
+  edgeOwner: Map<string, RouteOwner>
+) {
+  jumpers.forEach((jumper) => {
+    if (!jumper.locked) return;
+    const priority = Number.MAX_SAFE_INTEGER;
+    const id = `fixed-jumper-${jumper.id}`;
+    records.set(id, {
+      id,
+      net: jumper.net,
+      traces: [],
+      jumpers: [{ ...jumper, locked: true }],
+      priority
+    });
+    [jumper.from, jumper.to].forEach(([x, y]) => routeOwner.set(key(x, y), { net: jumper.net, routeId: id, priority }));
+    edgeOwner.set(edgeKey(jumper.from, jumper.to), { net: jumper.net, routeId: id, priority });
   });
 }
 
@@ -729,9 +759,35 @@ function buildFixedTerminalsByNet(traces: BottomTrace[]) {
   return terminals;
 }
 
+/** 该点是否落在禁布区里：mode 决定按“禁止底面走锡”还是“禁止跳线”判断。 */
+function hardKeepoutAt(
+  point: [number, number],
+  constraints: DesignConstraint[],
+  mode: "blockBottomRouting" | "blockJumpers"
+) {
+  return activeConstraints(constraints).find((constraint): constraint is Extract<DesignConstraint, { kind: "region_keepout" }> => (
+    constraint.kind === "region_keepout" &&
+    constraint.strength === "hard" &&
+    constraint[mode] === true &&
+    point[0] >= constraint.region.x &&
+    point[1] >= constraint.region.y &&
+    point[0] < constraint.region.x + constraint.region.width &&
+    point[1] < constraint.region.y + constraint.region.height
+  ));
+}
+
+function cellPathHasKeepout(
+  from: [number, number],
+  to: [number, number],
+  constraints: DesignConstraint[]
+) {
+  if (activeConstraints(constraints).every((constraint) => constraint.kind !== "region_keepout")) return false;
+  return cellsAlongSegment(from, to).some((cell) => hardKeepoutAt(cell, constraints, "blockJumpers"));
+}
+
 function seedRoutingKeepouts(board: BoardSize, constraints: DesignConstraint[], routeOwner: Map<string, RouteOwner>) {
-  constraints.forEach((constraint) => {
-    if (!constraint.enabled || constraint.status !== "active" || constraint.kind !== "region_keepout" || !constraint.blockBottomRouting) return;
+  activeConstraints(constraints).forEach((constraint) => {
+    if (constraint.kind !== "region_keepout" || constraint.strength !== "hard" || !constraint.blockBottomRouting) return;
     for (let y = constraint.region.y; y < constraint.region.y + constraint.region.height; y += 1) {
       for (let x = constraint.region.x; x < constraint.region.x + constraint.region.width; x += 1) {
         if (inBounds([x, y], board)) {
@@ -974,7 +1030,8 @@ export function validateRoutingResult(
   board: BoardSize,
   result: RoutingState,
   endpoints: RoutedNetEndpoint[],
-  components: PlacedComponent[]
+  components: PlacedComponent[],
+  constraints: DesignConstraint[] = []
 ): RoutingValidationResult {
   const boardModel = getBoardModel(board);
   const issues: DrcIssue[] = [];
@@ -1028,6 +1085,25 @@ export function validateRoutingResult(
         });
       }
     });
+    // 转接板上没接芯片的排针同样占孔，必须参与冲突检查
+    const boardPinCount = componentBoardPinCount(component);
+    for (let pin = component.pinOffsets.length + 1; pin <= boardPinCount; pin += 1) {
+      const grid = pinGridPosition(component, pin);
+      const cell = key(grid[0], grid[1]);
+      const pins = pinsByCell.get(cell) ?? [];
+      pins.push({ ref: component.name, pin, grid });
+      pinsByCell.set(cell, pins);
+      if (!boardModel.isValidHole(grid)) {
+        issues.push({
+          code: "INVALID_BOARD_HOLE",
+          severity: "error",
+          message: `${component.name} 的转接板排针 ${pin} 不在有效孔位上`,
+          ref: component.name,
+          pin,
+          grid
+        });
+      }
+    }
   });
   pinsByCell.forEach((pins, cell) => {
     if (pins.length < 2) return;
@@ -1075,6 +1151,16 @@ export function validateRoutingResult(
   });
 
   result.traces.forEach((trace) => {
+    // 路径里含非法坐标：拒绝这条线路，不能“删掉坏点接着连”
+    if (pathHasInvalidPoints(trace.points ?? [])) {
+      issues.push({
+        code: "TRACE_INVALID_PATH",
+        severity: "error",
+        message: `走锡 ${trace.net} 的路径含有非法坐标，已拒绝检查`,
+        net: trace.net
+      });
+      return;
+    }
     const points = expandOrthogonalPath(trace.points);
     const net = resolveManualRouteNet(trace.net, points, expectedNetByCell, routeNetsByCell);
     for (let index = 0; index < points.length; index += 1) {
@@ -1083,6 +1169,29 @@ export function validateRoutingResult(
       addRouteNet(routeNetsByCell, cell, net);
       conductiveCells.add(cell);
       physicalDsu.add(cell);
+
+      // 走锡落在板外（或已不在有效孔位）直接算错误
+      if (!boardModel.isValidHole(point)) {
+        issues.push({
+          code: "TRACE_OUT_OF_BOARD",
+          severity: "error",
+          message: `走锡 ${net} 经过板外坐标 (${point[0]}, ${point[1]})`,
+          net,
+          grid: point
+        });
+      }
+
+      // 硬禁布区对已有线路同样有效，穿过去必须报出来
+      const keepout = hardKeepoutAt(point, constraints, "blockBottomRouting");
+      if (keepout) {
+        issues.push({
+          code: "KEEPOUT_VIOLATION",
+          severity: "error",
+          message: `走锡 ${net} 穿过禁布区 (${keepout.region.x}, ${keepout.region.y}) ${keepout.region.width}×${keepout.region.height}`,
+          net,
+          grid: point
+        });
+      }
 
       if (index === 0) {
         continue;
@@ -1147,6 +1256,16 @@ export function validateRoutingResult(
         message: `Jumper ${net} to endpoint (${jumper.to[0]},${jumper.to[1]}) is not a usable board hole`,
         net,
         grid: jumper.to
+      });
+    }
+    // 跳线同样不能穿过“禁止跳线”的硬禁布区
+    if (cellPathHasKeepout(jumper.from, jumper.to, constraints)) {
+      issues.push({
+        code: "KEEPOUT_VIOLATION",
+        severity: "error",
+        message: `跳线 ${net} 穿过禁布区（该区域禁止跳线）`,
+        net,
+        grid: jumper.from
       });
     }
     if ((board.kind ?? "perfboard") === "breadboard") {

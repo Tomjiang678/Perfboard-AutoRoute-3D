@@ -8,7 +8,8 @@ const DRAFT_KINDS = new Set([
   "component_orientation",
   "region_keepout",
   "power_rail",
-  "net_jumper_limit"
+  "net_jumper_limit",
+  "component_adapter"
 ]);
 
 export function parseAiConstraintResponse(value: unknown): AiConstraintResponse {
@@ -105,6 +106,17 @@ function validateDraft(value: unknown): ConstraintDraft {
         strength,
         net: text(value.net, "net"),
         maxJumpers: finiteNumber(value.maxJumpers, "maxJumpers", 0, 1000),
+        explanation
+      };
+    case "component_adapter":
+      return {
+        kind: value.kind,
+        strength,
+        componentRefs: stringArray(value.componentRefs),
+        rowSpacing: value.rowSpacing === undefined ? undefined : finiteNumber(value.rowSpacing, "rowSpacing", 1, 63),
+        width: value.width === undefined ? undefined : finiteNumber(value.width, "width", 2, 64),
+        height: value.height === undefined ? undefined : finiteNumber(value.height, "height", 2, 64),
+        remove: value.remove === undefined ? undefined : Boolean(value.remove),
         explanation
       };
     default:

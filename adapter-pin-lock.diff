@@ -1,0 +1,1219 @@
+﻿diff --git a/apps/web/src/App.tsx b/apps/web/src/App.tsx
+index 6d251a4..37e3c50 100644
+--- a/apps/web/src/App.tsx
++++ b/apps/web/src/App.tsx
+@@ -1,4 +1,4 @@
+-import { useEffect, useMemo, useRef, useState } from "react";
++import { useEffect, useMemo, useState } from "react";
+ import { HeaderBar } from "./components/HeaderBar.tsx";
+ import { NewProjectDialog } from "./components/NewProjectDialog.tsx";
+ import { ProjectSidebar } from "./components/ProjectSidebar.tsx";
+@@ -14,28 +14,28 @@ import { createPlacedComponentsFromParsed } from "./features/import/componentMap
+ import { useAutoPlacement } from "./features/layout/useAutoPlacement.ts";
+ import { useAiConstraintAssistant } from "./features/ai/useAiConstraintAssistant.ts";
+ import { projectConstraints, withMigratedConstraints } from "./features/constraints/model.ts";
+-import {
+-  applyRoutingConstraintReport,
+-  buildPowerRailTraces
+-} from "./features/constraints/execution.ts";
++import { buildPowerRailTraces } from "./features/constraints/execution.ts";
+ import { bendComponentPin, pinGridPosition } from "./features/layout/manualPlacement.ts";
+ import { resolveNetEndpoints } from "./features/import/netEndpointResolver.ts";
+-import { autoRouteBoard, validateRoutingResult, MANUAL_NET_NAME } from "./features/routing/autoRouter.ts";
+-import { stripDrcWarnings } from "./features/routing/drcWarnings.ts";
++import { MANUAL_NET_NAME } from "./features/routing/autoRouter.ts";
++import { autoRouteInWorker } from "./features/routing/autoRouteWorkerClient.ts";
++import { buildDrcReport } from "./features/routing/drcReport.ts";
++import { stripConstraintWarnings, stripDrcWarnings } from "./features/routing/drcWarnings.ts";
+ import { expandOrthogonalPath } from "./features/routing/routingGeometry.ts";
+ import { removeRoutesToComponent } from "./features/routing/removeComponentRoutes.ts";
+ import { createProject } from "./features/project/projectFactory.ts";
+-import { invalidateDrcIfInputsChanged } from "./features/project/projectTransitions.ts";
++import { useProjectDocument, PROJECT_STORAGE_KEY } from "./features/project/useProjectDocument.ts";
++import { validateProjectShape } from "./features/project/projectValidation.ts";
++import { adapterContainsPoint } from "./features/project/adapter.ts";
++import { checkComponentPlacement } from "./features/layout/placementValidity.ts";
+ import { getBoardModel, normalizeBoardDefinition } from "./features/board/factory.ts";
+ import { componentPinHoles } from "./features/board/placement.ts";
+ import { clampSpacing } from "./features/project/componentTraits.ts";
+-import type { BoardSize, DragMoveModifier, ImportState, KeyboardShortcuts, PerfboardProject, PlacedComponent, RoutedNetEndpoint, ThemeMode } from "./types/project.ts";
++import type { AdapterSpec, BoardSize, DragMoveModifier, ImportState, KeyboardShortcuts, PerfboardProject, PlacedComponent, RoutedNetEndpoint, ThemeMode } from "./types/project.ts";
+ import type { SelectedPin } from "./components/Perfboard3DViewport.tsx";
+ import type { RouteEditMode, WorkspaceToolbarProps } from "./components/WorkspaceToolbar.tsx";
+ 
+-const STORAGE_KEY = "perfboard-autoroute-project";
+ const SETTINGS_KEY = "perfboard-autoroute-settings";
+-const MAX_UNDO_HISTORY = 50;
+ 
+ interface AppSettings {
+   dragMoveModifier: DragMoveModifier;
+@@ -68,33 +68,21 @@ const defaultSettings: AppSettings = {
+ };
+ 
+ export function App() {
+-  const [project, setProject] = useState<PerfboardProject | undefined>();
+-  const projectRef = useRef<PerfboardProject | undefined>(undefined);
++  // 工程文档（状态 + 撤销 + 持久化）统一由文档层负责
++  const { project, projectRef, undoCount, commitProject, replaceProject, undo, clearUndoHistory } = useProjectDocument();
+   const [isCreatingProject, setIsCreatingProject] = useState(false);
+   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+   const [selectedComponentId, setSelectedComponentId] = useState<string | undefined>();
+   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+-  const [undoCount, setUndoCount] = useState(0);
+-  const undoStackRef = useRef<PerfboardProject[]>([]);
+   const [isTransparentBoard, setIsTransparentBoard] = useState(false);
+   const [routeEditMode, setRouteEditMode] = useState<RouteEditMode>("select");
+   const [routeDraftStart, setRouteDraftStart] = useState<[number, number] | undefined>();
+   const [pendingComponent, setPendingComponent] = useState<LibraryComponentDefinition | undefined>();
+   const [selectedPin, setSelectedPin] = useState<SelectedPin | undefined>();
+   const [toolbarOpenMenu, setToolbarOpenMenu] = useState<string | undefined>();
++  const [routingRunning, setRoutingRunning] = useState(false);
+ 
+   useEffect(() => {
+-    const saved = window.localStorage.getItem(STORAGE_KEY);
+-    if (!saved) {
+-      return;
+-    }
+-
+-    try {
+-      replaceProject(withMigratedConstraints(JSON.parse(saved) as PerfboardProject));
+-    } catch {
+-      window.localStorage.removeItem(STORAGE_KEY);
+-    }
+-
+     const savedSettings = window.localStorage.getItem(SETTINGS_KEY);
+     if (savedSettings) {
+       try {
+@@ -118,17 +106,6 @@ export function App() {
+     }
+   }), []);
+ 
+-  useEffect(() => {
+-    if (!project) {
+-      return;
+-    }
+-    const timeout = window.setTimeout(() => {
+-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+-    }, 600);
+-
+-    return () => window.clearTimeout(timeout);
+-  }, [project]);
+-
+   useEffect(() => {
+     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+   }, [settings]);
+@@ -138,23 +115,6 @@ export function App() {
+     document.documentElement.style.colorScheme = settings.theme;
+   }, [settings.theme]);
+ 
+-  function commitProject(updater: (current: PerfboardProject) => PerfboardProject) {
+-    const current = projectRef.current;
+-    if (!current) return;
+-
+-    const updated = updater(current);
+-    if (updated === current) return;
+-    const next = invalidateDrcIfInputsChanged(current, updated);
+-
+-    undoStackRef.current = [...undoStackRef.current.slice(-(MAX_UNDO_HISTORY - 1)), current];
+-    setUndoCount(undoStackRef.current.length);
+-    replaceProject(next);
+-  }
+-
+-  function replaceProject(next: PerfboardProject | undefined) {
+-    projectRef.current = next;
+-    setProject(next);
+-  }
+ 
+   function updateComponent(
+     componentId: string,
+@@ -305,6 +265,7 @@ export function App() {
+     hasComponents,
+     hasImportedComponents,
+     hasDrc,
++    routingRunning,
+     canClearRoutes: project.routing.traces.length > 0 || project.routing.jumpers.length > 0 || Boolean(project.routing.drc),
+     shortcuts: settings.shortcuts,
+     openMenu: toolbarOpenMenu,
+@@ -332,20 +293,8 @@ export function App() {
+     onPickComponent: handlePickComponent
+   } : undefined;
+ 
+-  function clearUndoHistory() {
+-    undoStackRef.current = [];
+-    setUndoCount(0);
+-  }
+-
+   function handleUndo() {
+-    const previous = undoStackRef.current.at(-1);
+-    if (!previous) {
+-      return;
+-    }
+-
+-    undoStackRef.current = undoStackRef.current.slice(0, -1);
+-    setUndoCount(undoStackRef.current.length);
+-    replaceProject(previous);
++    if (!undo()) return;
+     setSelectedComponentId(undefined);
+   }
+ 
+@@ -374,14 +323,29 @@ export function App() {
+   }
+ 
+   function handleOpenProjectText(text: string) {
++    let parsed: unknown;
+     try {
+-      const next = withMigratedConstraints(JSON.parse(text) as PerfboardProject);
++      parsed = JSON.parse(text);
++    } catch {
++      window.alert("无法打开工程文件，请确认是导出的 JSON 工程。");
++      return;
++    }
++
++    // 先校验结构，再动状态和本地存储：坏工程不能覆盖掉当前工程
++    const validation = validateProjectShape(parsed);
++    if (!validation.ok) {
++      window.alert(`工程文件不完整，已拒绝载入：\n${validation.issues.slice(0, 6).join("\n")}`);
++      return;
++    }
++
++    try {
++      const next = withMigratedConstraints(parsed as PerfboardProject);
+       replaceProject(next);
+       setSelectedComponentId(undefined);
+       setSelectedPin(undefined);
+       setPendingComponent(undefined);
+       clearUndoHistory();
+-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
++      window.localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(next));
+     } catch {
+       window.alert("无法打开工程文件，请确认是导出的 JSON 工程。");
+     }
+@@ -397,6 +361,8 @@ export function App() {
+   }
+ 
+   async function handleImportFiles(files: File[]) {
++    // 记录下来这次导入属于哪个工程：读文件期间可能新建/打开了别的工程
++    const targetProjectId = projectRef.current?.id;
+     let parsed;
+     try {
+       parsed = await parseImportFiles(files);
+@@ -409,6 +375,10 @@ export function App() {
+     const fileNames = files.map((file) => file.name);
+ 
+     commitProject((current) => {
++      if (!targetProjectId || current.id !== targetProjectId) {
++        console.warn("[import] 工程已切换，本次导入结果已丢弃");
++        return current;
++      }
+       const importState = mergeImportState(removeFileData(current.importState, fileNames), parsed);
+       const newFiles = [
+         ...current.files.filter((file) => !fileNames.includes(file.name)),
+@@ -472,6 +442,7 @@ export function App() {
+       pinHeaderRows: component.pinHeaderRows,
+       pinHeaderColumns: component.pinHeaderColumns,
+       pinOffsets: component.pinOffsets,
++      adapter: component.adapter,
+       position,
+       rotation: 0,
+       mounted: false
+@@ -493,7 +464,48 @@ export function App() {
+   }
+ 
+   function handleMoveComponent(componentId: string, position: [number, number]) {
+-    updateComponent(componentId, (component) => ({ ...component, position }));
++    commitProject((current) => {
++      const moving = current.components.find((component) => component.id === componentId);
++      if (!moving) return current;
++
++      // 把芯片放到转接板上：脚数完全一致的才合并，脚数不同就不认这块板
++      const host =
++        moving.kind === "adapter"
++          ? undefined
++          : current.components.find(
++              (component) =>
++                component.kind === "adapter" &&
++                component.id !== componentId &&
++                component.adapter !== undefined &&
++                component.adapter.pinCount === moving.pinOffsets.length &&
++                adapterContainsPoint(component.position, component.adapter, position)
++            );
++
++      if (!host?.adapter) {
++        // 与自动放置共用同一套“能不能放”判定：重叠 + 硬禁布区
++        const check = checkComponentPlacement(current, { ...moving, position });
++        if (!check.valid) return current;
++        return {
++          ...current,
++          components: current.components.map((component) =>
++            component.id === componentId ? { ...component, position } : component
++          )
++        };
++      }
++
++      const merged = {
++        ...moving,
++        adapter: host.adapter,
++        position: host.position,
++        rotation: host.rotation
++      };
++      return {
++        ...current,
++        components: current.components
++          .filter((component) => component.id !== host.id)
++          .map((component) => (component.id === componentId ? merged : component))
++      };
++    });
+   }
+ 
+   function handleUpdateBoard(board: BoardSize) {
+@@ -538,41 +550,93 @@ export function App() {
+     });
+   }
+ 
+-  function handleAutoRoute() {
+-    commitProject((current) => {
+-      const endpoints = resolveNetEndpoints(current.importState, current.components);
+-      const allConstraints = projectConstraints(current);
++  async function handleAutoRoute() {
++    const sourceProject = projectRef.current;
++    if (!sourceProject || routingRunning) return;
++    setRoutingRunning(true);
++    try {
++      const endpoints = resolveNetEndpoints(sourceProject.importState, sourceProject.components);
++      const allConstraints = projectConstraints(sourceProject);
+       const extraWarnings: string[] = [];
+       let constraints = allConstraints;
+-      if ((current.board.kind ?? "perfboard") === "breadboard") {
++      if ((sourceProject.board.kind ?? "perfboard") === "breadboard") {
+         const railConstraints = allConstraints.filter((constraint) => constraint.kind === "power_rail");
+         if (railConstraints.length > 0) {
+           extraWarnings.push(...railConstraints.map((constraint) => `面包板不支持电源母线约束：${constraint.net}（已忽略）。`));
+           constraints = allConstraints.filter((constraint) => constraint.kind !== "power_rail");
+         }
+       }
+-      const rails = buildPowerRailTraces(constraints, endpoints, current.components);
++      const rails = buildPowerRailTraces(constraints, endpoints, sourceProject.components);
+       if (rails.errors.length > 0) {
+-        return {
++        commitProject((current) => ({
+           ...current,
+           routing: {
+             ...current.routing,
+             warnings: [...current.routing.warnings, ...rails.errors]
+           }
+-        };
++        }));
++        return;
+       }
+       const fixedTraces = [
+         ...rails.traces,
+-        ...current.routing.traces.filter((trace) => trace.locked && !trace.id.startsWith("constraint-rail-"))
++        ...sourceProject.routing.traces.filter((trace) => trace.locked && !trace.id.startsWith("constraint-rail-"))
+       ];
+-      const fixedJumpers = current.routing.jumpers.filter((jumper) => jumper.locked);
+-      const routing = autoRouteBoard(current.board, endpoints, current.components, fixedTraces, constraints, undefined, fixedJumpers);
+-      const reported = applyRoutingConstraintReport(routing, constraints);
+-      return {
+-        ...current,
+-        routing: { ...reported, warnings: [...reported.warnings, ...extraWarnings] }
++      const fixedJumpers = sourceProject.routing.jumpers.filter((jumper) => jumper.locked);
++
++      // 放到 worker 里跑：这里是最重的一段，主线程不能卡
++      const routing = await autoRouteInWorker({
++        board: sourceProject.board,
++        endpoints,
++        components: sourceProject.components,
++        fixedTraces,
++        constraints,
++        fixedJumpers
++      });
++
++      // 布线结果也走同一个 DRC 真值入口（接线校验 + 网表完整性 + 约束报告）
++      const report = buildDrcReport(sourceProject, routing);
++      const routed = {
++        ...routing,
++        drc: report.drc,
++        diagnostics: report.diagnostics,
++        failedNets: report.failedNets
+       };
+-    });
++      // 布线期间用户可能改了布局/线路：输入变了就丢弃这次结果，不能覆盖它
++      commitProject((current) => {
++        if (current.id !== sourceProject.id) return current;
++        const inputsUnchanged =
++          current.components === sourceProject.components &&
++          current.board === sourceProject.board &&
++          current.routing === sourceProject.routing &&
++          current.constraints === sourceProject.constraints &&
++          // 布线期间重新导入网表同样会让结果过期
++          current.importState === sourceProject.importState;
++        if (!inputsUnchanged) {
++          return {
++            ...current,
++            routing: {
++              ...current.routing,
++              warnings: [...current.routing.warnings, "布线期间工程已被修改，本次自动布线结果已丢弃。"]
++            }
++          };
++        }
++        return {
++          ...current,
++          routing: {
++            ...routed,
++            warnings: [...stripConstraintWarnings(routed.warnings), ...report.warnings, ...extraWarnings]
++          }
++        };
++      });
++    } catch (error) {
++      const message = error instanceof Error ? error.message : "自动布线失败。";
++      commitProject((current) => ({
++        ...current,
++        routing: { ...current.routing, warnings: [...current.routing.warnings, `自动布线失败：${message}`] }
++      }));
++    } finally {
++      setRoutingRunning(false);
++    }
+   }
+ 
+   /** Removes all copper and DRC marks, keeping components and their placement. */
+@@ -606,27 +670,16 @@ export function App() {
+ 
+   function handleRunDrc() {
+     commitProject((current) => {
+-      const endpoints = resolveNetEndpoints(current.importState, current.components);
+-      const validation = validateRoutingResult(current.board, current.routing, endpoints, current.components);
+-      const failedNets = new Set(current.routing.failedNets);
+-      validation.failedNetDetails.forEach((detail) => failedNets.add(detail.net));
+-      validation.drc.errors.forEach((issue) => {
+-        if (issue.net) {
+-          failedNets.add(issue.net);
+-        }
+-        if (issue.expectedNet) {
+-          failedNets.add(issue.expectedNet);
+-        }
+-      });
+-
++      // 唯一的 DRC 真值来源：接线校验 + 网表完整性 + 约束报告
++      const report = buildDrcReport(current, current.routing);
+       return {
+         ...current,
+         routing: {
+           ...current.routing,
+-          drc: validation.drc,
+-          diagnostics: { failedNetDetails: validation.failedNetDetails },
+-          warnings: stripDrcWarnings(current.routing.warnings),
+-          failedNets: [...failedNets]
++          drc: report.drc,
++          diagnostics: report.diagnostics,
++          warnings: [...stripConstraintWarnings(stripDrcWarnings(current.routing.warnings)), ...report.warnings],
++          failedNets: report.failedNets
+         }
+       };
+     });
+@@ -757,11 +810,14 @@ export function App() {
+     leadSpacing?: number;
+     rowSpacing?: number;
+     sameSidePitch?: number;
++    adapter?: AdapterSpec;
+   }) {
+     if (!selectedComponentId) return;
+     commitProject((current) => {
+       const component = current.components.find((item) => item.id === selectedComponentId);
+       if (!component) return current;
++      // 放置之后脚位已经定了，转接板规格不允许再变
++      if (patch.adapter !== undefined && component.mounted) return current;
+       const next = {
+         ...component,
+         ...patch,
+@@ -774,6 +830,14 @@ export function App() {
+     });
+   }
+ 
++  function handleDetachAdapter() {
++    if (!selectedComponentId) return;
++    // 已经放到板上的元件不允许摘转接板：脚位已经参与布线
++    updateComponent(selectedComponentId, (component) =>
++      component.mounted ? component : { ...component, adapter: undefined }
++    );
++  }
++
+   return (
+     <div className="app-shell">
+       <HeaderBar
+@@ -806,6 +870,7 @@ export function App() {
+           onMountSelected={handleMountSelected}
+           onUnmountSelected={handleUnmountSelected}
+           onUpdateSelected={handleUpdateSelected}
++          onDetachAdapter={handleDetachAdapter}
+           highlightedEndpoints={highlightedEndpoints}
+           routeEditMode={routeEditMode}
+           isPlacingComponent={Boolean(pendingComponent)}
+diff --git a/apps/web/src/components/ComponentLibrary.tsx b/apps/web/src/components/ComponentLibrary.tsx
+index 036431e..d6af84f 100644
+--- a/apps/web/src/components/ComponentLibrary.tsx
++++ b/apps/web/src/components/ComponentLibrary.tsx
+@@ -8,6 +8,7 @@ import {
+   MAX_PIN_HEADER_DIMENSION,
+   MAX_PIN_HEADER_PINS
+ } from "../features/project/pinHeader.ts";
++import { createAdapterDefinition, normalizeAdapterSpec } from "../features/project/adapter.ts";
+ 
+ interface ComponentLibraryProps {
+   onPickComponent: (component: LibraryComponentDefinition) => void;
+@@ -21,6 +22,18 @@ export function ComponentLibrary({ onPickComponent }: ComponentLibraryProps) {
+   const pinHeaderPinCount = pinHeaderRows * pinHeaderColumns;
+   const pinHeaderValid = pinHeaderPinCount <= MAX_PIN_HEADER_PINS;
+ 
++  const [adapterConfiguratorOpen, setAdapterConfiguratorOpen] = useState(false);
++  const [adapterPins, setAdapterPins] = useState(16);
++  const [adapterWidth, setAdapterWidth] = useState(7);
++  const [adapterHeight, setAdapterHeight] = useState(10);
++  const [adapterRowSpacing, setAdapterRowSpacing] = useState(6);
++  const adapterDraft = normalizeAdapterSpec({
++    pinCount: adapterPins,
++    width: adapterWidth,
++    height: adapterHeight,
++    rowSpacing: adapterRowSpacing
++  });
++
+   return (
+     <div className="component-library-menu">
+       <button className={isOpen ? "icon-text-button active" : "icon-text-button"} type="button" onClick={() => setIsOpen((current) => !current)}>
+@@ -39,7 +52,12 @@ export function ComponentLibrary({ onPickComponent }: ComponentLibraryProps) {
+             <div className="component-library-dialog-grid">
+               {componentLibrary.map((component) => (
+                 <button
+-                  className={component.kind === "pin_header" && pinHeaderConfiguratorOpen ? "library-item active" : "library-item"}
++                  className={
++                    (component.kind === "pin_header" && pinHeaderConfiguratorOpen) ||
++                    (component.kind === "adapter" && adapterConfiguratorOpen)
++                      ? "library-item active"
++                      : "library-item"
++                  }
+                   key={`${component.kind}-${component.label}-${component.pinCount ?? ""}`}
+                   type="button"
+                   onClick={() => {
+@@ -47,13 +65,17 @@ export function ComponentLibrary({ onPickComponent }: ComponentLibraryProps) {
+                       setPinHeaderConfiguratorOpen(true);
+                       return;
+                     }
++                    if (component.kind === "adapter") {
++                      setAdapterConfiguratorOpen(true);
++                      return;
++                    }
+                     onPickComponent(component);
+                     setIsOpen(false);
+                   }}
+                   title={`Select ${component.title}`}
+                 >
+                   <Component size={16} />
+-                  <span>{component.kind === "pin_header" ? "排针" : component.title}</span>
++                  <span>{component.kind === "pin_header" ? "排针" : component.kind === "adapter" ? "转接板" : component.title}</span>
+                 </button>
+               ))}
+               {pinHeaderConfiguratorOpen && (
+@@ -101,6 +123,72 @@ export function ComponentLibrary({ onPickComponent }: ComponentLibraryProps) {
+                   </button>
+                 </section>
+               )}
++              {adapterConfiguratorOpen && (
++                <section className="pin-header-configurator" aria-label="转接板">
++                  <div className="pin-header-configurator-heading">
++                    <strong>自定义转接板</strong>
++                    <span>
++                      {adapterDraft.pinCount} 脚 · {adapterDraft.width}×{adapterDraft.height} 孔
++                    </span>
++                  </div>
++                  <div className="pin-header-dimension-fields">
++                    <label>
++                      <span>排针脚数</span>
++                      <input
++                        type="number"
++                        min={2}
++                        max={64}
++                        step={2}
++                        value={adapterPins}
++                        onChange={(event) => setAdapterPins(Math.max(2, Math.round(Number(event.target.value) || 2)))}
++                      />
++                    </label>
++                    <label>
++                      <span>两排间距</span>
++                      <input
++                        type="number"
++                        min={1}
++                        max={63}
++                        value={adapterRowSpacing}
++                        onChange={(event) => setAdapterRowSpacing(Math.max(1, Math.round(Number(event.target.value) || 1)))}
++                      />
++                    </label>
++                  </div>
++                  <div className="pin-header-dimension-fields">
++                    <label>
++                      <span>宽（孔）</span>
++                      <input
++                        type="number"
++                        min={2}
++                        max={64}
++                        value={adapterWidth}
++                        onChange={(event) => setAdapterWidth(Math.max(2, Math.round(Number(event.target.value) || 2)))}
++                      />
++                    </label>
++                    <label>
++                      <span>高（孔）</span>
++                      <input
++                        type="number"
++                        min={2}
++                        max={64}
++                        value={adapterHeight}
++                        onChange={(event) => setAdapterHeight(Math.max(2, Math.round(Number(event.target.value) || 2)))}
++                      />
++                    </label>
++                  </div>
++                  <button
++                    className="tool-button primary"
++                    type="button"
++                    onClick={() => {
++                      onPickComponent(createAdapterDefinition(adapterDraft));
++                      setIsOpen(false);
++                      setAdapterConfiguratorOpen(false);
++                    }}
++                  >
++                    使用 {adapterDraft.pinCount} 脚转接板
++                  </button>
++                </section>
++              )}
+             </div>
+           </section>
+         </div>
+diff --git a/apps/web/src/components/Workspace.tsx b/apps/web/src/components/Workspace.tsx
+index eeffb04..df6a746 100644
+--- a/apps/web/src/components/Workspace.tsx
++++ b/apps/web/src/components/Workspace.tsx
+@@ -1,7 +1,8 @@
+ import { Layers3 } from "lucide-react";
+ import type { LibraryComponentDefinition } from "../features/project/componentLibrary.ts";
+-import type { BoardSize, DragMoveModifier, PerfboardProject, RoutedNetEndpoint, ThemeMode } from "../types/project.ts";
++import type { AdapterSpec, BoardSize, DragMoveModifier, PerfboardProject, RoutedNetEndpoint, ThemeMode } from "../types/project.ts";
+ import { getBoardModel } from "../features/board/factory.ts";
++import { normalizeAdapter } from "../features/project/adapter.ts";
+ import { spacingLimits } from "../features/project/componentTraits.ts";
+ import { PLACEHOLDER_NOTE } from "../features/import/componentMapping.ts";
+ import { Perfboard3DViewport, type SelectedPin } from "./Perfboard3DViewport.tsx";
+@@ -19,6 +20,7 @@ interface WorkspaceProps {
+   onUpdateBoard: (board: BoardSize) => void;
+   onRotateSelected: () => void;
+   onDeleteSelected: () => void;
++  onDetachAdapter: () => void;
+   onMountSelected: () => void;
+   onUnmountSelected: () => void;
+   onUpdateSelected: (patch: {
+@@ -27,6 +29,7 @@ interface WorkspaceProps {
+     leadSpacing?: number;
+     rowSpacing?: number;
+     sameSidePitch?: number;
++    adapter?: AdapterSpec;
+   }) => void;
+   highlightedEndpoints: RoutedNetEndpoint[];
+   routeEditMode: RouteEditMode;
+@@ -49,6 +52,7 @@ export function Workspace({
+   onUpdateBoard,
+   onRotateSelected,
+   onDeleteSelected,
++  onDetachAdapter,
+   onMountSelected,
+   onUnmountSelected,
+   onUpdateSelected,
+@@ -92,6 +96,7 @@ export function Workspace({
+           onMovePin={onMovePin}
+           onRotateSelected={onRotateSelected}
+           onDeleteSelected={onDeleteSelected}
++          onDetachAdapter={onDetachAdapter}
+           onMountSelected={onMountSelected}
+           onUnmountSelected={onUnmountSelected}
+           onUpdateBoard={onUpdateBoard}
+@@ -171,6 +176,65 @@ export function Workspace({
+               </span>
+               <span>{selectedComponent.mounted ? "已放置" : "未放置"}</span>
+             </div>
++            {selectedComponent.adapter && (() => {
++              const adapter = selectedComponent.adapter;
++              const locked = selectedComponent.mounted;
++              const chipPins = selectedComponent.pinOffsets.length;
++              const chipRowSpacing = Math.max(1, selectedComponent.rowSpacing || 1);
++              const minWidth = Math.max(adapter.rowSpacing + 1, chipRowSpacing + 1);
++              const minHeight = Math.ceil(chipPins / 2);
++              const patchAdapter = (change: Partial<AdapterSpec>) =>
++                onUpdateSelected({
++                  adapter: normalizeAdapter(
++                    { ...adapter, ...change },
++                    { pinCount: chipPins, rowSpacing: chipRowSpacing }
++                  ).adapter
++                });
++              return (
++                <div className={`adapter-inspector${locked ? " is-locked" : ""}`}>
++                  <h3>转接板{locked && <span className="adapter-lock-note">已放置，锁定</span>}</h3>
++                  <p className="adapter-pin-count">排针 {chipPins} 脚（与芯片一致）</p>
++                  <label>
++                    <span>两列间距（≥{chipRowSpacing}）</span>
++                    <input
++                      type="number"
++                      min={chipRowSpacing}
++                      max={63}
++                      disabled={locked}
++                      value={adapter.rowSpacing}
++                      onChange={(event) => patchAdapter({ rowSpacing: Number(event.target.value) })}
++                    />
++                  </label>
++                  <div className="adapter-inspector-size">
++                    <label>
++                      <span>宽（≥{minWidth}）</span>
++                      <input
++                        type="number"
++                        min={minWidth}
++                        max={64}
++                        disabled={locked}
++                        value={adapter.width}
++                        onChange={(event) => patchAdapter({ width: Number(event.target.value) })}
++                      />
++                    </label>
++                    <label>
++                      <span>高（≥{minHeight}）</span>
++                      <input
++                        type="number"
++                        min={minHeight}
++                        max={64}
++                        disabled={locked}
++                        value={adapter.height}
++                        onChange={(event) => patchAdapter({ height: Number(event.target.value) })}
++                      />
++                    </label>
++                  </div>
++                  <button className="icon-text-button" type="button" disabled={locked} onClick={onDetachAdapter}>
++                    {locked ? "放置后不能移除转接板" : "移除转接板"}
++                  </button>
++                </div>
++              );
++            })()}
+             {selectedComponent.isFallback && (
+               <div className="fallback-component-note">
+                 <strong>库中无对应封装</strong>
+diff --git a/apps/web/src/features/ai/constraintPrompt.ts b/apps/web/src/features/ai/constraintPrompt.ts
+index b0c2c51..b81a825 100644
+--- a/apps/web/src/features/ai/constraintPrompt.ts
++++ b/apps/web/src/features/ai/constraintPrompt.ts
+@@ -1,6 +1,7 @@
+ import type { PerfboardProject } from "../../types/project.ts";
+ import { constraintCatalogForPrompt, constraintResponseSchema } from "../constraints/catalog.ts";
+ import { resolveNetEndpoints } from "../import/netEndpointResolver.ts";
++import { componentBoardPinOffsets } from "../project/adapter.ts";
+ 
+ export function buildConstraintPrompt(userText: string, project: PerfboardProject) {
+   const physicalEndpoints = resolveNetEndpoints(project.importState, project.components);
+@@ -17,19 +18,27 @@ export function buildConstraintPrompt(userText: string, project: PerfboardProjec
+         validY: [0, project.board.height - 1]
+       }
+     },
+-    components: project.components.map((component) => ({
+-      id: component.id,
+-      ref: component.name,
+-      label: component.label,
+-      category: component.kind,
+-      value: component.value,
+-      pinCount: component.pinOffsets.length,
+-      pinOffsets: component.pinOffsets,
+-      feasibleFootprintSizes: feasibleFootprintSizes(component.pinOffsets),
+-      mounted: component.mounted,
+-      position: component.position,
+-      rotationDegrees: Math.round(component.rotation * 180 / Math.PI)
+-    })),
++    components: project.components.map((component) => {
++      const boardPins = componentBoardPinOffsets(component);
++      return {
++        id: component.id,
++        ref: component.name,
++        label: component.label,
++        category: component.kind,
++        value: component.value,
++        pinCount: component.pinOffsets.length,
++        pinOffsets: component.pinOffsets,
++        /** 非 null 表示芯片插在转接板上 */
++        adapter: component.adapter ? { ...component.adapter } : null,
++        /** 板上实际占用的脚位：带转接板时是转接板排针 */
++        boardPinCount: boardPins.length,
++        boardPinOffsets: boardPins,
++        feasibleFootprintSizes: feasibleFootprintSizes(boardPins),
++        mounted: component.mounted,
++        position: component.position,
++        rotationDegrees: Math.round(component.rotation * 180 / Math.PI)
++      };
++    }),
+     nets: project.importState.nets.map((net) => ({
+       name: net.name,
+       nodes: net.nodes.map((node) => ({ ref: node.ref, pin: node.pin }))
+@@ -59,6 +68,10 @@ export function buildConstraintPrompt(userText: string, project: PerfboardProjec
+ 根据用户完整语义判断 strength；不可违反的要求使用 hard，可优化但允许折中的偏好使用 soft。
+ 所有区域和行列坐标只根据 board.coordinateSystem 计算。
+ component_in_region 的 region 必须能容纳所列每个元件的至少一个 feasibleFootprintSizes 项；不要给元件输出无法放入的单行或单列区域。
++元件若带转接板（adapter 不为 null），它在板上占的是整块转接板板面，尺寸按 boardPinOffsets 计算；选区域、算间距时一律用 boardPinOffsets / feasibleFootprintSizes，不要用芯片自己的 pinOffsets。
++用户在说“把某颗芯片放到哪里、离什么元件近、靠边”时，如果该芯片带转接板，必须按转接板板面考虑占位。
++用户要求“加/换/去掉转接板、插在转接板上、引出来”时，使用 component_adapter；尺寸字段可以省略，省略部分按芯片默认值补齐。
++转接板脚数只能等于芯片脚数（一对一转换）：不要在 component_adapter 里写 pinCount，写了也会被忽略。
+ 有效结果格式：{"action":"constraints","constraints":[...]}。
+ 
+ 指令目录：${JSON.stringify(catalog)}
+diff --git a/apps/web/src/features/constraints/catalog.ts b/apps/web/src/features/constraints/catalog.ts
+index 1093f07..e1d01d8 100644
+--- a/apps/web/src/features/constraints/catalog.ts
++++ b/apps/web/src/features/constraints/catalog.ts
+@@ -44,6 +44,20 @@ export const CONSTRAINT_CATALOG: ConstraintCatalogEntry[] = [
+     kind: "net_jumper_limit",
+     purpose: "限制某个已存在网络的跳线数量",
+     fields: { strength: "hard | soft", net: "确切网络名", maxJumpers: "非负整数" }
++  },
++  {
++    kind: "component_adapter",
++    purpose:
++      "给一个或多个已存在芯片插上转接板（或移除）。芯片插在转接板上时会占用整块板面，比芯片本身大；用户提到“转接板、转接、插在板上、加个底座、引出来”时用这个。省略的尺寸字段按芯片默认值补齐；remove=true 表示移除转接板。",
++    fields: {
++      strength: "hard | soft",
++      componentRefs: "string[]，必须展开成确切位号",
++      pinCount: "可选，偶数，不得小于芯片脚数",
++      rowSpacing: "可选，两列排针间距，不得小于芯片自身排距",
++      width: "可选，板面宽度（孔），不得小于芯片宽度",
++      height: "可选，板面高度（孔），不得小于每列针数",
++      remove: "可选 boolean，true 表示移除转接板"
++    }
+   }
+ ];
+ 
+@@ -111,6 +125,13 @@ export function constraintResponseSchema(componentRefs: string[], netNames: stri
+             }),
+             command("net_jumper_limit", ["net", "maxJumpers"], {
+               net, maxJumpers: { type: "integer", minimum: 0 }
++            }),
++            command("component_adapter", ["componentRefs"], {
++              componentRefs: { type: "array", minItems: 1, uniqueItems: true, items: componentRef },
++              rowSpacing: { type: "integer", minimum: 1, maximum: 63 },
++              width: { type: "integer", minimum: 2, maximum: 64 },
++              height: { type: "integer", minimum: 2, maximum: 64 },
++              remove: { type: "boolean" }
+             })
+           ]
+         }
+diff --git a/apps/web/src/features/constraints/drafts.ts b/apps/web/src/features/constraints/drafts.ts
+index 1447d6f..c4d0b1c 100644
+--- a/apps/web/src/features/constraints/drafts.ts
++++ b/apps/web/src/features/constraints/drafts.ts
+@@ -64,6 +64,18 @@ export type ConstraintDraft =
+       net: string;
+       maxJumpers: number;
+       explanation?: string;
++    }
++  | {
++      kind: "component_adapter";
++      strength: ConstraintStrength;
++      componentRefs: string[];
++      /** 缺省字段按芯片默认值补齐；脚数固定等于芯片脚数，不能指定 */
++      width?: number;
++      height?: number;
++      rowSpacing?: number;
++      /** true = 摘掉转接板 */
++      remove?: boolean;
++      explanation?: string;
+     };
+ 
+ export interface AiConstraintResponse {
+diff --git a/apps/web/src/features/constraints/model.ts b/apps/web/src/features/constraints/model.ts
+index 232b87f..fec507b 100644
+--- a/apps/web/src/features/constraints/model.ts
++++ b/apps/web/src/features/constraints/model.ts
+@@ -1,9 +1,35 @@
+-import type { DesignConstraint, PerfboardProject } from "../../types/project.ts";
++import type { DesignConstraint, PerfboardProject, PlacedComponent } from "../../types/project.ts";
+ import { normalizeBoardDefinition } from "../board/factory.ts";
+ import { buildPinOffsetsForComponent } from "../project/componentLibrary.ts";
++import { chipProfileOf, normalizeAdapter } from "../project/adapter.ts";
++import { isValidConstraintShape } from "../project/projectValidation.ts";
+ 
+ export const CONSTRAINT_SCHEMA_VERSION = 1;
+ 
++const CONSTRAINT_KINDS = new Set([
++  "component_in_region",
++  "component_on_board_edge",
++  "component_near_component",
++  "component_lock",
++  "component_orientation",
++  "region_keepout",
++  "power_rail",
++  "net_jumper_limit",
++  "component_adapter"
++]);
++
++const KIND_LABELS: Record<string, string> = {
++  component_in_region: "限制元件在区域内",
++  component_on_board_edge: "元件靠近板边",
++  component_near_component: "元件靠近另一元件",
++  component_lock: "锁定元件",
++  component_orientation: "固定元件方向",
++  region_keepout: "保留板上区域",
++  power_rail: "建立电源母线",
++  net_jumper_limit: "限制跳线数量",
++  component_adapter: "插上转接板"
++};
++
+ export function projectConstraints(project: PerfboardProject): DesignConstraint[] {
+   return project.constraints ?? [];
+ }
+@@ -12,16 +38,124 @@ export function activeConstraints(constraints: DesignConstraint[]) {
+   return constraints.filter((constraint) => constraint.enabled && constraint.status === "active");
+ }
+ 
++/**
++ * 读入工程时把约束整理成当前结构：
++ *  - 旧工程里没有 enabled/status/id 等字段的约束会被补全（否则会被 activeConstraints 静默丢掉）；
++ *  - 元件重新导入后 id 会变，按位号把引用重新指回现有元件；
++ *  - 无法识别的约束类型直接丢弃。
++ */
++export function normalizeConstraints(raw: unknown, components: PlacedComponent[]): DesignConstraint[] {
++  if (!Array.isArray(raw)) return [];
++  const byId = new Map(components.map((component) => [component.id, component]));
++  const byName = new Map(components.map((component) => [component.name.trim().toLowerCase(), component]));
++
++  const resolve = (id: unknown, ref: unknown): PlacedComponent | undefined => {
++    if (typeof id === "string") {
++      const hit = byId.get(id);
++      if (hit) return hit;
++    }
++    if (typeof ref === "string") {
++      const hit = byName.get(ref.trim().toLowerCase());
++      if (hit) return hit;
++    }
++    return undefined;
++  };
++
++  const constraints: DesignConstraint[] = [];
++  for (const entry of raw) {
++    if (!entry || typeof entry !== "object") continue;
++    const record = entry as Record<string, unknown>;
++    const kind = typeof record.kind === "string" ? record.kind : undefined;
++    if (!kind || !CONSTRAINT_KINDS.has(kind)) continue;
++    // 字段不完整的约束（例如缺 region）会在渲染时崩，直接丢弃
++    if (!isValidConstraintShape(record)) continue;
++
++    const enabled = record.enabled !== false;
++    const status = record.status === "disabled" || record.status === "conflicted" || record.status === "orphaned"
++      ? record.status
++      : enabled ? "active" : "disabled";
++
++    const base = {
++      id: typeof record.id === "string" && record.id.length > 0 ? record.id : crypto.randomUUID(),
++      strength: record.strength === "soft" ? ("soft" as const) : ("hard" as const),
++      status: status as DesignConstraint["status"],
++      enabled,
++      sourceText: typeof record.sourceText === "string" ? record.sourceText : "",
++      explanation: typeof record.explanation === "string" && record.explanation.trim().length > 0
++        ? record.explanation
++        : KIND_LABELS[kind] ?? kind,
++      createdAt: typeof record.createdAt === "string" && record.createdAt.length > 0
++        ? record.createdAt
++        : new Date().toISOString()
++    };
++
++    const constraint = { ...record, ...base } as DesignConstraint;
++    constraints.push(relinkConstraint(constraint, resolve));
++  }
++  return constraints;
++}
++
++function relinkConstraint(
++  constraint: DesignConstraint,
++  resolve: (id: unknown, ref: unknown) => PlacedComponent | undefined
++): DesignConstraint {
++  switch (constraint.kind) {
++    case "component_in_region":
++    case "component_on_board_edge":
++    case "component_adapter": {
++      const ids: string[] = [];
++      const refs: string[] = [];
++      const sourceIds = Array.isArray(constraint.componentIds) ? constraint.componentIds : [];
++      const sourceRefs = Array.isArray(constraint.componentRefs) ? constraint.componentRefs : [];
++      sourceIds.forEach((id, index) => {
++        const hit = resolve(id, sourceRefs[index]);
++        ids.push(hit ? hit.id : id);
++        refs.push(hit ? hit.name : sourceRefs[index] ?? id);
++      });
++      return { ...constraint, componentIds: ids, componentRefs: refs };
++    }
++    case "component_lock":
++    case "component_orientation": {
++      const hit = resolve(constraint.componentId, constraint.componentRef);
++      return hit
++        ? { ...constraint, componentId: hit.id, componentRef: hit.name }
++        : constraint;
++    }
++    case "component_near_component": {
++      const hit = resolve(constraint.componentId, constraint.componentRef);
++      const anchor = resolve(constraint.anchorComponentId, constraint.anchorComponentRef);
++      return {
++        ...constraint,
++        componentId: hit ? hit.id : constraint.componentId,
++        componentRef: hit ? hit.name : constraint.componentRef,
++        anchorComponentId: anchor ? anchor.id : constraint.anchorComponentId,
++        anchorComponentRef: anchor ? anchor.name : constraint.anchorComponentRef
++      };
++    }
++    default:
++      return constraint;
++  }
++}
++
+ export function withMigratedConstraints(project: PerfboardProject): PerfboardProject {
++  const components = project.components.map((component) => {
++    const migrated = component.kind === "to39" && component.leadSpacing < 2
++      ? { ...component, leadSpacing: 2 }
++      : component;
++    const withPins = migrated === component
++      ? migrated
++      : { ...migrated, pinOffsets: buildPinOffsetsForComponent(migrated) };
++    // 老工程里可能存着“14 脚芯片 + 16 脚转接板”，读入时统一到芯片脚数
++    return withPins.adapter
++      ? { ...withPins, adapter: normalizeAdapter(withPins.adapter, chipProfileOf(withPins)).adapter }
++      : withPins;
++  });
++
+   return {
+     ...project,
+     board: normalizeBoardDefinition(project.board),
+-    components: project.components.map((component) => {
+-      if (component.kind !== "to39" || component.leadSpacing >= 2) return component;
+-      const migrated = { ...component, leadSpacing: 2 };
+-      return { ...migrated, pinOffsets: buildPinOffsetsForComponent(migrated) };
+-    }),
+-    constraints: Array.isArray(project.constraints) ? project.constraints : [],
++    components,
++    constraints: normalizeConstraints(project.constraints, components),
+     constraintSchemaVersion: CONSTRAINT_SCHEMA_VERSION
+   };
+ }
+diff --git a/apps/web/src/features/constraints/resolveDrafts.ts b/apps/web/src/features/constraints/resolveDrafts.ts
+index f48563a..51cb433 100644
+--- a/apps/web/src/features/constraints/resolveDrafts.ts
++++ b/apps/web/src/features/constraints/resolveDrafts.ts
+@@ -79,6 +79,24 @@ function resolveDraft(draft: ConstraintDraft, sourceText: string, project: Perfb
+       }
+     case "net_jumper_limit":
+       return { ...base, ...draft, net: validateNet(draft.net, project) };
++    case "component_adapter": {
++      const components = draft.componentRefs.map((ref) => resolveComponent(ref, project.components));
++      // 只保留 AI 真正给出的字段，缺省的交由默认预设补齐
++      const requested = draft.remove
++        ? null
++        : {
++            ...(draft.width === undefined ? {} : { width: draft.width }),
++            ...(draft.height === undefined ? {} : { height: draft.height }),
++            ...(draft.rowSpacing === undefined ? {} : { rowSpacing: draft.rowSpacing })
++          };
++      return {
++        ...base,
++        kind: draft.kind,
++        componentIds: components.map((item) => item.id),
++        componentRefs: components.map((item) => item.name),
++        requested
++      };
++    }
+   }
+ }
+ 
+@@ -165,5 +183,8 @@ function defaultExplanation(draft: ConstraintDraft) {
+     case "region_keepout": return "保留指定板上区域";
+     case "power_rail": return `建立 ${draft.net} 连续母线`;
+     case "net_jumper_limit": return `限制 ${draft.net} 跳线数量`;
++    case "component_adapter": return draft.remove
++      ? `移除 ${draft.componentRefs.join("、")} 的转接板`
++      : `给 ${draft.componentRefs.join("、")} 插上转接板`;
+   }
+ }
+diff --git a/apps/web/src/features/constraints/schema.ts b/apps/web/src/features/constraints/schema.ts
+index 4669044..b0101e6 100644
+--- a/apps/web/src/features/constraints/schema.ts
++++ b/apps/web/src/features/constraints/schema.ts
+@@ -8,7 +8,8 @@ const DRAFT_KINDS = new Set([
+   "component_orientation",
+   "region_keepout",
+   "power_rail",
+-  "net_jumper_limit"
++  "net_jumper_limit",
++  "component_adapter"
+ ]);
+ 
+ export function parseAiConstraintResponse(value: unknown): AiConstraintResponse {
+@@ -107,6 +108,17 @@ function validateDraft(value: unknown): ConstraintDraft {
+         maxJumpers: finiteNumber(value.maxJumpers, "maxJumpers", 0, 1000),
+         explanation
+       };
++    case "component_adapter":
++      return {
++        kind: value.kind,
++        strength,
++        componentRefs: stringArray(value.componentRefs),
++        rowSpacing: value.rowSpacing === undefined ? undefined : finiteNumber(value.rowSpacing, "rowSpacing", 1, 63),
++        width: value.width === undefined ? undefined : finiteNumber(value.width, "width", 2, 64),
++        height: value.height === undefined ? undefined : finiteNumber(value.height, "height", 2, 64),
++        remove: value.remove === undefined ? undefined : Boolean(value.remove),
++        explanation
++      };
+     default:
+       throw new Error("未知约束类型。");
+   }
+diff --git a/apps/web/src/styles.css b/apps/web/src/styles.css
+index 0cd23de..3ed7888 100644
+--- a/apps/web/src/styles.css
++++ b/apps/web/src/styles.css
+@@ -908,6 +908,56 @@ button:disabled {
+   font-size: 14px;
+ }
+ 
++/* 转接板参数：和元件属性分开一块，方便找到 */
++.adapter-inspector {
++  display: grid;
++  gap: 10px;
++  margin-top: 4px;
++  padding-top: 10px;
++  border-top: 1px solid #e2e8ef;
++}
++
++.adapter-inspector h3 {
++  margin: 0;
++  color: #1b3f7a;
++  font-size: 13px;
++  font-weight: 600;
++}
++
++.adapter-pin-count {
++  margin: 0;
++  color: #4a5568;
++  font-size: 12px;
++}
++
++.adapter-inspector-size {
++  display: grid;
++  grid-template-columns: 1fr 1fr;
++  gap: 8px;
++}
++
++.adapter-inspector .icon-text-button {
++  justify-self: start;
++}
++
++.adapter-inspector.is-locked input {
++  background: #f4f6f8;
++  color: #7b8695;
++  cursor: not-allowed;
++}
++
++.adapter-inspector .icon-text-button:disabled {
++  color: #98a2b3;
++  cursor: not-allowed;
++}
++
++.adapter-lock-note {
++  margin-left: 8px;
++  font-size: 11px;
++  font-weight: 500;
++  color: #8a94a3;
++}
++
+ .component-inspector label {
+   display: grid;
+   gap: 5px;
+diff --git a/apps/web/src/types/project.ts b/apps/web/src/types/project.ts
+index 55ab1c4..b09fb42 100644
+--- a/apps/web/src/types/project.ts
++++ b/apps/web/src/types/project.ts
+@@ -133,6 +133,10 @@ export type DrcIssueCode =
+   | "BOTTOM_ROUTE_CROSSING"
+   | "BOTTOM_ROUTE_OVERLAP"
+   | "INVALID_BOARD_HOLE"
++  | "TRACE_OUT_OF_BOARD"
++  | "TRACE_INVALID_PATH"
++  | "KEEPOUT_VIOLATION"
++  | "NETLIST_NODE_UNMAPPED"
+   | "HOLE_OCCUPIED"
+   | "JUMPER_ENDPOINT_INVALID_HOLE"
+   | "JUMPER_ENDPOINT_OCCUPIED"
+@@ -190,7 +194,9 @@ export type LibraryComponentKind =
+   | "slide_switch"
+   | "buzzer"
+   | "tactile_switch"
+-  | "potentiometer";
++  | "potentiometer"
++  /** 转接板：插在洞洞板/面包板上，再把芯片插在它上面 */
++  | "adapter";
+ 
+ export interface PlacedComponent {
+   id: string;
+@@ -208,9 +214,31 @@ export interface PlacedComponent {
+   position: [number, number];
+   rotation: number;
+   mounted: boolean;
++  /** 运行期标记：被 component_lock 锁定了方向，自动放置不得再枚举旋转 */
++  rotationLocked?: boolean;
+   isFallback?: boolean;
+   fallbackReason?: string;
+   fallbackPinMap?: Record<string, number>;
++  /** 芯片插在转接板上时存在：芯片仍然是一颗元件，但它在板上的脚位变成转接板的排针 */
++  adapter?: AdapterSpec;
++}
++
++/**
++ * 转接板（breakout）：一块小板把芯片的引脚引到两排更宽的排针上，再插到主洞洞板。
++ * 一颗芯片对应一块转接板；一个工程可以有多块。
++ *
++ * 排针按 DIP 编号：沿第一排从左到右是 1..pinCount/2，
++ * 再沿第二排从右到左是 pinCount/2+1..pinCount。
++ * 芯片的第 i 脚接到转接板的第 i 脚，多出来的排针悬空。
++ */
++export interface AdapterSpec {
++  /** 排针总脚数，偶数，必须 ≥ 芯片脚数 */
++  pinCount: number;
++  /** 转接板外形尺寸（孔），用于占位与绘制 */
++  width: number;
++  height: number;
++  /** 两排排针之间的孔距（≥ 1，≤ height - 1） */
++  rowSpacing: number;
+ }
+ 
+ export interface BoardSize {
+@@ -314,6 +342,22 @@ export interface NetJumperLimitConstraint extends DesignConstraintBase {
+   maxJumpers: number;
+ }
+ 
++/**
++ * 给元件插上转接板（或摘掉）。规格是“请求值”，缺失字段在执行时按芯片默认值补齐，
++ * 这样同一条指令可以同时作用于脚数不同的几颗芯片。
++ */
++export interface ComponentAdapterConstraint extends DesignConstraintBase {
++  kind: "component_adapter";
++  componentIds: string[];
++  componentRefs: string[];
++  /** null 表示移除转接板；字段缺失表示“用默认值”。脚数永远等于芯片脚数，不在这里配置 */
++  requested: {
++    width?: number;
++    height?: number;
++    rowSpacing?: number;
++  } | null;
++}
++
+ export type DesignConstraint =
+   | ComponentRegionConstraint
+   | ComponentBoardEdgeConstraint
+@@ -322,7 +366,8 @@ export type DesignConstraint =
+   | ComponentOrientationConstraint
+   | RegionKeepoutConstraint
+   | PowerRailConstraint
+-  | NetJumperLimitConstraint;
++  | NetJumperLimitConstraint
++  | ComponentAdapterConstraint;
+ 
+ export interface PerfboardProject {
+   id: string;

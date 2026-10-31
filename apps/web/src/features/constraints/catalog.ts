@@ -44,6 +44,20 @@ export const CONSTRAINT_CATALOG: ConstraintCatalogEntry[] = [
     kind: "net_jumper_limit",
     purpose: "限制某个已存在网络的跳线数量",
     fields: { strength: "hard | soft", net: "确切网络名", maxJumpers: "非负整数" }
+  },
+  {
+    kind: "component_adapter",
+    purpose:
+      "给一个或多个已存在芯片插上转接板（或移除）。芯片插在转接板上时会占用整块板面，比芯片本身大；用户提到“转接板、转接、插在板上、加个底座、引出来”时用这个。省略的尺寸字段按芯片默认值补齐；remove=true 表示移除转接板。",
+    fields: {
+      strength: "hard | soft",
+      componentRefs: "string[]，必须展开成确切位号",
+      pinCount: "可选，偶数，不得小于芯片脚数",
+      rowSpacing: "可选，两列排针间距，不得小于芯片自身排距",
+      width: "可选，板面宽度（孔），不得小于芯片宽度",
+      height: "可选，板面高度（孔），不得小于每列针数",
+      remove: "可选 boolean，true 表示移除转接板"
+    }
   }
 ];
 
@@ -111,6 +125,13 @@ export function constraintResponseSchema(componentRefs: string[], netNames: stri
             }),
             command("net_jumper_limit", ["net", "maxJumpers"], {
               net, maxJumpers: { type: "integer", minimum: 0 }
+            }),
+            command("component_adapter", ["componentRefs"], {
+              componentRefs: { type: "array", minItems: 1, uniqueItems: true, items: componentRef },
+              rowSpacing: { type: "integer", minimum: 1, maximum: 63 },
+              width: { type: "integer", minimum: 2, maximum: 64 },
+              height: { type: "integer", minimum: 2, maximum: 64 },
+              remove: { type: "boolean" }
             })
           ]
         }

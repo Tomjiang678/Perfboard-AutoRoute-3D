@@ -1,7 +1,8 @@
 import { Layers3 } from "lucide-react";
 import type { LibraryComponentDefinition } from "../features/project/componentLibrary.ts";
-import type { BoardSize, DragMoveModifier, PerfboardProject, RoutedNetEndpoint, ThemeMode } from "../types/project.ts";
+import type { AdapterSpec, BoardSize, DragMoveModifier, PerfboardProject, RoutedNetEndpoint, ThemeMode } from "../types/project.ts";
 import { getBoardModel } from "../features/board/factory.ts";
+import { normalizeAdapter } from "../features/project/adapter.ts";
 import { spacingLimits } from "../features/project/componentTraits.ts";
 import { PLACEHOLDER_NOTE } from "../features/import/componentMapping.ts";
 import { Perfboard3DViewport, type SelectedPin } from "./Perfboard3DViewport.tsx";
@@ -19,6 +20,7 @@ interface WorkspaceProps {
   onUpdateBoard: (board: BoardSize) => void;
   onRotateSelected: () => void;
   onDeleteSelected: () => void;
+  onDetachAdapter: () => void;
   onMountSelected: () => void;
   onUnmountSelected: () => void;
   onUpdateSelected: (patch: {
@@ -27,6 +29,7 @@ interface WorkspaceProps {
     leadSpacing?: number;
     rowSpacing?: number;
     sameSidePitch?: number;
+    adapter?: AdapterSpec;
   }) => void;
   highlightedEndpoints: RoutedNetEndpoint[];
   routeEditMode: RouteEditMode;
@@ -49,6 +52,7 @@ export function Workspace({
   onUpdateBoard,
   onRotateSelected,
   onDeleteSelected,
+  onDetachAdapter,
   onMountSelected,
   onUnmountSelected,
   onUpdateSelected,
@@ -92,6 +96,7 @@ export function Workspace({
           onMovePin={onMovePin}
           onRotateSelected={onRotateSelected}
           onDeleteSelected={onDeleteSelected}
+          onDetachAdapter={onDetachAdapter}
           onMountSelected={onMountSelected}
           onUnmountSelected={onUnmountSelected}
           onUpdateBoard={onUpdateBoard}
@@ -171,6 +176,65 @@ export function Workspace({
               </span>
               <span>{selectedComponent.mounted ? "已放置" : "未放置"}</span>
             </div>
+            {selectedComponent.adapter && (() => {
+              const adapter = selectedComponent.adapter;
+              const locked = selectedComponent.mounted;
+              const chipPins = selectedComponent.pinOffsets.length;
+              const chipRowSpacing = Math.max(1, selectedComponent.rowSpacing || 1);
+              const minWidth = Math.max(adapter.rowSpacing + 1, chipRowSpacing + 1);
+              const minHeight = Math.ceil(chipPins / 2);
+              const patchAdapter = (change: Partial<AdapterSpec>) =>
+                onUpdateSelected({
+                  adapter: normalizeAdapter(
+                    { ...adapter, ...change },
+                    { pinCount: chipPins, rowSpacing: chipRowSpacing }
+                  ).adapter
+                });
+              return (
+                <div className={`adapter-inspector${locked ? " is-locked" : ""}`}>
+                  <h3>转接板{locked && <span className="adapter-lock-note">已放置，锁定</span>}</h3>
+                  <p className="adapter-pin-count">排针 {chipPins} 脚</p>
+                  <label>
+                    <span>两列间距（≥{chipRowSpacing}）</span>
+                    <input
+                      type="number"
+                      min={chipRowSpacing}
+                      max={63}
+                      disabled={locked}
+                      value={adapter.rowSpacing}
+                      onChange={(event) => patchAdapter({ rowSpacing: Number(event.target.value) })}
+                    />
+                  </label>
+                  <div className="adapter-inspector-size">
+                    <label>
+                      <span>宽（≥{minWidth}）</span>
+                      <input
+                        type="number"
+                        min={minWidth}
+                        max={64}
+                        disabled={locked}
+                        value={adapter.width}
+                        onChange={(event) => patchAdapter({ width: Number(event.target.value) })}
+                      />
+                    </label>
+                    <label>
+                      <span>高（≥{minHeight}）</span>
+                      <input
+                        type="number"
+                        min={minHeight}
+                        max={64}
+                        disabled={locked}
+                        value={adapter.height}
+                        onChange={(event) => patchAdapter({ height: Number(event.target.value) })}
+                      />
+                    </label>
+                  </div>
+                  <button className="icon-text-button" type="button" disabled={locked} onClick={onDetachAdapter}>
+                    {locked ? "放置后不能移除转接板" : "移除转接板"}
+                  </button>
+                </div>
+              );
+            })()}
             {selectedComponent.isFallback && (
               <div className="fallback-component-note">
                 <strong>库中无对应封装</strong>

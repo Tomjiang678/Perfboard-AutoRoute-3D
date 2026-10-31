@@ -62,12 +62,13 @@ export function AutoPlacementDialog({
             boardWidth={boardWidth}
             boardHeight={boardHeight}
             boardKind={boardKind}
-            disabled={running}
+            disabled={false}
             values={{ x, y, width, height }}
             onChange={{ setX, setY, setWidth, setHeight }}
           />
 
-          {boardKind !== "breadboard" && <AiConstraintAssistantPanel controller={aiAssistant} disabled={running} />}
+          {/* 面包板工程也要能用自然语言指令；不支持的约束（例如电源母线）会在解析时报错 */}
+          <AiConstraintAssistantPanel controller={aiAssistant} />
 
           {warnings.length > 0 && (
             <div className="warning-list">

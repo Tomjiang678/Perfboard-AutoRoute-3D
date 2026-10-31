@@ -3,6 +3,7 @@ import { activeConstraints } from "../constraints/model.ts";
 import { autoRouteBoard } from "../routing/autoRouter.ts";
 import { getBoardModel } from "../board/factory.ts";
 import { componentPinHoles, layoutFromComponent, pinsConflict, placementHasPinConflicts, rotateGridOffset } from "../board/placement.ts";
+import { componentBoardPinOffsets, componentOccupiedCells } from "../project/adapter.ts";
 import type { BoardModel, ElectricalNodeId, GridPoint } from "../board/types.ts";
 import { key, manhattan } from "../routing/routingGeometry.ts";
 import { isBendableTwoPin, preferredLeadSpan, spacingLimits } from "../project/componentTraits.ts";
@@ -18,6 +19,8 @@ export interface AutoPlacementResult {
   components: PlacedComponent[];
   placedCount: number;
   warnings: string[];
+  /** 放不进选区的元件名：它们仍停在导入时的位置，调用方必须告诉用户 */
+  unplaced: string[];
 }
 
 export interface AutoPlacementProgress {
@@ -128,7 +131,7 @@ export function autoPlaceComponents(
   const warnings: string[] = [];
 
   if (normalizedRegion.width <= 0 || normalizedRegion.height <= 0) {
-    return { components, placedCount: 0, warnings: ["Placement region is too small after inset."] };
+    return { components, placedCount: 0, warnings: ["Placement region is too small after inset."], unplaced: components.filter((c) => !c.mounted).map((c) => c.name) };
   }
 
   const movableIds = new Set(components.filter((component) => !component.mounted).map((component) => component.id));
@@ -137,7 +140,7 @@ export function autoPlaceComponents(
   const optimizationRouteBudget = { remaining: OPTIMIZATION_ROUTE_EVALUATION_BUDGET };
   const initial = createInitialPlacement(components, normalizedRegion, boardWidth, boardHeight, endpoints, warnings, constraints, reportProgress, board, initialRouteBudget);
   if (initial.placedCount === 0) {
-    return { components, placedCount: 0, warnings };
+    return { components, placedCount: 0, warnings, unplaced: initial.unplaced };
   }
 
   const optimized = optimizePlacement(initial.components, movableIds, normalizedRegion, board, endpoints, constraints, reportProgress, optimizationRouteBudget);
@@ -145,7 +148,8 @@ export function autoPlaceComponents(
   return {
     components: optimized,
     placedCount: initial.placedCount,
-    warnings
+    warnings,
+    unplaced: initial.unplaced
   };
 }
 
@@ -168,6 +172,7 @@ function createInitialPlacement(
   const occupied = new Set<string>();
   const placedByName = new Map<string, PlacedComponent>();
   const placedPositions = new Map<string, PlacementCandidate>();
+  const unplaced: string[] = [];
   const board: BoardSize = boardConfig ?? { width: boardWidth, height: boardHeight };
 
   // Register locked (already placed) components as obstacles
@@ -198,11 +203,13 @@ function createInitialPlacement(
     const effectiveRegion = constrainedRegionFor(component, region, constraints, board);
     if (effectiveRegion.width <= 0 || effectiveRegion.height <= 0) {
       warnings.push(`${component.name} 的约束区域为空，无法落位。`);
+      unplaced.push(component.name);
       continue;
     }
     const candidate = findPlacement(component, components, effectiveRegion, boardWidth, boardHeight, occupied, placedByName, endpointMap, netGraph, endpoints, constraints, undefined, 10, board, false);
     if (!candidate) {
       warnings.push(`${component.name} 无法满足约束条件，无法落位。`);
+      unplaced.push(component.name);
       continue;
     }
     const placedComponent = { ...candidate.component, mounted: true };
@@ -233,6 +240,7 @@ function createInitialPlacement(
     const candidate = findPlacement(component, components, region, boardWidth, boardHeight, occupied, placedByName, endpointMap, netGraph, endpoints, constraints, reportProgress, percent, board, true, routeBudget);
     if (!candidate) {
       warnings.push(`${component.name} cannot fit in the selected placement region.`);
+      unplaced.push(component.name);
       continue;
     }
 
@@ -247,7 +255,8 @@ function createInitialPlacement(
       const candidate = placedPositions.get(component.id);
       return candidate ? { ...candidate.component, mounted: true } : component;
     }),
-    placedCount: placedPositions.size
+    placedCount: placedPositions.size,
+    unplaced
   };
 }
 
@@ -315,7 +324,8 @@ function findPlacement(
     board,
     reportProgress,
     progressPercent,
-    `${component.name} 候选 1/${shortlist.length}`
+    `${component.name} 候选 1/${shortlist.length}`,
+    constraints
   );
 
   verifiable.slice(1).forEach((candidate, index) => {
@@ -332,7 +342,8 @@ function findPlacement(
       board,
       reportProgress,
       progressPercent,
-      `${component.name} 候选 ${index + 2}/${shortlist.length}`
+      `${component.name} 候选 ${index + 2}/${shortlist.length}`,
+      constraints
     );
     if (compareQuality(quality, bestQuality) < 0 || (compareQuality(quality, bestQuality) === 0 && candidate.airwireScore < best.airwireScore)) {
       best = candidate;
@@ -481,7 +492,7 @@ function optimizePlacement(
 
   let best = components;
   reportProgress?.({ percent: 52, phase: "optimization", detail: "[autoplacement] 正在评估初始整板布局" });
-  let bestQuality = routeQualityForComponents(best, endpoints, board, reportProgress, 52, "初始整板布局");
+  let bestQuality = routeQualityForComponents(best, endpoints, board, reportProgress, 52, "初始整板布局", constraints);
 
   routeBudget.remaining -= 1;
   for (let round = 0; round < OPTIMIZATION_ROUNDS; round += 1) {
@@ -508,7 +519,7 @@ function optimizePlacement(
         routeBudget.remaining -= 1;
         const context = `${component.name} 优化候选 ${trialIndex + 1}/${trials.length}，第 ${round + 1}/${OPTIMIZATION_ROUNDS} 轮`;
         reportProgress?.({ percent, phase: "candidate-routing", detail: `[autoplacement] 正在用完整布线评估 ${context}` });
-        const quality = routeQualityForComponents(trial, endpoints, board, reportProgress, percent, context);
+        const quality = routeQualityForComponents(trial, endpoints, board, reportProgress, percent, context, constraints);
         if (compareQuality(quality, bestQuality) < 0) {
           best = trial;
           bestQuality = quality;
@@ -608,7 +619,7 @@ function findImprovingSwap(
       }
       const context = `${first.name} 与 ${second.name} 交换位置`;
       reportProgress?.({ percent: progressPercent, phase: "candidate-routing", detail: `[autoplacement] 正在用完整布线评估 ${context}` });
-      const quality = routeQualityForComponents(swapped, endpoints, board, reportProgress, progressPercent, context);
+      const quality = routeQualityForComponents(swapped, endpoints, board, reportProgress, progressPercent, context, constraints);
       routeBudget.remaining -= 1;
       if (compareQuality(quality, currentQuality) < 0) {
         return { components: swapped, quality };
@@ -624,7 +635,8 @@ function routeQualityForComponents(
   board: BoardSize,
   reportProgress?: AutoPlacementProgressReporter,
   progressPercent = 50,
-  context = "放置候选"
+  context = "放置候选",
+  constraints: DesignConstraint[] = []
 ): RouteQuality {
   const endpoints = endpointsForComponents(endpointTemplates, components);
   reportProgress?.({
@@ -633,7 +645,8 @@ function routeQualityForComponents(
     routeEvaluation: "full",
     detail: `[autoplacement] 正在完整评估布线质量：${context}`
   });
-  const routing = autoRouteBoard(board, endpoints, components, [], [], (routingProgress) => {
+  // 用真实约束评估：否则自动放置优化的是一个用户永远不会看到的布线结果
+  const routing = autoRouteBoard(board, endpoints, components, [], constraints, (routingProgress) => {
     const stageLabels = {
       round: "准备布线轮次",
       net: "处理网络",
@@ -731,6 +744,15 @@ function minimumGroupSpanningLength(groups: GridPoint[][]) {
 }
 
 function generatePlacementPoseCandidates(component: PlacedComponent, includeDiagonal: boolean): PlacedComponent[] {
+  // 方向被约束锁定的元件：只保留当前朝向，不再枚举 90° 档位
+  if (component.rotationLocked) {
+    if (!isStretchableTwoPin(component)) return [{ ...component }];
+    return leadSpacingRange(component).map((spacing) => ({
+      ...withTwoPinVector(component, spacing, 0),
+      rotation: component.rotation
+    }));
+  }
+
   const baseCandidates = isStretchableTwoPin(component)
     ? leadSpacingRange(component).flatMap((spacing) => {
       const stretched = withTwoPinVector(component, spacing, 0);
@@ -969,7 +991,16 @@ function pinsConflictWithPlaced(
   const boardModel = getBoardModel(board);
   const candidateNets = pinNetsForComponent(candidate, endpointMap);
   const candidateHoles = componentPinHoles(candidate);
+  // 只有涉及转接板时才需要比板面；普通元件之间的同孔冲突由下面的引脚检查覆盖
+  const candidateCells = candidate.adapter ? occupiedCells(candidate) : undefined;
   return placedComponents.some((other) => {
+    if (candidateCells || other.adapter) {
+      const otherCells = occupiedCells(other);
+      const cells = candidateCells ?? occupiedCells(candidate);
+      for (const cell of otherCells) {
+        if (cells.has(cell)) return true;
+      }
+    }
     const otherNets = pinNetsForComponent(other, endpointMap);
     const otherHoles = componentPinHoles(other);
     return candidateHoles.some((hole, candidateIndex) => otherHoles.some((otherHole, otherIndex) => pinsConflict(
@@ -980,6 +1011,17 @@ function pinsConflictWithPlaced(
       otherNets[otherIndex + 1]
     )));
   });
+}
+
+/** 同一个元件在一次放置里会被反复检查，占位集合只算一次。 */
+const occupiedCellsCache = new WeakMap<PlacedComponent, Set<string>>();
+
+function occupiedCells(component: PlacedComponent): Set<string> {
+  const cached = occupiedCellsCache.get(component);
+  if (cached) return cached;
+  const cells = componentOccupiedCells(component);
+  occupiedCellsCache.set(component, cells);
+  return cells;
 }
 
 function crossComponentPinLayouts(components: PlacedComponent[], endpointMap: EndpointMap) {
@@ -1426,8 +1468,10 @@ function countCandidateCrossings(candidateAirwires: Airwire[], placedAirwires: A
 }
 
 function pinGridAt(component: PlacedComponent, position: [number, number], pin: number): [number, number] {
-  const anchor = component.pinOffsets[0] ?? [0, 0];
-  const offset = component.pinOffsets[pin - 1] ?? anchor;
+  // 必须用板面上的实际脚位（转接板会改变脚位），否则评分与 DRC 用的坐标不一致
+  const offsets = componentBoardPinOffsets(component);
+  const anchor = offsets[0] ?? [0, 0];
+  const offset = offsets[pin - 1] ?? anchor;
   const [rx, ry] = rotateGridOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
   return [position[0] + rx, position[1] + ry];
 }

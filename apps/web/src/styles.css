@@ -908,6 +908,69 @@ button:disabled {
   font-size: 14px;
 }
 
+/* 转接板参数：和元件属性分开一块，方便找到 */
+.adapter-inspector {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8ef;
+}
+
+.adapter-inspector h3 {
+  margin: 0;
+  color: #1b3f7a;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.adapter-pin-count {
+  margin: 0;
+  color: #4a5568;
+  font-size: 12px;
+}
+
+.adapter-inspector-size {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.adapter-inspector .icon-text-button {
+  justify-self: start;
+  min-height: 0;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  background: transparent;
+  color: #6b7686;
+}
+
+.adapter-inspector .icon-text-button:hover:not(:disabled) {
+  background: #eef2f6;
+  color: #26323f;
+}
+
+.adapter-inspector .icon-text-button:disabled {
+  color: #98a2b3;
+  background: transparent;
+  cursor: not-allowed;
+}
+
+.adapter-inspector.is-locked input {
+  background: #f4f6f8;
+  color: #7b8695;
+  cursor: not-allowed;
+}
+
+.adapter-lock-note {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #8a94a3;
+}
+
 .component-inspector label {
   display: grid;
   gap: 5px;

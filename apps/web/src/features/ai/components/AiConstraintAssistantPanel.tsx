@@ -5,14 +5,13 @@ import { AiProviderConfigurationPanel } from "./AiProviderConfigurationPanel.tsx
 
 interface AiConstraintAssistantPanelProps {
   controller: AiConstraintAssistantController;
-  disabled: boolean;
 }
 
-export function AiConstraintAssistantPanel({ controller, disabled }: AiConstraintAssistantPanelProps) {
+export function AiConstraintAssistantPanel({ controller }: AiConstraintAssistantPanelProps) {
   return (
     <>
-      <AiProviderConfigurationPanel controller={controller} disabled={disabled} />
-      <AiInstructionComposer controller={controller} disabled={disabled} />
+      <AiProviderConfigurationPanel controller={controller} />
+      <AiInstructionComposer controller={controller} />
       <AiConstraintLists controller={controller} />
     </>
   );

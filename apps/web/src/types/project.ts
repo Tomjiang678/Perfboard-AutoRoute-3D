@@ -133,6 +133,10 @@ export type DrcIssueCode =
   | "BOTTOM_ROUTE_CROSSING"
   | "BOTTOM_ROUTE_OVERLAP"
   | "INVALID_BOARD_HOLE"
+  | "TRACE_OUT_OF_BOARD"
+  | "TRACE_INVALID_PATH"
+  | "KEEPOUT_VIOLATION"
+  | "NETLIST_NODE_UNMAPPED"
   | "HOLE_OCCUPIED"
   | "JUMPER_ENDPOINT_INVALID_HOLE"
   | "JUMPER_ENDPOINT_OCCUPIED"
@@ -190,7 +194,9 @@ export type LibraryComponentKind =
   | "slide_switch"
   | "buzzer"
   | "tactile_switch"
-  | "potentiometer";
+  | "potentiometer"
+  /** 转接板：插在洞洞板/面包板上，再把芯片插在它上面 */
+  | "adapter";
 
 export interface PlacedComponent {
   id: string;
@@ -208,9 +214,31 @@ export interface PlacedComponent {
   position: [number, number];
   rotation: number;
   mounted: boolean;
+  /** 运行期标记：被 component_lock 锁定了方向，自动放置不得再枚举旋转 */
+  rotationLocked?: boolean;
   isFallback?: boolean;
   fallbackReason?: string;
   fallbackPinMap?: Record<string, number>;
+  /** 芯片插在转接板上时存在：芯片仍然是一颗元件，但它在板上的脚位变成转接板的排针 */
+  adapter?: AdapterSpec;
+}
+
+/**
+ * 转接板（breakout）：一块小板把芯片的引脚引到两排更宽的排针上，再插到主洞洞板。
+ * 一颗芯片对应一块转接板；一个工程可以有多块。
+ *
+ * 排针按 DIP 编号：沿第一排从左到右是 1..pinCount/2，
+ * 再沿第二排从右到左是 pinCount/2+1..pinCount。
+ * 芯片的第 i 脚接到转接板的第 i 脚，多出来的排针悬空。
+ */
+export interface AdapterSpec {
+  /** 排针总脚数，偶数，必须 ≥ 芯片脚数 */
+  pinCount: number;
+  /** 转接板外形尺寸（孔），用于占位与绘制 */
+  width: number;
+  height: number;
+  /** 两排排针之间的孔距（≥ 1，≤ height - 1） */
+  rowSpacing: number;
 }
 
 export interface BoardSize {
@@ -314,6 +342,22 @@ export interface NetJumperLimitConstraint extends DesignConstraintBase {
   maxJumpers: number;
 }
 
+/**
+ * 给元件插上转接板（或摘掉）。规格是“请求值”，缺失字段在执行时按芯片默认值补齐，
+ * 这样同一条指令可以同时作用于脚数不同的几颗芯片。
+ */
+export interface ComponentAdapterConstraint extends DesignConstraintBase {
+  kind: "component_adapter";
+  componentIds: string[];
+  componentRefs: string[];
+  /** null 表示移除转接板；字段缺失表示“用默认值”。脚数永远等于芯片脚数，不在这里配置 */
+  requested: {
+    width?: number;
+    height?: number;
+    rowSpacing?: number;
+  } | null;
+}
+
 export type DesignConstraint =
   | ComponentRegionConstraint
   | ComponentBoardEdgeConstraint
@@ -322,7 +366,8 @@ export type DesignConstraint =
   | ComponentOrientationConstraint
   | RegionKeepoutConstraint
   | PowerRailConstraint
-  | NetJumperLimitConstraint;
+  | NetJumperLimitConstraint
+  | ComponentAdapterConstraint;
 
 export interface PerfboardProject {
   id: string;

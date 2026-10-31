@@ -26,12 +26,34 @@ export function traceEdges(points: GridPoint[]) {
   return points.slice(1).map((point, index) => edgeKey(points[index], point));
 }
 
+const MAX_PATH_STEPS = 10_000;
+
+/** 走锡坐标必须是有限整数，否则下面的逐格展开永远走不到终点。 */
+export function isFiniteGridPoint(point: unknown): point is GridPoint {
+  return Array.isArray(point) &&
+    point.length === 2 &&
+    Number.isInteger(point[0]) &&
+    Number.isInteger(point[1]) &&
+    Math.abs(point[0]) <= MAX_PATH_STEPS &&
+    Math.abs(point[1]) <= MAX_PATH_STEPS;
+}
+
+export function pathHasInvalidPoints(points: GridPoint[]): boolean {
+  return !Array.isArray(points) || points.some((point) => !isFiniteGridPoint(point));
+}
+
 export function expandOrthogonalPath(points: GridPoint[]) {
   if (points.length <= 1) {
     return points;
   }
 
+  // 含非法点的路径一律拒绝展开：静默丢弃坏点会把线路“修好”，让 DRC 误报通过
+  if (pathHasInvalidPoints(points)) {
+    return [];
+  }
+
   const expanded: GridPoint[] = [points[0]];
+  let steps = 0;
   for (let index = 1; index < points.length; index += 1) {
     const previous = expanded[expanded.length - 1];
     const target = points[index];
@@ -45,6 +67,10 @@ export function expandOrthogonalPath(points: GridPoint[]) {
 
     let current = previous;
     while (current[0] !== target[0] || current[1] !== target[1]) {
+      if (steps >= MAX_PATH_STEPS) {
+        return expanded;
+      }
+      steps += 1;
       current = [current[0] + dx, current[1] + dy];
       expanded.push(current);
     }
@@ -98,6 +124,36 @@ export function segmentsIntersect(a1: GridPoint, a2: GridPoint, b1: GridPoint, b
 export function shareEndpoint(a1: GridPoint, a2: GridPoint, b1: GridPoint, b2: GridPoint) {
   const endpoints = new Set([key(a1[0], a1[1]), key(a2[0], a2[1])]);
   return endpoints.has(key(b1[0], b1[1])) || endpoints.has(key(b2[0], b2[1]));
+}
+
+/** 一根直连线（跳线）覆盖的格子，用 Bresenham 走一遍；用于禁布区检查。 */
+export function cellsAlongSegment(from: GridPoint, to: GridPoint): GridPoint[] {
+  const cells: GridPoint[] = [];
+  let [x, y] = from;
+  const [targetX, targetY] = to;
+  const dx = Math.abs(targetX - x);
+  const dy = Math.abs(targetY - y);
+  const stepX = targetX > x ? 1 : -1;
+  const stepY = targetY > y ? 1 : -1;
+  let error = dx - dy;
+  let guard = 0;
+
+  while (guard <= dx + dy + 1) {
+    guard += 1;
+    cells.push([x, y]);
+    if (x === targetX && y === targetY) break;
+    const doubled = error * 2;
+    if (doubled > -dy) {
+      error -= dy;
+      x += stepX;
+    }
+    if (doubled < dx) {
+      error += dx;
+      y += stepY;
+    }
+  }
+
+  return cells;
 }
 
 export function formatSegment(from: GridPoint, to: GridPoint) {

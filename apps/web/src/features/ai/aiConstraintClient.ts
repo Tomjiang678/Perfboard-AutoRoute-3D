@@ -3,6 +3,9 @@ import { AI_PROVIDER_OPTIONS, type AiApiConfiguration } from "./aiProvider.ts";
 import { buildConstraintPrompt, buildConstraintRepairPrompt } from "./constraintPrompt.ts";
 import { parseAiConstraintResponse } from "../constraints/schema.ts";
 
+/** 单次请求的上限：没有它，卡住的连接会让“解析中”永远不结束，输入框一直禁用。 */
+const AI_REQUEST_TIMEOUT_MS = 90_000;
+
 export async function requestConstraintDrafts(
   configuration: AiApiConfiguration,
   userText: string,
@@ -17,20 +20,37 @@ export async function requestConstraintDrafts(
   if (provider?.requiresModel && !configuration.model.trim()) {
     throw new Error(`请填写 ${provider.label} 的模型名称。`);
   }
-  const prompt = buildConstraintPrompt(userText, project);
-  const firstOutput = await requestRawConstraintOutput(configuration, prompt, signal);
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
+  const forwardAbort = () => controller.abort();
+  signal?.addEventListener("abort", forwardAbort, { once: true });
+
   try {
-    return parseAiConstraintResponse(parseJsonContent(firstOutput));
-  } catch (error) {
-    const validationError = error instanceof Error ? error.message : "未知 Schema 错误";
-    const repairPrompt = buildConstraintRepairPrompt(prompt, firstOutput, validationError);
-    const repairedOutput = await requestRawConstraintOutput(configuration, repairPrompt, signal);
+    const prompt = buildConstraintPrompt(userText, project);
+    const firstOutput = await requestRawConstraintOutput(configuration, prompt, controller.signal);
     try {
-      return parseAiConstraintResponse(parseJsonContent(repairedOutput));
-    } catch (repairError) {
-      const detail = repairError instanceof Error ? repairError.message : "未知 Schema 错误";
-      throw new Error(`AI 两次返回的指令都不符合受支持的结构：${detail}`);
+      return parseAiConstraintResponse(parseJsonContent(firstOutput));
+    } catch (error) {
+      if (controller.signal.aborted) throw error;
+      const validationError = error instanceof Error ? error.message : "未知 Schema 错误";
+      const repairPrompt = buildConstraintRepairPrompt(prompt, firstOutput, validationError);
+      const repairedOutput = await requestRawConstraintOutput(configuration, repairPrompt, controller.signal);
+      try {
+        return parseAiConstraintResponse(parseJsonContent(repairedOutput));
+      } catch (repairError) {
+        const detail = repairError instanceof Error ? repairError.message : "未知 Schema 错误";
+        throw new Error(`AI 两次返回的指令都不符合受支持的结构：${detail}`);
+      }
     }
+  } catch (error) {
+    if (controller.signal.aborted && !signal?.aborted) {
+      throw new Error(`AI 请求超过 ${AI_REQUEST_TIMEOUT_MS / 1000} 秒没有响应，请检查网络或 API 地址。`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+    signal?.removeEventListener("abort", forwardAbort);
   }
 }
 

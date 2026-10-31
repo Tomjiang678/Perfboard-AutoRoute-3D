@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { HeaderBar } from "./components/HeaderBar.tsx";
 import { NewProjectDialog } from "./components/NewProjectDialog.tsx";
 import { ProjectSidebar } from "./components/ProjectSidebar.tsx";
@@ -14,28 +14,28 @@ import { createPlacedComponentsFromParsed } from "./features/import/componentMap
 import { useAutoPlacement } from "./features/layout/useAutoPlacement.ts";
 import { useAiConstraintAssistant } from "./features/ai/useAiConstraintAssistant.ts";
 import { projectConstraints, withMigratedConstraints } from "./features/constraints/model.ts";
-import {
-  applyRoutingConstraintReport,
-  buildPowerRailTraces
-} from "./features/constraints/execution.ts";
+import { buildPowerRailTraces } from "./features/constraints/execution.ts";
 import { bendComponentPin, pinGridPosition } from "./features/layout/manualPlacement.ts";
 import { resolveNetEndpoints } from "./features/import/netEndpointResolver.ts";
-import { autoRouteBoard, validateRoutingResult, MANUAL_NET_NAME } from "./features/routing/autoRouter.ts";
-import { stripDrcWarnings } from "./features/routing/drcWarnings.ts";
+import { MANUAL_NET_NAME } from "./features/routing/autoRouter.ts";
+import { autoRouteInWorker } from "./features/routing/autoRouteWorkerClient.ts";
+import { buildDrcReport } from "./features/routing/drcReport.ts";
+import { stripConstraintWarnings, stripDrcWarnings } from "./features/routing/drcWarnings.ts";
 import { expandOrthogonalPath } from "./features/routing/routingGeometry.ts";
 import { removeRoutesToComponent } from "./features/routing/removeComponentRoutes.ts";
 import { createProject } from "./features/project/projectFactory.ts";
-import { invalidateDrcIfInputsChanged } from "./features/project/projectTransitions.ts";
+import { useProjectDocument, PROJECT_STORAGE_KEY } from "./features/project/useProjectDocument.ts";
+import { validateProjectShape } from "./features/project/projectValidation.ts";
+import { adapterContainsPoint } from "./features/project/adapter.ts";
+import { checkComponentPlacement } from "./features/layout/placementValidity.ts";
 import { getBoardModel, normalizeBoardDefinition } from "./features/board/factory.ts";
 import { componentPinHoles } from "./features/board/placement.ts";
 import { clampSpacing } from "./features/project/componentTraits.ts";
-import type { BoardSize, DragMoveModifier, ImportState, KeyboardShortcuts, PerfboardProject, PlacedComponent, RoutedNetEndpoint, ThemeMode } from "./types/project.ts";
+import type { AdapterSpec, BoardSize, DragMoveModifier, ImportState, KeyboardShortcuts, PerfboardProject, PlacedComponent, RoutedNetEndpoint, ThemeMode } from "./types/project.ts";
 import type { SelectedPin } from "./components/Perfboard3DViewport.tsx";
 import type { RouteEditMode, WorkspaceToolbarProps } from "./components/WorkspaceToolbar.tsx";
 
-const STORAGE_KEY = "perfboard-autoroute-project";
 const SETTINGS_KEY = "perfboard-autoroute-settings";
-const MAX_UNDO_HISTORY = 50;
 
 interface AppSettings {
   dragMoveModifier: DragMoveModifier;
@@ -68,33 +68,21 @@ const defaultSettings: AppSettings = {
 };
 
 export function App() {
-  const [project, setProject] = useState<PerfboardProject | undefined>();
-  const projectRef = useRef<PerfboardProject | undefined>(undefined);
+  // 工程文档（状态 + 撤销 + 持久化）统一由文档层负责
+  const { project, projectRef, undoCount, commitProject, replaceProject, undo, clearUndoHistory } = useProjectDocument();
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectedComponentId, setSelectedComponentId] = useState<string | undefined>();
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
-  const [undoCount, setUndoCount] = useState(0);
-  const undoStackRef = useRef<PerfboardProject[]>([]);
   const [isTransparentBoard, setIsTransparentBoard] = useState(false);
   const [routeEditMode, setRouteEditMode] = useState<RouteEditMode>("select");
   const [routeDraftStart, setRouteDraftStart] = useState<[number, number] | undefined>();
   const [pendingComponent, setPendingComponent] = useState<LibraryComponentDefinition | undefined>();
   const [selectedPin, setSelectedPin] = useState<SelectedPin | undefined>();
   const [toolbarOpenMenu, setToolbarOpenMenu] = useState<string | undefined>();
+  const [routingRunning, setRoutingRunning] = useState(false);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (!saved) {
-      return;
-    }
-
-    try {
-      replaceProject(withMigratedConstraints(JSON.parse(saved) as PerfboardProject));
-    } catch {
-      window.localStorage.removeItem(STORAGE_KEY);
-    }
-
     const savedSettings = window.localStorage.getItem(SETTINGS_KEY);
     if (savedSettings) {
       try {
@@ -119,17 +107,6 @@ export function App() {
   }), []);
 
   useEffect(() => {
-    if (!project) {
-      return;
-    }
-    const timeout = window.setTimeout(() => {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
-    }, 600);
-
-    return () => window.clearTimeout(timeout);
-  }, [project]);
-
-  useEffect(() => {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }, [settings]);
 
@@ -138,23 +115,6 @@ export function App() {
     document.documentElement.style.colorScheme = settings.theme;
   }, [settings.theme]);
 
-  function commitProject(updater: (current: PerfboardProject) => PerfboardProject) {
-    const current = projectRef.current;
-    if (!current) return;
-
-    const updated = updater(current);
-    if (updated === current) return;
-    const next = invalidateDrcIfInputsChanged(current, updated);
-
-    undoStackRef.current = [...undoStackRef.current.slice(-(MAX_UNDO_HISTORY - 1)), current];
-    setUndoCount(undoStackRef.current.length);
-    replaceProject(next);
-  }
-
-  function replaceProject(next: PerfboardProject | undefined) {
-    projectRef.current = next;
-    setProject(next);
-  }
 
   function updateComponent(
     componentId: string,
@@ -305,6 +265,7 @@ export function App() {
     hasComponents,
     hasImportedComponents,
     hasDrc,
+    routingRunning,
     canClearRoutes: project.routing.traces.length > 0 || project.routing.jumpers.length > 0 || Boolean(project.routing.drc),
     shortcuts: settings.shortcuts,
     openMenu: toolbarOpenMenu,
@@ -332,20 +293,8 @@ export function App() {
     onPickComponent: handlePickComponent
   } : undefined;
 
-  function clearUndoHistory() {
-    undoStackRef.current = [];
-    setUndoCount(0);
-  }
-
   function handleUndo() {
-    const previous = undoStackRef.current.at(-1);
-    if (!previous) {
-      return;
-    }
-
-    undoStackRef.current = undoStackRef.current.slice(0, -1);
-    setUndoCount(undoStackRef.current.length);
-    replaceProject(previous);
+    if (!undo()) return;
     setSelectedComponentId(undefined);
   }
 
@@ -374,14 +323,29 @@ export function App() {
   }
 
   function handleOpenProjectText(text: string) {
+    let parsed: unknown;
     try {
-      const next = withMigratedConstraints(JSON.parse(text) as PerfboardProject);
+      parsed = JSON.parse(text);
+    } catch {
+      window.alert("无法打开工程文件，请确认是导出的 JSON 工程。");
+      return;
+    }
+
+    // 先校验结构，再动状态和本地存储：坏工程不能覆盖掉当前工程
+    const validation = validateProjectShape(parsed);
+    if (!validation.ok) {
+      window.alert(`工程文件不完整，已拒绝载入：\n${validation.issues.slice(0, 6).join("\n")}`);
+      return;
+    }
+
+    try {
+      const next = withMigratedConstraints(parsed as PerfboardProject);
       replaceProject(next);
       setSelectedComponentId(undefined);
       setSelectedPin(undefined);
       setPendingComponent(undefined);
       clearUndoHistory();
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      window.localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(next));
     } catch {
       window.alert("无法打开工程文件，请确认是导出的 JSON 工程。");
     }
@@ -397,6 +361,8 @@ export function App() {
   }
 
   async function handleImportFiles(files: File[]) {
+    // 记录下来这次导入属于哪个工程：读文件期间可能新建/打开了别的工程
+    const targetProjectId = projectRef.current?.id;
     let parsed;
     try {
       parsed = await parseImportFiles(files);
@@ -409,6 +375,10 @@ export function App() {
     const fileNames = files.map((file) => file.name);
 
     commitProject((current) => {
+      if (!targetProjectId || current.id !== targetProjectId) {
+        console.warn("[import] 工程已切换，本次导入结果已丢弃");
+        return current;
+      }
       const importState = mergeImportState(removeFileData(current.importState, fileNames), parsed);
       const newFiles = [
         ...current.files.filter((file) => !fileNames.includes(file.name)),
@@ -472,6 +442,7 @@ export function App() {
       pinHeaderRows: component.pinHeaderRows,
       pinHeaderColumns: component.pinHeaderColumns,
       pinOffsets: component.pinOffsets,
+      adapter: component.adapter,
       position,
       rotation: 0,
       mounted: false
@@ -493,7 +464,48 @@ export function App() {
   }
 
   function handleMoveComponent(componentId: string, position: [number, number]) {
-    updateComponent(componentId, (component) => ({ ...component, position }));
+    commitProject((current) => {
+      const moving = current.components.find((component) => component.id === componentId);
+      if (!moving) return current;
+
+      // 把芯片放到转接板上：脚数完全一致的才合并，脚数不同就不认这块板
+      const host =
+        moving.kind === "adapter"
+          ? undefined
+          : current.components.find(
+              (component) =>
+                component.kind === "adapter" &&
+                component.id !== componentId &&
+                component.adapter !== undefined &&
+                component.adapter.pinCount === moving.pinOffsets.length &&
+                adapterContainsPoint(component.position, component.adapter, position)
+            );
+
+      if (!host?.adapter) {
+        // 与自动放置共用同一套“能不能放”判定：重叠 + 硬禁布区
+        const check = checkComponentPlacement(current, { ...moving, position });
+        if (!check.valid) return current;
+        return {
+          ...current,
+          components: current.components.map((component) =>
+            component.id === componentId ? { ...component, position } : component
+          )
+        };
+      }
+
+      const merged = {
+        ...moving,
+        adapter: host.adapter,
+        position: host.position,
+        rotation: host.rotation
+      };
+      return {
+        ...current,
+        components: current.components
+          .filter((component) => component.id !== host.id)
+          .map((component) => (component.id === componentId ? merged : component))
+      };
+    });
   }
 
   function handleUpdateBoard(board: BoardSize) {
@@ -538,41 +550,93 @@ export function App() {
     });
   }
 
-  function handleAutoRoute() {
-    commitProject((current) => {
-      const endpoints = resolveNetEndpoints(current.importState, current.components);
-      const allConstraints = projectConstraints(current);
+  async function handleAutoRoute() {
+    const sourceProject = projectRef.current;
+    if (!sourceProject || routingRunning) return;
+    setRoutingRunning(true);
+    try {
+      const endpoints = resolveNetEndpoints(sourceProject.importState, sourceProject.components);
+      const allConstraints = projectConstraints(sourceProject);
       const extraWarnings: string[] = [];
       let constraints = allConstraints;
-      if ((current.board.kind ?? "perfboard") === "breadboard") {
+      if ((sourceProject.board.kind ?? "perfboard") === "breadboard") {
         const railConstraints = allConstraints.filter((constraint) => constraint.kind === "power_rail");
         if (railConstraints.length > 0) {
           extraWarnings.push(...railConstraints.map((constraint) => `面包板不支持电源母线约束：${constraint.net}（已忽略）。`));
           constraints = allConstraints.filter((constraint) => constraint.kind !== "power_rail");
         }
       }
-      const rails = buildPowerRailTraces(constraints, endpoints, current.components);
+      const rails = buildPowerRailTraces(constraints, endpoints, sourceProject.components);
       if (rails.errors.length > 0) {
-        return {
+        commitProject((current) => ({
           ...current,
           routing: {
             ...current.routing,
             warnings: [...current.routing.warnings, ...rails.errors]
           }
-        };
+        }));
+        return;
       }
       const fixedTraces = [
         ...rails.traces,
-        ...current.routing.traces.filter((trace) => trace.locked && !trace.id.startsWith("constraint-rail-"))
+        ...sourceProject.routing.traces.filter((trace) => trace.locked && !trace.id.startsWith("constraint-rail-"))
       ];
-      const fixedJumpers = current.routing.jumpers.filter((jumper) => jumper.locked);
-      const routing = autoRouteBoard(current.board, endpoints, current.components, fixedTraces, constraints, undefined, fixedJumpers);
-      const reported = applyRoutingConstraintReport(routing, constraints);
-      return {
-        ...current,
-        routing: { ...reported, warnings: [...reported.warnings, ...extraWarnings] }
+      const fixedJumpers = sourceProject.routing.jumpers.filter((jumper) => jumper.locked);
+
+      // 放到 worker 里跑：这里是最重的一段，主线程不能卡
+      const routing = await autoRouteInWorker({
+        board: sourceProject.board,
+        endpoints,
+        components: sourceProject.components,
+        fixedTraces,
+        constraints,
+        fixedJumpers
+      });
+
+      // 布线结果也走同一个 DRC 真值入口（接线校验 + 网表完整性 + 约束报告）
+      const report = buildDrcReport(sourceProject, routing);
+      const routed = {
+        ...routing,
+        drc: report.drc,
+        diagnostics: report.diagnostics,
+        failedNets: report.failedNets
       };
-    });
+      // 布线期间用户可能改了布局/线路：输入变了就丢弃这次结果，不能覆盖它
+      commitProject((current) => {
+        if (current.id !== sourceProject.id) return current;
+        const inputsUnchanged =
+          current.components === sourceProject.components &&
+          current.board === sourceProject.board &&
+          current.routing === sourceProject.routing &&
+          current.constraints === sourceProject.constraints &&
+          // 布线期间重新导入网表同样会让结果过期
+          current.importState === sourceProject.importState;
+        if (!inputsUnchanged) {
+          return {
+            ...current,
+            routing: {
+              ...current.routing,
+              warnings: [...current.routing.warnings, "布线期间工程已被修改，本次自动布线结果已丢弃。"]
+            }
+          };
+        }
+        return {
+          ...current,
+          routing: {
+            ...routed,
+            warnings: [...stripConstraintWarnings(routed.warnings), ...report.warnings, ...extraWarnings]
+          }
+        };
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "自动布线失败。";
+      commitProject((current) => ({
+        ...current,
+        routing: { ...current.routing, warnings: [...current.routing.warnings, `自动布线失败：${message}`] }
+      }));
+    } finally {
+      setRoutingRunning(false);
+    }
   }
 
   /** Removes all copper and DRC marks, keeping components and their placement. */
@@ -606,27 +670,16 @@ export function App() {
 
   function handleRunDrc() {
     commitProject((current) => {
-      const endpoints = resolveNetEndpoints(current.importState, current.components);
-      const validation = validateRoutingResult(current.board, current.routing, endpoints, current.components);
-      const failedNets = new Set(current.routing.failedNets);
-      validation.failedNetDetails.forEach((detail) => failedNets.add(detail.net));
-      validation.drc.errors.forEach((issue) => {
-        if (issue.net) {
-          failedNets.add(issue.net);
-        }
-        if (issue.expectedNet) {
-          failedNets.add(issue.expectedNet);
-        }
-      });
-
+      // 唯一的 DRC 真值来源：接线校验 + 网表完整性 + 约束报告
+      const report = buildDrcReport(current, current.routing);
       return {
         ...current,
         routing: {
           ...current.routing,
-          drc: validation.drc,
-          diagnostics: { failedNetDetails: validation.failedNetDetails },
-          warnings: stripDrcWarnings(current.routing.warnings),
-          failedNets: [...failedNets]
+          drc: report.drc,
+          diagnostics: report.diagnostics,
+          warnings: [...stripConstraintWarnings(stripDrcWarnings(current.routing.warnings)), ...report.warnings],
+          failedNets: report.failedNets
         }
       };
     });
@@ -757,11 +810,14 @@ export function App() {
     leadSpacing?: number;
     rowSpacing?: number;
     sameSidePitch?: number;
+    adapter?: AdapterSpec;
   }) {
     if (!selectedComponentId) return;
     commitProject((current) => {
       const component = current.components.find((item) => item.id === selectedComponentId);
       if (!component) return current;
+      // 放置之后脚位已经定了，转接板规格不允许再变
+      if (patch.adapter !== undefined && component.mounted) return current;
       const next = {
         ...component,
         ...patch,
@@ -772,6 +828,14 @@ export function App() {
       const updated = { ...next, pinOffsets: buildPinOffsetsForComponent(next) };
       return { ...current, components: current.components.map((item) => item.id === component.id ? updated : item) };
     });
+  }
+
+  function handleDetachAdapter() {
+    if (!selectedComponentId) return;
+    // 已经放到板上的元件不允许摘转接板：脚位已经参与布线
+    updateComponent(selectedComponentId, (component) =>
+      component.mounted ? component : { ...component, adapter: undefined }
+    );
   }
 
   return (
@@ -806,6 +870,7 @@ export function App() {
           onMountSelected={handleMountSelected}
           onUnmountSelected={handleUnmountSelected}
           onUpdateSelected={handleUpdateSelected}
+          onDetachAdapter={handleDetachAdapter}
           highlightedEndpoints={highlightedEndpoints}
           routeEditMode={routeEditMode}
           isPlacingComponent={Boolean(pendingComponent)}

@@ -1,4 +1,5 @@
-import type { LibraryComponentKind } from "../../types/project.ts";
+import type { AdapterSpec, LibraryComponentKind } from "../../types/project.ts";
+import { createAdapterDefinition } from "./adapter.ts";
 import { createPinHeaderDefinition, createPinHeaderOffsets } from "./pinHeader.ts";
 import { centerBridgeKinds, threeInlinePinKinds } from "./componentTraits.ts";
 
@@ -13,6 +14,8 @@ export interface LibraryComponentDefinition {
   pinHeaderRows?: number;
   pinHeaderColumns?: number;
   pinOffsets: Array<[number, number]>;
+  /** 转接板条目才有：它的外形与排针规格 */
+  adapter?: AdapterSpec;
 }
 
 // Geometry is defined in exactly one place (buildPinOffsetsForComponent):
@@ -44,6 +47,7 @@ const rawLibrary: Array<Omit<LibraryComponentDefinition, "pinOffsets"> & { pinOf
   makeDisplay("7SEG", "七段数码管", "seven_segment_display", 10, 3, 1),
   makeDisplay("ALNUM", "字母数字显示器", "alphanumeric_display", 14, 3, 1),
   createPinHeaderDefinition(1, 4),
+  createAdapterDefinition({ pinCount: 16, width: 7, height: 10, rowSpacing: 6 }),
   makeTwoPin("terminal_block", "TB", "接线端子", 1, 2),
   { kind: "slide_switch", label: "SW", title: "拨动开关 SPDT", pinCount: 3, leadSpacing: 1, rowSpacing: 0, sameSidePitch: 1 },
   makeTwoPin("buzzer", "BZ", "蜂鸣器", 2),

@@ -79,6 +79,24 @@ function resolveDraft(draft: ConstraintDraft, sourceText: string, project: Perfb
       }
     case "net_jumper_limit":
       return { ...base, ...draft, net: validateNet(draft.net, project) };
+    case "component_adapter": {
+      const components = draft.componentRefs.map((ref) => resolveComponent(ref, project.components));
+      // 只保留 AI 真正给出的字段，缺省的交由默认预设补齐
+      const requested = draft.remove
+        ? null
+        : {
+            ...(draft.width === undefined ? {} : { width: draft.width }),
+            ...(draft.height === undefined ? {} : { height: draft.height }),
+            ...(draft.rowSpacing === undefined ? {} : { rowSpacing: draft.rowSpacing })
+          };
+      return {
+        ...base,
+        kind: draft.kind,
+        componentIds: components.map((item) => item.id),
+        componentRefs: components.map((item) => item.name),
+        requested
+      };
+    }
   }
 }
 
@@ -165,5 +183,8 @@ function defaultExplanation(draft: ConstraintDraft) {
     case "region_keepout": return "保留指定板上区域";
     case "power_rail": return `建立 ${draft.net} 连续母线`;
     case "net_jumper_limit": return `限制 ${draft.net} 跳线数量`;
+    case "component_adapter": return draft.remove
+      ? `移除 ${draft.componentRefs.join("、")} 的转接板`
+      : `给 ${draft.componentRefs.join("、")} 插上转接板`;
   }
 }

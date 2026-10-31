@@ -7,21 +7,31 @@ import type {
 } from "../../types/project.ts";
 import { activeConstraints } from "./model.ts";
 import { pinGridPosition } from "../layout/manualPlacement.ts";
+import { adapterFromRequest, chipProfileOf } from "../project/adapter.ts";
 
 export function prepareComponentsForConstraints(components: PlacedComponent[], constraints: DesignConstraint[]) {
   const active = activeConstraints(constraints);
   return components.map((component) => {
     const lock = active.find((constraint) => constraint.kind === "component_lock" && constraint.componentId === component.id);
     const orientation = active.find((constraint) => constraint.kind === "component_orientation" && constraint.componentId === component.id);
+    const adapterConstraint = active.find((constraint) => constraint.kind === "component_adapter" && constraint.componentIds.includes(component.id));
     const shouldMoveForConstraint = active.some((constraint) => (
       (constraint.kind === "component_in_region" && constraint.componentIds.includes(component.id)) ||
       (constraint.kind === "component_on_board_edge" && constraint.componentIds.includes(component.id)) ||
       (constraint.kind === "component_near_component" && constraint.componentId === component.id) ||
-      (constraint.kind === "component_orientation" && constraint.componentId === component.id)
+      (constraint.kind === "component_orientation" && constraint.componentId === component.id) ||
+      (constraint.kind === "component_adapter" && constraint.componentIds.includes(component.id))
     ));
     const lockPosition = Boolean(lock && lock.kind === "component_lock" && lock.lockPosition);
+    const lockRotation = Boolean(lock && lock.kind === "component_lock" && lock.lockRotation);
+    // 转接板会改脚位，位置锁定的元件不允许被悄悄换脚
+    const adapter = adapterConstraint && adapterConstraint.kind === "component_adapter" && !lockPosition
+      ? adapterFromRequest(adapterConstraint.requested, chipProfileOf(component))
+      : component.adapter;
     return {
       ...component,
+      adapter,
+      rotationLocked: lockRotation,
       mounted: lockPosition || (component.mounted && !shouldMoveForConstraint),
       rotation: orientation && orientation.kind === "component_orientation"
         ? orientation.rotationDegrees * Math.PI / 180
@@ -107,6 +117,19 @@ export function evaluatePlacementConstraints(components: PlacedComponent[], cons
       if (!component || !anchor) continue;
       const distance = Math.abs(component.position[0] - anchor.position[0]) + Math.abs(component.position[1] - anchor.position[1]);
       if (distance > constraint.maxDistance) warnings.push(`约束未满足：${component.name} 与 ${anchor.name} 相距 ${distance} 孔，目标不超过 ${constraint.maxDistance} 孔。`);
+    }
+    if (constraint.kind === "component_adapter") {
+      constraint.componentIds.forEach((id) => {
+        const component = byId.get(id);
+        if (!component) {
+          warnings.push(`约束引用的元件 ${id} 已不存在。`);
+          return;
+        }
+        const expected = adapterFromRequest(constraint.requested, chipProfileOf(component));
+        if (JSON.stringify(expected ?? null) !== JSON.stringify(component.adapter ?? null)) {
+          warnings.push(`约束未满足：${component.name} 的转接板未按指令生效（位置被锁定的元件不会改脚位）。`);
+        }
+      });
     }
   }
   return warnings;

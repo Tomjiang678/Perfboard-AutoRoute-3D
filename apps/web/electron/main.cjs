@@ -90,18 +90,34 @@ async function writeAiConfig(_event, configuration) {
   return { storage: "electron-safe-storage" };
 }
 
+const AI_REQUEST_TIMEOUT_MS = 90_000;
+
 async function requestAiApi(_event, request) {
-  const response = await fetch(request.url, {
-    method: request.method ?? "POST",
-    headers: request.headers,
-    body: request.body
-  });
-  return {
-    ok: response.ok,
-    status: response.status,
-    statusText: response.statusText,
-    body: await response.text()
-  };
+  // 渲染进程的 AbortController 传不过 IPC，主进程必须自己兜底超时，
+  // 否则请求挂住时前端的 instructionRunning 永远不会复位。
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(request.url, {
+      method: request.method ?? "POST",
+      headers: request.headers,
+      body: request.body,
+      signal: controller.signal
+    });
+    return {
+      ok: response.ok,
+      status: response.status,
+      statusText: response.statusText,
+      body: await response.text()
+    };
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`AI 请求超过 ${AI_REQUEST_TIMEOUT_MS / 1000} 秒没有响应，已中止。`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function createWindow() {

@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { getLibraryComponentByKind } from "../features/project/componentLibrary.ts";
+import { adapterPinOffsets } from "../features/project/adapter.ts";
 import { UNKNOWN_COMPONENT_LABEL } from "../features/project/componentTraits.ts";
+import type { AdapterSpec } from "../types/project.ts";
 
 export type ParametricComponentKind =
   | "resistor"
@@ -28,7 +30,8 @@ export type ParametricComponentKind =
   | "slide_switch"
   | "buzzer"
   | "tactile_switch"
-  | "potentiometer";
+  | "potentiometer"
+  | "adapter";
 
 export interface ParametricComponentSpec {
   kind: ParametricComponentKind;
@@ -37,6 +40,10 @@ export interface ParametricComponentSpec {
   color?: number;
   pinOffsets?: Array<[number, number]>;
   isFallback?: boolean;
+  /** 转接板规格：元件插在转接板上时带上，用于画板体与排针 */
+  adapter?: AdapterSpec;
+  /** 芯片插在转接板上时，脚由转接板的排针代替，本体不画脚 */
+  hidePins?: boolean;
 }
 
 const BOARD_TOP_Y = 0.28;
@@ -70,6 +77,16 @@ const materials = {
   ferrite: new THREE.MeshStandardMaterial({ color: 0x294b42, roughness: 0.38, metalness: 0.08 }),
   copper: new THREE.MeshStandardMaterial({ color: 0xc77a43, roughness: 0.24, metalness: 0.78 }),
   terminalGreen: new THREE.MeshStandardMaterial({ color: 0x15845f, roughness: 0.32 }),
+  /** 转接板：蓝色阻焊 + 清漆，和绿色洞洞板区分开 */
+  adapterPcb: new THREE.MeshPhysicalMaterial({
+    color: 0x1b3f7a,
+    roughness: 0.22,
+    metalness: 0.12,
+    clearcoat: 0.9,
+    clearcoatRoughness: 0.15
+  }),
+  adapterSilk: new THREE.MeshStandardMaterial({ color: 0xdff3e8, roughness: 0.55 }),
+  adapterPad: new THREE.MeshStandardMaterial({ color: 0xd8af4e, roughness: 0.18, metalness: 0.85 }),
   brass: new THREE.MeshStandardMaterial({ color: 0xc7953a, roughness: 0.22, metalness: 0.55 })
 };
 Object.values(materials).forEach((material) => {
@@ -104,7 +121,7 @@ const componentFactories: Record<ParametricComponentKind, (spec: ParametricCompo
   relay: (s) => createRelay(s.label ?? "RLY", s.pinCount ?? 5, pins(s)),
   crystal: (s) => createCrystal(s.label ?? "Y", pins(s)),
   fuse: (s) => createFuse(s.label ?? "F", pins(s)),
-  dip: (s) => createDip(s.pinCount ?? 8, s.label ?? `DIP-${s.pinCount ?? 8}`, pins(s)),
+  dip: (s) => createDip(s.pinCount ?? 8, s.label ?? `DIP-${s.pinCount ?? 8}`, pins(s), s.hidePins),
   dip_switch: (s) => createDipSwitch(s.pinCount ?? 16, s.label ?? `DIPSW${Math.floor((s.pinCount ?? 16) / 2)}`, pins(s)),
   seven_segment_display: (s) => createSevenSegmentDisplay(s.label ?? "7SEG", pins(s)),
   alphanumeric_display: (s) => createAlphanumericDisplay(s.label ?? "ALNUM", pins(s)),
@@ -113,7 +130,8 @@ const componentFactories: Record<ParametricComponentKind, (spec: ParametricCompo
   slide_switch: (s) => createSlideSwitch(pins(s)),
   buzzer: (s) => createBuzzer(s.label ?? "BZ", pins(s)),
   tactile_switch: (s) => createTactileSwitch(pins(s)),
-  potentiometer: (s) => createPotentiometer(pins(s))
+  potentiometer: (s) => createPotentiometer(pins(s)),
+  adapter: (s) => createAdapterPlate(s.adapter ?? adapterSpecFromPins(pins(s)), s.label ?? "ADP")
 };
 
 function createAxialPart(
@@ -406,7 +424,7 @@ function createTo39(label: string, pinOffsets: Array<[number, number]>) {
   return group;
 }
 
-function createDip(pinCount: number, label: string, pinOffsets: Array<[number, number]>) {
+function createDip(pinCount: number, label: string, pinOffsets: Array<[number, number]>, hidePins = false) {
   const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
   const bodyWidth = Math.max(2.4, box.width - 0.45);
@@ -420,6 +438,7 @@ function createDip(pinCount: number, label: string, pinOffsets: Array<[number, n
   group.add(pinOne);
 
   pinOffsets.forEach(([x, z]) => {
+    if (hidePins) return;
     const edgeX = box.centerX + Math.sign(x - box.centerX) * bodyWidth / 2;
     if (Math.abs(x - box.centerX) > bodyWidth / 2 - 0.08) {
       addLeadBetween(group, [edgeX, z], [x, z], 0.69);
@@ -524,8 +543,71 @@ function addSevenSegmentBars(group: THREE.Group, x: number, y: number, z: number
   vertical(0.72, 0.58);
 }
 
-function createPinHeader(pinCount: number, pinOffsets: Array<[number, number]>, isFallback = false) {
+/**
+ * 转接板：阻焊绿薄板 + 金盘 + 排针。原点在排针第 1 脚，和元件锚点一致，
+ * 既能作为独立元件渲染，也能直接挂在插在它上面的芯片下面。
+ */
+export function createAdapterPlate(adapter: AdapterSpec, label: string) {
   const group = new THREE.Group();
+  const offsets = adapterPinOffsets(adapter);
+  const xs = offsets.map(([x]) => x);
+  const zs = offsets.map(([, z]) => z);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minZ = Math.min(...zs);
+  const maxZ = Math.max(...zs);
+  const centerX = (minX + maxX) / 2;
+  const centerZ = (minZ + maxZ) / 2;
+  const width = Math.max(adapter.width, maxX - minX + 2);
+  const depth = Math.max(adapter.height, maxZ - minZ + 2);
+
+  const plate = new THREE.Mesh(new RoundedBoxGeometry(width, 0.22, depth, 3, 0.12), materials.adapterPcb);
+  plate.position.set(centerX, 0.36, centerZ);
+  plate.castShadow = true;
+  plate.receiveShadow = true;
+  group.add(plate);
+
+  // 丝印边框：四条细边，不遮挡板面
+  const inset = 0.26;
+  const bar = 0.07;
+  const outline: Array<[number, number, number, number]> = [
+    [centerX, centerZ - depth / 2 + inset, width - inset * 2, bar],
+    [centerX, centerZ + depth / 2 - inset, width - inset * 2, bar],
+    [centerX - width / 2 + inset, centerZ, bar, depth - inset * 2],
+    [centerX + width / 2 - inset, centerZ, bar, depth - inset * 2]
+  ];
+  for (const [x, z, w, d] of outline) {
+    const silk = new THREE.Mesh(new THREE.BoxGeometry(w, 0.012, d), materials.adapterSilk);
+    silk.position.set(x, 0.474, z);
+    group.add(silk);
+  }
+
+  offsets.forEach(([x, z]) => {
+    const pin = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.55, 0.12), materials.brass);
+    pin.position.set(x, 0.25, z);
+    group.add(pin);
+
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.035, 20), materials.adapterPad);
+    pad.position.set(x, 0.487, z);
+    group.add(pad);
+  });
+
+  addTextLabel(group, label, centerX, 0.5, centerZ, 0xdff3e8, Math.min(2, Math.max(1, width * 0.32)));
+
+  return group;
+}
+
+function adapterSpecFromPins(pinOffsets: Array<[number, number]>): AdapterSpec {
+  const box = getPinBox(pinOffsets);
+  return {
+    pinCount: Math.max(2, pinOffsets.length),
+    width: Math.round(box.width) + 2,
+    height: Math.round(box.height) + 2,
+    rowSpacing: Math.max(1, Math.round(box.height))
+  };
+}
+
+function createPinHeader(pinCount: number, pinOffsets: Array<[number, number]>, isFallback = false) {  const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
   const baseWidth = Math.max(1, box.width + 0.6);
   const baseDepth = Math.max(0.62, box.height + 0.5);

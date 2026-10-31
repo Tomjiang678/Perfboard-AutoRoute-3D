@@ -70,15 +70,22 @@ export function useAutoPlacement({ project, commitProject }: UseAutoPlacementOpt
       }, setProgress, abortController.signal);
 
       const constraintWarnings = evaluatePlacementConstraints(result.components, constraints);
-      setWarnings([...result.warnings, ...constraintWarnings]);
-      if (result.warnings.length > 0 && result.placedCount === 0) return;
+      // 放不下的元件会留在导入位置：必须明确告诉用户，不能算作放置成功
+      const unplacedWarning = result.unplaced.length > 0
+        ? [`放不下：${result.unplaced.join("、")}。它们仍在导入时的位置，请扩大放置区域或手动摆放。`]
+        : [];
+      setWarnings([...unplacedWarning, ...result.warnings, ...constraintWarnings]);
+      if (result.placedCount === 0 && result.unplaced.length > 0) return;
+
+      // rotationLocked 只是放置过程中的临时标记，不写进工程
+      const placedComponents = result.components.map(({ rotationLocked: _rotationLocked, ...rest }) => rest);
 
       commitProject((current) => current.id === sourceProject.id &&
         current.board === sourceProject.board &&
         current.components === sourceProject.components &&
         current.importState === sourceProject.importState &&
         current.constraints === sourceProject.constraints
-        ? { ...current, components: result.components }
+        ? { ...current, components: placedComponents }
         : current);
       setDialogOpen(false);
     } catch (error) {

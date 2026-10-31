@@ -14,6 +14,8 @@ export interface WorkspaceToolbarProps {
   hasComponents: boolean;
   hasImportedComponents: boolean;
   hasDrc: boolean;
+  /** 自动布线正在 worker 里跑 */
+  routingRunning: boolean;
   canClearRoutes: boolean;
   shortcuts: KeyboardShortcuts;
   openMenu?: string;
@@ -49,6 +51,7 @@ export function WorkspaceToolbar({
   hasComponents,
   hasImportedComponents,
   hasDrc,
+  routingRunning,
   canClearRoutes,
   shortcuts,
   openMenu,
@@ -114,8 +117,8 @@ export function WorkspaceToolbar({
         <MenuButton disabled={!hasComponents} shortcut={shortcutLabel(shortcuts.autoPlace)} onClick={onOpenAutoPlacement}>
           自动放置
         </MenuButton>
-        <MenuButton disabled={!hasComponents} shortcut={shortcutLabel(shortcuts.autoRoute)} onClick={onAutoRoute}>
-          自动布线
+        <MenuButton disabled={!hasComponents || routingRunning} shortcut={shortcutLabel(shortcuts.autoRoute)} onClick={onAutoRoute}>
+          {routingRunning ? "布线中…" : "自动布线"}
         </MenuButton>
       </ToolbarMenu>
 

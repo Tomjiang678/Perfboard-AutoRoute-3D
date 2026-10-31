@@ -1,14 +1,19 @@
 import type { PlacedComponent } from "../../types/project.ts";
+import { componentBoardPinCount, componentBoardPinOffsets } from "../project/adapter.ts";
 import type { BoardModel, GridPoint, PinNetAssignments, PlacementIssue, PlacementValidation } from "./types.ts";
 export { isCenterBridgeComponent } from "../project/componentTraits.ts";
 
 export function componentPinHoles(component: PlacedComponent): GridPoint[] {
-  return component.pinOffsets.map((_, index) => pinGridPosition(component, index + 1));
+  // 插了转接板时要算上多出来的排针：它们同样占孔
+  const count = componentBoardPinCount(component);
+  return Array.from({ length: count }, (_, index) => pinGridPosition(component, index + 1));
 }
 
 export function pinGridPosition(component: PlacedComponent, pin: number): GridPoint {
-  const anchor = component.pinOffsets[0] ?? [0, 0];
-  const offset = component.pinOffsets[pin - 1] ?? anchor;
+  // 插在转接板上的芯片，落到板上的脚位是转接板的排针
+  const offsets = componentBoardPinOffsets(component);
+  const anchor = offsets[0] ?? [0, 0];
+  const offset = offsets[pin - 1] ?? anchor;
   const [x, y] = rotateGridOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
   return [component.position[0] + x, component.position[1] + y];
 }

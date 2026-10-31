@@ -12,9 +12,10 @@ import type { PlacedComponent } from "../types/project.ts";
 import type { RoutedNetEndpoint } from "../types/project.ts";
 import type { RoutingState } from "../types/project.ts";
 import type { ThemeMode } from "../types/project.ts";
-import { createParametricComponent, setComponentTheme } from "../renderer3d/parametricComponents.ts";
+import { createAdapterPlate, createParametricComponent, setComponentTheme } from "../renderer3d/parametricComponents.ts";
 import { bendComponentPin, isManuallyBendable, pinGridPosition } from "../features/layout/manualPlacement.ts";
 import { createBreadboardDefinition } from "../features/board/breadboard.ts";
+import { componentBoardPinOffsets, centeredChipPinOffsets } from "../features/project/adapter.ts";
 import { getBoardModel } from "../features/board/factory.ts";
 import { rotateGridOffset } from "../features/board/placement.ts";
 import { segmentsIntersect, shareEndpoint } from "../features/routing/routingGeometry.ts";
@@ -31,6 +32,7 @@ interface Perfboard3DViewportProps {
   onMovePin: (componentId: string, pin: number, position: [number, number]) => void;
   onRotateSelected: () => void;
   onDeleteSelected: () => void;
+  onDetachAdapter: () => void;
   onMountSelected: () => void;
   onUnmountSelected: () => void;
   onUpdateBoard: (board: BoardSize) => void;
@@ -60,6 +62,7 @@ export function Perfboard3DViewport({
   onMovePin,
   onRotateSelected,
   onDeleteSelected,
+  onDetachAdapter,
   onMountSelected,
   onUnmountSelected,
   onUpdateBoard,
@@ -459,36 +462,36 @@ export function Perfboard3DViewport({
           <button type="button" disabled={isSelectedMounted()} onClick={() => { onRotateSelected(); setContextMenu(undefined); }}>
             旋转
           </button>
+          {components.find((component) => component.id === selectedComponentId)?.adapter && (
+            <button
+              type="button"
+              disabled={isSelectedMounted()}
+              title={isSelectedMounted() ? "放置后不能移除转接板" : undefined}
+              onClick={() => { onDetachAdapter(); setContextMenu(undefined); }}
+            >
+              移除转接板
+            </button>
+          )}
           <button type="button" onClick={() => { onDeleteSelected(); setContextMenu(undefined); }}>
             删除
           </button>
         </div>
       )}
       <div className="view-controls" aria-label="3D 视角">
-        <label className="board-size-control">
-          <span>W</span>
-          <input
-            type="number"
-            min={5}
-            max={150}
-            value={board.width}
-            disabled={!boardModel.capabilities.canResizeWidth}
-            title={!boardModel.capabilities.canResizeWidth ? "Board width is determined by its definition" : undefined}
-            onChange={(event) => onUpdateBoard({ ...board, width: toBoardSize(event.target.value) })}
-          />
-        </label>
-        <label className="board-size-control">
-          <span>H</span>
-          <input
-            type="number"
-            min={5}
-            max={150}
-            value={board.height}
-            onChange={(event) => onUpdateBoard(board.kind === "breadboard"
-              ? createBreadboardDefinition(toBoardSize(event.target.value), board.breadboard?.modules ?? 1)
-              : { ...board, height: toBoardSize(event.target.value) })}
-          />
-        </label>
+        <BoardSizeInput
+          label="W"
+          value={board.width}
+          disabled={!boardModel.capabilities.canResizeWidth}
+          title={!boardModel.capabilities.canResizeWidth ? "Board width is determined by its definition" : undefined}
+          onCommit={(width) => onUpdateBoard({ ...board, width })}
+        />
+        <BoardSizeInput
+          label="H"
+          value={board.height}
+          onCommit={(height) => onUpdateBoard(board.kind === "breadboard"
+            ? createBreadboardDefinition(height, board.breadboard?.modules ?? 1)
+            : { ...board, height })}
+        />
         <button className="view-button" type="button" onClick={() => setView("top")}>
           正面
         </button>
@@ -679,18 +682,82 @@ function toBoardSize(value: string) {
   return Math.max(5, Math.min(150, Math.round(next)));
 }
 
+/**
+ * 板子尺寸输入框：输入过程中保留原始文本（输入 "30" 时不会在打出 "3" 的瞬间被夹到 5），
+ * 只有在失焦或回车时才做取整与上下限修正。
+ */
+function BoardSizeInput({
+  label,
+  value,
+  disabled,
+  title,
+  onCommit
+}: {
+  label: string;
+  value: number;
+  disabled?: boolean;
+  title?: string;
+  onCommit: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  const [editing, setEditing] = useState(false);
+
+  useEffect(() => {
+    if (!editing) setDraft(String(value));
+  }, [value, editing]);
+
+  function commit() {
+    setEditing(false);
+    const parsed = Number(draft);
+    const next = draft.trim() !== "" && Number.isFinite(parsed)
+      ? Math.max(5, Math.min(150, Math.round(parsed)))
+      : value;
+    setDraft(String(next));
+    if (next !== value) onCommit(next);
+  }
+
+  return (
+    <label className="board-size-control">
+      <span>{label}</span>
+      <input
+        type="number"
+        min={5}
+        max={150}
+        value={draft}
+        disabled={disabled}
+        title={title}
+        onFocus={() => setEditing(true)}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+        }}
+      />
+    </label>
+  );
+}
+
 function createPlacedComponents(components: PlacedComponent[], board: BoardSize, selectedComponentId: string | undefined, theme: ThemeMode) {
   const dark = theme === "dark";
   setComponentTheme(dark);
   const group = new THREE.Group();
   components.forEach((placed) => {
-    const component = createParametricComponent({
+    const mesh = createParametricComponent({
       kind: placed.kind,
       label: placed.label,
       pinCount: placed.pinCount,
-      pinOffsets: placed.pinOffsets,
-      isFallback: placed.isFallback
+      pinOffsets: centeredChipPins(placed),
+      isFallback: placed.isFallback,
+      adapter: placed.adapter,
+      hidePins: Boolean(placed.adapter)
     });
+    const component = new THREE.Group();
+    component.add(mesh);
+    if (placed.adapter) {
+      // 芯片坐在转接板上：板体在下面，芯片整体抬起一点，针脚埋进板里
+      component.add(createAdapterPlate(placed.adapter, placed.label));
+      mesh.position.y += 0.18;
+    }
     component.position.copy(getComponentWorldPosition(placed, board));
     component.rotation.y = placed.rotation;
     if (placed.mounted) {
@@ -729,8 +796,13 @@ function createPlacedComponents(components: PlacedComponent[], board: BoardSize,
   return group;
 }
 
-function createPinLandingRings(group: THREE.Group, placed: PlacedComponent, board: BoardSize) {
-  const anchor = getPinAnchor(placed.pinOffsets);
+/** 芯片插在转接板上时，本体要居中摆到排针范围的正中。 */
+function centeredChipPins(placed: PlacedComponent): Array<[number, number]> {
+  return centeredChipPinOffsets(placed);
+}
+
+function createPinLandingRings(group: THREE.Group, placed: PlacedComponent, board: BoardSize) {  const offsets = componentBoardPinOffsets(placed);
+  const anchor = getPinAnchor(offsets);
   const boardModel = getBoardModel(board);
   const ringMaterial = new THREE.MeshStandardMaterial({
     color: board.kind === "breadboard" ? 0x8b969d : 0xb9c2c8,
@@ -739,7 +811,7 @@ function createPinLandingRings(group: THREE.Group, placed: PlacedComponent, boar
     side: THREE.DoubleSide
   });
 
-  placed.pinOffsets.forEach((offset, index) => {
+  offsets.forEach((offset, index) => {
     const hole = pinGridPosition(placed, index + 1);
     if (!boardModel.isValidHole(hole)) return;
 

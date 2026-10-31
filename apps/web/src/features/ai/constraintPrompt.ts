@@ -1,6 +1,7 @@
 import type { PerfboardProject } from "../../types/project.ts";
 import { constraintCatalogForPrompt, constraintResponseSchema } from "../constraints/catalog.ts";
 import { resolveNetEndpoints } from "../import/netEndpointResolver.ts";
+import { componentBoardPinOffsets } from "../project/adapter.ts";
 
 export function buildConstraintPrompt(userText: string, project: PerfboardProject) {
   const physicalEndpoints = resolveNetEndpoints(project.importState, project.components);
@@ -17,19 +18,27 @@ export function buildConstraintPrompt(userText: string, project: PerfboardProjec
         validY: [0, project.board.height - 1]
       }
     },
-    components: project.components.map((component) => ({
-      id: component.id,
-      ref: component.name,
-      label: component.label,
-      category: component.kind,
-      value: component.value,
-      pinCount: component.pinOffsets.length,
-      pinOffsets: component.pinOffsets,
-      feasibleFootprintSizes: feasibleFootprintSizes(component.pinOffsets),
-      mounted: component.mounted,
-      position: component.position,
-      rotationDegrees: Math.round(component.rotation * 180 / Math.PI)
-    })),
+    components: project.components.map((component) => {
+      const boardPins = componentBoardPinOffsets(component);
+      return {
+        id: component.id,
+        ref: component.name,
+        label: component.label,
+        category: component.kind,
+        value: component.value,
+        pinCount: component.pinOffsets.length,
+        pinOffsets: component.pinOffsets,
+        /** 非 null 表示芯片插在转接板上 */
+        adapter: component.adapter ? { ...component.adapter } : null,
+        /** 板上实际占用的脚位：带转接板时是转接板排针 */
+        boardPinCount: boardPins.length,
+        boardPinOffsets: boardPins,
+        feasibleFootprintSizes: feasibleFootprintSizes(boardPins),
+        mounted: component.mounted,
+        position: component.position,
+        rotationDegrees: Math.round(component.rotation * 180 / Math.PI)
+      };
+    }),
     nets: project.importState.nets.map((net) => ({
       name: net.name,
       nodes: net.nodes.map((node) => ({ ref: node.ref, pin: node.pin }))
@@ -59,6 +68,10 @@ export function buildConstraintPrompt(userText: string, project: PerfboardProjec
 根据用户完整语义判断 strength；不可违反的要求使用 hard，可优化但允许折中的偏好使用 soft。
 所有区域和行列坐标只根据 board.coordinateSystem 计算。
 component_in_region 的 region 必须能容纳所列每个元件的至少一个 feasibleFootprintSizes 项；不要给元件输出无法放入的单行或单列区域。
+元件若带转接板（adapter 不为 null），它在板上占的是整块转接板板面，尺寸按 boardPinOffsets 计算；选区域、算间距时一律用 boardPinOffsets / feasibleFootprintSizes，不要用芯片自己的 pinOffsets。
+用户在说“把某颗芯片放到哪里、离什么元件近、靠边”时，如果该芯片带转接板，必须按转接板板面考虑占位。
+用户要求“加/换/去掉转接板、插在转接板上、引出来”时，使用 component_adapter；尺寸字段可以省略，省略部分按芯片默认值补齐。
+转接板脚数只能等于芯片脚数（一对一转换）：不要在 component_adapter 里写 pinCount，写了也会被忽略。
 有效结果格式：{"action":"constraints","constraints":[...]}。
 
 指令目录：${JSON.stringify(catalog)}

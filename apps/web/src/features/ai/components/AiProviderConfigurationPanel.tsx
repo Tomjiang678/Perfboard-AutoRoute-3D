@@ -5,10 +5,9 @@ import type { AiConstraintAssistantController } from "../useAiConstraintAssistan
 
 interface AiProviderConfigurationPanelProps {
   controller: AiConstraintAssistantController;
-  disabled: boolean;
 }
 
-export function AiProviderConfigurationPanel({ controller, disabled }: AiProviderConfigurationPanelProps) {
+export function AiProviderConfigurationPanel({ controller }: AiProviderConfigurationPanelProps) {
   const [open, setOpen] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const configuration = controller.configuration;
@@ -20,7 +19,6 @@ export function AiProviderConfigurationPanel({ controller, disabled }: AiProvide
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        disabled={disabled}
       >
         <span className="auto-placement-ai-toggle-title">
           {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -40,7 +38,6 @@ export function AiProviderConfigurationPanel({ controller, disabled }: AiProvide
             <span>AI 服务</span>
             <select
               value={configuration.provider}
-              disabled={disabled}
               onChange={(event) => {
                 const provider = event.target.value as AiProviderPreset;
                 const option = AI_PROVIDER_OPTIONS.find((candidate) => candidate.id === provider);
@@ -66,7 +63,6 @@ export function AiProviderConfigurationPanel({ controller, disabled }: AiProvide
               placeholder="https://..."
               autoComplete="url"
               spellCheck={false}
-              disabled={disabled}
               onChange={(event) => controller.setConfiguration({ ...configuration, requestUrl: event.target.value })}
             />
           </label>
@@ -79,7 +75,6 @@ export function AiProviderConfigurationPanel({ controller, disabled }: AiProvide
                 placeholder="输入你自己的 API Key"
                 autoComplete="off"
                 spellCheck={false}
-                disabled={disabled}
                 onChange={(event) => controller.setConfiguration({ ...configuration, apiKey: event.target.value })}
               />
               <button
@@ -87,7 +82,6 @@ export function AiProviderConfigurationPanel({ controller, disabled }: AiProvide
                 onClick={() => setShowApiKey((current) => !current)}
                 title={showApiKey ? "隐藏 API Key" : "显示 API Key"}
                 aria-label={showApiKey ? "隐藏 API Key" : "显示 API Key"}
-                disabled={disabled}
               >
                 {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
@@ -104,14 +98,13 @@ export function AiProviderConfigurationPanel({ controller, disabled }: AiProvide
               placeholder="按服务商要求填写"
               autoComplete="off"
               spellCheck={false}
-              disabled={disabled}
               onChange={(event) => controller.setConfiguration({ ...configuration, model: event.target.value })}
             />
           </label>
           <button
             className="tool-button auto-placement-ai-test"
             type="button"
-            disabled={disabled || controller.instructionRunning || !isAiApiConfigurationComplete(configuration)}
+            disabled={controller.instructionRunning || !isAiApiConfigurationComplete(configuration)}
             onClick={controller.testConnection}
           >
             测试连接
@@ -121,4 +114,3 @@ export function AiProviderConfigurationPanel({ controller, disabled }: AiProvide
     </section>
   );
 }
-

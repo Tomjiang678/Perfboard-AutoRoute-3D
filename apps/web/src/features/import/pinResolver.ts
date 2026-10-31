@@ -45,7 +45,7 @@ function resolveNet(
   const nodes: ResolvedPinNode[] = [];
   const unresolved: NetNode[] = [];
 
-  for (const node of net.nodes) {
+  for (const node of net.nodes ?? []) {
     const physicalPin = Number(node.pin);
     if (!/^\d+$/.test(node.pin) || !Number.isInteger(physicalPin) || physicalPin < 1) {
       unresolved.push(node);
