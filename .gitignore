@@ -45,3 +45,8 @@ Thumbs.db
 
 #库
 docs/kicad-symbols/
+
+# 官网与部署（不属于本仓库的版本管理范围）
+apps/site/
+deploy/
+apps/web/assets/网站图片/
