@@ -832,6 +832,21 @@ export function App() {
 
   function handleDetachAdapter() {
     if (!selectedComponentId) return;
+    const selected = projectRef.current?.components.find((component) => component.id === selectedComponentId);
+    // 独立转接板（还没装芯片）本身就是这块板：移除=删掉这个元件（连带清掉它引出的走线）
+    if (selected?.kind === "adapter") {
+      const deletedPinCells = selected.pinOffsets.map((_, index) => pinGridPosition(selected, index + 1));
+      const remainingPinCells = (projectRef.current?.components ?? [])
+        .filter((component) => component.id !== selectedComponentId)
+        .flatMap((component) => component.pinOffsets.map((_, index) => pinGridPosition(component, index + 1)));
+      commitProject((current) => ({
+        ...current,
+        components: current.components.filter((component) => component.id !== selectedComponentId),
+        routing: removeRoutesToComponent(current.routing, deletedPinCells, remainingPinCells)
+      }));
+      setSelectedComponentId(undefined);
+      return;
+    }
     // 已经放到板上的元件不允许摘转接板：脚位已经参与布线
     updateComponent(selectedComponentId, (component) =>
       component.mounted ? component : { ...component, adapter: undefined }

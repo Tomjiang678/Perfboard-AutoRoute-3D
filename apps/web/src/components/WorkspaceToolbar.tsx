@@ -103,7 +103,7 @@ export function WorkspaceToolbar({
           放置
         </MenuButton>
         <MenuButton disabled={!canUnmountSelected} icon={<Undo2 size={16} />} shortcut={shortcutLabel(shortcuts.unmount)} onClick={onUnmountSelected}>
-          移除
+          拿起
         </MenuButton>
         <MenuButton danger disabled={!selectedComponent} icon={<Trash2 size={16} />} shortcut={shortcutLabel(shortcuts.delete)} onClick={onDeleteSelected}>
           删除

@@ -229,8 +229,15 @@ export function Workspace({
                       />
                     </label>
                   </div>
-                  <button className="icon-text-button" type="button" disabled={locked} onClick={onDetachAdapter}>
-                    {locked ? "放置后不能移除转接板" : "移除转接板"}
+                  <button
+                    className="icon-text-button"
+                    type="button"
+                    disabled={locked && selectedComponent.kind !== "adapter"}
+                    onClick={onDetachAdapter}
+                  >
+                    {selectedComponent.kind === "adapter"
+                      ? "删除转接板"
+                      : locked ? "放置后不能移除转接板" : "移除转接板"}
                   </button>
                 </div>
               );

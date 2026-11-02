@@ -1,0 +1,60 @@
+# ProtoRoute 3D —— nginx 参考配置
+#
+# 目录约定：
+#   /srv/protoroute/site         apps/site/dist 的内容（官网 + /app/ + /downloads/）
+#   /srv/protoroute/site/admin   deploy/admin/index.html + 生成的 stats.json
+#   /srv/protoroute/stats.py     deploy/stats.py
+#
+# 改动后：nginx -t && systemctl reload nginx
+
+# ── ① 放在 http { } 里，和别的 limit_req_zone 放一起 ──────────────────
+limit_req_zone $binary_remote_addr zone=hit:10m rate=30r/m;
+
+# ── ② 放在 http { } 里（server 之外） ────────────────────────────────
+log_format protoroute_hit '$remote_addr - $remote_user [$time_local] '
+                          '"$request" $status $body_bytes_sent '
+                          '"$http_referer" "$http_user_agent"';
+
+server {
+    listen 80;
+    server_name example.com;
+
+    root /srv/protoroute/site;
+    index index.html;
+
+    access_log /var/log/nginx/protoroute-access.log;
+    error_log  /var/log/nginx/protoroute-error.log;
+
+    # 计数端点：只写日志、立刻 204，不落盘、不缓存，并做限流防刷。
+    # 前端只在真实浏览器里发这个 1×1 请求，所以比直接数 access.log 干净得多。
+    location = /api/hit {
+        access_log /var/log/nginx/protoroute-hit.log protoroute_hit;
+        limit_req zone=hit burst=20 nodelay;
+        limit_req_status 204;
+        add_header Cache-Control "no-store" always;
+        return 204;
+    }
+
+    # 后台：整个 /admin/ 走 basic auth，stats.json 也在里面，不会被公开。
+    location /admin/ {
+        auth_basic "stats";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+        try_files $uri $uri/ /admin/index.html;
+    }
+
+    # 应用本体（单页，没有自己的路由）
+    location /app/ {
+        try_files $uri $uri/ /app/index.html;
+    }
+
+    # 发布包：大文件，别走 SPA 回落，缓存一年
+    location /downloads/ {
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # 官网（前端路由 /、/download、/workspace）
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

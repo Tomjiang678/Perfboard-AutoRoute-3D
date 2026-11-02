@@ -457,12 +457,12 @@ export function Perfboard3DViewport({
             放置
           </button>
           <button type="button" disabled={!isSelectedMounted()} onClick={() => { onUnmountSelected(); setContextMenu(undefined); }}>
-            移除
+            拿起
           </button>
           <button type="button" disabled={isSelectedMounted()} onClick={() => { onRotateSelected(); setContextMenu(undefined); }}>
             旋转
           </button>
-          {components.find((component) => component.id === selectedComponentId)?.adapter && (
+          {components.find((component) => component.id === selectedComponentId && component.kind !== "adapter")?.adapter && (
             <button
               type="button"
               disabled={isSelectedMounted()}

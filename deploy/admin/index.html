@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>访问统计 · ProtoRoute 3D</title>
+    <style>
+      :root {
+        --ink: #111318;
+        --muted: #5c626d;
+        --faint: #8a909a;
+        --line: #e6e8ec;
+        --accent: #0f7c53;
+        --bg: #ffffff;
+        --surface: #f6f7f8;
+        --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC",
+          "Microsoft YaHei", sans-serif;
+        --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--font);
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap { max-width: 960px; margin: 0 auto; padding: 56px 24px 80px; }
+      header h1 { margin: 0; font-size: 30px; letter-spacing: -0.03em; }
+      header p { margin: 8px 0 0; color: var(--faint); font-size: 13px; }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 36px;
+      }
+      .card {
+        padding: 18px 20px 20px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+      }
+      .card span { font-size: 13px; color: var(--muted); }
+      .card strong {
+        display: block;
+        margin-top: 10px;
+        font-size: 30px;
+        font-weight: 650;
+        letter-spacing: -0.03em;
+      }
+
+      .panel { margin-top: 44px; }
+      .panel-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .panel-head h2 { margin: 0; font-size: 15px; font-weight: 620; }
+      .panel-head span { font-size: 12.5px; color: var(--faint); }
+
+      .chart {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        height: 150px;
+        margin-top: 18px;
+        padding-top: 8px;
+        border-bottom: 1px solid var(--line);
+      }
+      .bar {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        align-items: center;
+        height: 100%;
+        min-width: 0;
+      }
+      .bar i {
+        display: block;
+        width: 100%;
+        max-width: 34px;
+        min-height: 2px;
+        border-radius: 3px 3px 0 0;
+        background: var(--accent);
+        opacity: 0.85;
+      }
+      .bar em {
+        margin-top: 6px;
+        font-style: normal;
+        font-family: var(--mono);
+        font-size: 10.5px;
+        color: var(--faint);
+        white-space: nowrap;
+      }
+
+      table {
+        width: 100%;
+        margin-top: 12px;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      th,
+      td {
+        padding: 10px 8px;
+        border-bottom: 1px solid var(--line);
+        text-align: right;
+      }
+      th:first-child,
+      td:first-child { text-align: left; }
+      th {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--faint);
+        letter-spacing: 0.04em;
+      }
+      td { color: var(--muted); }
+      td:first-child { color: var(--ink); font-family: var(--mono); font-size: 13px; }
+
+      .empty {
+        margin-top: 18px;
+        padding: 20px;
+        border: 1px dashed var(--line);
+        border-radius: 12px;
+        color: var(--faint);
+        font-size: 14px;
+      }
+
+      @media (max-width: 640px) {
+        .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .wrap { padding: 36px 18px 64px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <header>
+        <h1>访问统计</h1>
+        <p id="meta">正在读取…</p>
+      </header>
+
+      <section class="cards">
+        <div class="card"><span>今日访客</span><strong id="today">–</strong></div>
+        <div class="card"><span>昨日</span><strong id="yesterday">–</strong></div>
+        <div class="card"><span>近 7 天</span><strong id="last7">–</strong></div>
+        <div class="card"><span>累计</span><strong id="all">–</strong></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>最近 14 天</h2>
+          <span id="views">–</span>
+        </div>
+        <div class="chart" id="chart"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h2>明细</h2></div>
+        <table>
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>访客</th>
+              <th>浏览</th>
+              <th>打开工作区</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const number = new Intl.NumberFormat("zh-CN");
+      const $ = (id) => document.getElementById(id);
+
+      function showEmpty(message) {
+        $("meta").textContent = message;
+        $("chart").innerHTML = '<div class="empty">还没有数据。等 nginx 记到第一批访问后，cron 跑一次就会出来。</div>';
+      }
+
+      function render(data) {
+        const summary = data.summary ?? {};
+        $("today").textContent = number.format(summary.today ?? 0);
+        $("yesterday").textContent = number.format(summary.yesterday ?? 0);
+        $("last7").textContent = number.format(summary.last7 ?? 0);
+        $("all").textContent = number.format(summary.allTime ?? 0);
+        $("meta").textContent = `更新于 ${String(data.generatedAt ?? "").replace("T", " ").slice(0, 16)} · 统计起点 ${summary.since ?? "—"}`;
+        $("views").textContent = `累计浏览 ${number.format(summary.views ?? 0)} 次`;
+
+        const days = (data.days ?? []).slice(-14);
+        if (days.length === 0) {
+          showEmpty("还没有数据");
+          return;
+        }
+
+        const max = Math.max(1, ...days.map((day) => day.visitors));
+        $("chart").innerHTML = days
+          .map((day) => {
+            const height = Math.round((day.visitors / max) * 100);
+            return `<div class="bar" title="${day.date}：${day.visitors} 人">
+              <i style="height:${height}%"></i>
+              <em>${day.date.slice(5)}</em>
+            </div>`;
+          })
+          .join("");
+
+        $("rows").innerHTML = days
+          .slice()
+          .reverse()
+          .map((day) => {
+            const opens = (day.events && day.events.open) || 0;
+            return `<tr>
+              <td>${day.date}</td>
+              <td>${number.format(day.visitors)}</td>
+              <td>${number.format(day.views)}</td>
+              <td>${number.format(opens)}</td>
+            </tr>`;
+          })
+          .join("");
+      }
+
+      fetch("stats.json", { cache: "no-store" })
+        .then((response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.json();
+        })
+        .then(render)
+        .catch((error) => showEmpty(`读取 stats.json 失败：${error.message}`));
+    </script>
+  </body>
+</html>
