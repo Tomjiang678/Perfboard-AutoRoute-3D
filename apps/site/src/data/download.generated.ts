@@ -7,5 +7,5 @@ export const downloadArtifact = {
   "size": "约 132 MB",
   "version": "",
   "releasedAt": "2026-11",
-  "generatedAt": "2026-10-31T17:46:06.342Z"
+  "generatedAt": "2026-11-03T09:12:04.083Z"
 } as const;

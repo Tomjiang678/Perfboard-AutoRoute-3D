@@ -12,7 +12,7 @@ import type { PlacedComponent } from "../types/project.ts";
 import type { RoutedNetEndpoint } from "../types/project.ts";
 import type { RoutingState } from "../types/project.ts";
 import type { ThemeMode } from "../types/project.ts";
-import { createAdapterPlate, createParametricComponent, setComponentTheme } from "../renderer3d/parametricComponents.ts";
+import { ADAPTER_PLATE_SURFACE_Y, createAdapterPlate, createParametricComponent, setComponentTheme } from "../renderer3d/parametricComponents.ts";
 import { bendComponentPin, isManuallyBendable, pinGridPosition } from "../features/layout/manualPlacement.ts";
 import { createBreadboardDefinition } from "../features/board/breadboard.ts";
 import { componentBoardPinOffsets, centeredChipPinOffsets } from "../features/project/adapter.ts";
@@ -753,10 +753,12 @@ function createPlacedComponents(components: PlacedComponent[], board: BoardSize,
     });
     const component = new THREE.Group();
     component.add(mesh);
-    if (placed.adapter) {
-      // 芯片坐在转接板上：板体在下面，芯片整体抬起一点，针脚埋进板里
+    // 独立转接板（kind=adapter）本身就是板，别再叠一层
+    if (placed.adapter && placed.kind !== "adapter") {
+      // 芯片坐在转接板焊盘上，而不是悬空
       component.add(createAdapterPlate(placed.adapter, placed.label));
-      mesh.position.y += 0.18;
+      const chipBox = new THREE.Box3().setFromObject(mesh);
+      mesh.position.y += ADAPTER_PLATE_SURFACE_Y - chipBox.min.y;
     }
     component.position.copy(getComponentWorldPosition(placed, board));
     component.rotation.y = placed.rotation;

@@ -1,0 +1,11 @@
+{
+  "name": "perfboard-autoroute-3d",
+  "version": "0.0.0",
+  "private": true,
+  "description": "ProtoRoute 3D — 一条命令同时启动应用与官网的开发服务器",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "npm --prefix apps/web run dev",
+    "dev:site": "npm --prefix apps/site run dev"
+  }
+}

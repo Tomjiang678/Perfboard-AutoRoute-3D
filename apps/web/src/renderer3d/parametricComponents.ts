@@ -547,6 +547,9 @@ function addSevenSegmentBars(group: THREE.Group, x: number, y: number, z: number
  * 转接板：阻焊绿薄板 + 金盘 + 排针。原点在排针第 1 脚，和元件锚点一致，
  * 既能作为独立元件渲染，也能直接挂在插在它上面的芯片下面。
  */
+/** 转接板正面的落座高度（焊盘顶面）：芯片要坐在这里，不能悬空 */
+export const ADAPTER_PLATE_SURFACE_Y = 0.505;
+
 export function createAdapterPlate(adapter: AdapterSpec, label: string) {
   const group = new THREE.Group();
   const offsets = adapterPinOffsets(adapter);
@@ -588,7 +591,7 @@ export function createAdapterPlate(adapter: AdapterSpec, label: string) {
     group.add(pin);
 
     const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.035, 20), materials.adapterPad);
-    pad.position.set(x, 0.487, z);
+    pad.position.set(x, ADAPTER_PLATE_SURFACE_Y - 0.0175, z);
     group.add(pad);
   });
 

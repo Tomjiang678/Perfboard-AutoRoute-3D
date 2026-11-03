@@ -96,6 +96,24 @@ npm.cmd run dev
 http://127.0.0.1:5173
 ```
 
+### 同时启动应用和官网
+
+从仓库根目录一条命令起两个开发服务器：
+
+```powershell
+npm.cmd run dev
+```
+
+- 应用：`http://127.0.0.1:5173/`
+- 官网：`http://127.0.0.1:5174/`（`/workspace` 会内嵌上面的应用）
+
+`Ctrl+C` 一起关闭。只想起其中一个时用 `npm.cmd run dev:web` 或 `npm.cmd run dev:site`；
+端口冲突时可以临时换：
+
+```powershell
+$env:DEV_WEB_PORT=5283; $env:DEV_SITE_PORT=5284; npm.cmd run dev
+```
+
 生产构建与本地预览：
 
 ```powershell
