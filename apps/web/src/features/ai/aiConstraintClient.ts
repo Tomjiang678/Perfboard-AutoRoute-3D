@@ -108,10 +108,12 @@ function buildProviderRequest(
 ): { requestUrl: string; init: RequestInit; extract: (value: unknown) => unknown } {
   const apiKey = configuration.apiKey.trim();
   const model = configuration.model.trim();
+  /** URL 里的 {model} 用当前模型替换（Gemini 这类把模型写在路径里的服务需要） */
+  const resolvedUrl = configuration.requestUrl.trim().replace("{model}", encodeURIComponent(model));
   const common: Pick<RequestInit, "method" | "signal"> = { method: "POST", signal };
   if (configuration.provider === "anthropic") {
     return {
-      requestUrl: configuration.requestUrl.trim(),
+      requestUrl: resolvedUrl,
       init: {
         ...common,
         headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
@@ -123,9 +125,9 @@ function buildProviderRequest(
     };
   }
   if (configuration.provider === "gemini") {
-    const separator = configuration.requestUrl.includes("?") ? "&" : "?";
+    const separator = resolvedUrl.includes("?") ? "&" : "?";
     return {
-      requestUrl: `${configuration.requestUrl.trim()}${separator}key=${encodeURIComponent(apiKey)}`,
+      requestUrl: `${resolvedUrl}${separator}key=${encodeURIComponent(apiKey)}`,
       init: {
         ...common,
         headers: { "content-type": "application/json" },
@@ -141,7 +143,7 @@ function buildProviderRequest(
   }
 
   return {
-    requestUrl: configuration.requestUrl.trim(),
+    requestUrl: resolvedUrl,
     init: {
       ...common,
       headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
