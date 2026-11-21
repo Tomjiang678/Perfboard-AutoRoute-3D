@@ -1,8 +1,9 @@
-const { app, BrowserWindow, ipcMain, safeStorage, Menu } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, safeStorage, Menu } = require("electron");
 const fs = require("fs/promises");
 const path = require("path");
 
 const AI_CONFIG_FILE = "ai-config.json";
+const BACKUP_FILE = "protoroute-backup.json";
 const PROJECT_FILE_EXTENSION = ".json";
 const pendingProjectFiles = [];
 let mainWindow;
@@ -120,6 +121,35 @@ async function requestAiApi(_event, request) {
   }
 }
 
+async function chooseStorageDirectory() {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ["openDirectory", "createDirectory"],
+    title: "选择保存位置"
+  });
+  return result.canceled ? undefined : result.filePaths[0];
+}
+
+async function writeStorageBackup(_event, payload) {
+  const directory = typeof payload?.directory === "string" ? payload.directory.trim() : "";
+  const content = typeof payload?.content === "string" ? payload.content : "";
+  if (!directory) {
+    throw new Error("保存位置为空");
+  }
+  await fs.mkdir(directory, { recursive: true });
+  const target = path.join(directory, BACKUP_FILE);
+  await fs.writeFile(target, content, "utf8");
+  return { path: target };
+}
+
+async function readStorageBackup(_event, directory) {
+  if (typeof directory !== "string" || !directory.trim()) return undefined;
+  try {
+    return await fs.readFile(path.join(directory.trim(), BACKUP_FILE), "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -149,6 +179,9 @@ app.whenReady().then(() => {
   ipcMain.handle("ai-config:load", readAiConfig);
   ipcMain.handle("ai-config:save", writeAiConfig);
   ipcMain.handle("ai-api:request", requestAiApi);
+  ipcMain.handle("storage:choose-directory", chooseStorageDirectory);
+  ipcMain.handle("storage:write-backup", writeStorageBackup);
+  ipcMain.handle("storage:read-backup", readStorageBackup);
   ipcMain.on("project:renderer-ready", () => {
     rendererReady = true;
     dispatchProjectFiles();

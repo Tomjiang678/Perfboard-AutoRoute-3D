@@ -6,6 +6,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    strictPort: false
+    strictPort: false,
+    watch: {
+      // Editor atomic-write temp dirs and Electron build output can be locked
+      // on Windows; watching them can crash Vite with EBUSY.
+      ignored: ["**/.*.tmpdir/**", "**/release/**", "**/dist/**"]
+    }
   }
 });

@@ -1,4 +1,4 @@
-import { Moon, RotateCcw, Save, Settings, Sun } from "lucide-react";
+import { CircleHelp, Moon, RotateCcw, Save, Settings, Sun } from "lucide-react";
 import type { ChangeEvent } from "react";
 import type { ThemeMode } from "../types/project.ts";
 import { WorkspaceToolbar, type WorkspaceToolbarProps } from "./WorkspaceToolbar.tsx";
@@ -15,10 +15,11 @@ interface HeaderBarProps {
   onUndo: () => void;
   canUndo: boolean;
   onOpenSettings: () => void;
+  onOpenHelp: () => void;
   toolbar?: WorkspaceToolbarProps;
 }
 
-export function HeaderBar({ projectName, theme, onToggleTheme, onNewProject, onSaveProject, onOpenProject, onClearProject, onUndo, canUndo, onOpenSettings, toolbar }: HeaderBarProps) {
+export function HeaderBar({ projectName, theme, onToggleTheme, onNewProject, onSaveProject, onOpenProject, onClearProject, onUndo, canUndo, onOpenSettings, onOpenHelp, toolbar }: HeaderBarProps) {
   function handleProjectAction(event: ChangeEvent<HTMLSelectElement>) {
     const value = event.target.value;
     event.target.value = "";
@@ -77,6 +78,9 @@ export function HeaderBar({ projectName, theme, onToggleTheme, onNewProject, onS
         </button>
         <button className="icon-button" type="button" title="Export project JSON" disabled={!projectName} onClick={onSaveProject}>
           <Save size={18} />
+        </button>
+        <button className="icon-button" type="button" title="帮助" onClick={onOpenHelp}>
+          <CircleHelp size={18} />
         </button>
         <button className="icon-button" type="button" title="Settings" disabled={!projectName} onClick={onOpenSettings}>
           <Settings size={18} />

@@ -86,6 +86,24 @@ export function isValidConstraintShape(value: unknown): boolean {
   }
 }
 
+function isPinProfileShape(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (typeof value.id !== "string") return false;
+  if (!isRecord(value.identity) || typeof value.identity.value !== "string" || typeof value.identity.package !== "string") {
+    return false;
+  }
+  if (!Number.isInteger(value.pinCount) || (value.pinCount as number) < 2) {
+    return false;
+  }
+  if (!Array.isArray(value.pins)) return false;
+  return value.pins.every((pin) => isRecord(pin) &&
+    Number.isInteger(pin.physical) &&
+    (pin.physical as number) >= 1 &&
+    ["netlist", "bound", "unconnected"].includes(pin.connection as string) &&
+    (pin.logical === undefined || typeof pin.logical === "string") &&
+    (pin.net === undefined || typeof pin.net === "string"));
+}
+
 export function validateProjectShape(raw: unknown): ProjectValidationResult {
   const issues: string[] = [];
 
@@ -142,6 +160,16 @@ export function validateProjectShape(raw: unknown): ProjectValidationResult {
     }
     if (!Array.isArray(importState.components)) issues.push("importState.components 不是数组");
     if (!Array.isArray(importState.warnings)) issues.push("importState.warnings 不是数组");
+    if (importState.pinProfiles !== undefined) {
+      if (!Array.isArray(importState.pinProfiles)) {
+        issues.push("importState.pinProfiles 不是数组");
+      } else {
+        const brokenProfiles = importState.pinProfiles.filter((profile) => !isPinProfileShape(profile));
+        if (brokenProfiles.length > 0) {
+          issues.push(`${brokenProfiles.length} 个元件引脚配置字段不完整`);
+        }
+      }
+    }
   }
 
   const routing = raw.routing;

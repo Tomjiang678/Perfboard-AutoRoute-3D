@@ -30,7 +30,7 @@ server {
     location = /api/hit {
         access_log /var/log/nginx/protoroute-hit.log protoroute_hit;
         limit_req zone=hit burst=20 nodelay;
-        limit_req_status 204;
+        limit_req_status 429;
         add_header Cache-Control "no-store" always;
         return 204;
     }

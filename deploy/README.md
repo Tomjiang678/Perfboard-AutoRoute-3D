@@ -115,3 +115,69 @@ python3 /srv/protoroute/stats.py \
 ```bash
 python3 deploy/stats.py --log deploy/sample.log --out /tmp/stats.json
 ```
+
+## 引脚配置回流（`/api/pin-profile`）
+
+App 保存一个 Multisim 型号的引脚配置时，会静默 POST 一条 JSON（不含网表、位号、工程名、IP）。这里只负责落盘，人工审核后再合并进内置库。
+
+```
+app ──POST /api/pin-profile──► nginx ──► 127.0.0.1:8099 ──► /var/lib/protoroute/pin-profiles/*.jsonl
+                                                                     │
+                                          node tools/merge-pin-profiles.mjs --in <dir>
+                                                                     ▼
+                                        apps/web/src/features/import/multisim/multisimProfiles.json
+```
+
+## 1. 启动接收服务
+
+```bash
+sudo mkdir -p /srv/protoroute /var/lib/protoroute/pin-profiles
+sudo cp deploy/pin-profile-server.mjs /srv/protoroute/
+sudo cp deploy/pin-profile.service.example /etc/systemd/system/protoroute-pin-profile.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now protoroute-pin-profile
+curl -i http://127.0.0.1:8099/health   # 204
+```
+
+只需要 Node 18+，没有依赖；默认只监听 `127.0.0.1:8099`。
+
+## 2. nginx
+
+把 `deploy/pin-profile.nginx.conf` 里的 `location` 合进站点配置；`limit_req_zone` 放 `http {}`：
+
+```conf
+limit_req_zone $binary_remote_addr zone=pinprofile:1m rate=10r/m;
+```
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+## 3. 构建时指向端点
+
+```bash
+VITE_PROFILE_ENDPOINT=https://你的域名/api/pin-profile npm run build
+```
+
+没配置时，提交只留在本机 outbox（最多 50 条），联网后补发。
+
+## 4. 审核与合并
+
+```bash
+# 从服务器拉回 submissions/
+node tools/merge-pin-profiles.mjs --in submissions/ --report pin-profile-report.md
+```
+
+- 完全相同的提交只累加确认次数；
+- 同一型号映射不一致 → 两边都保留，写进报告，**不自动合并**；
+- 默认至少 2 份独立提交才进内置库，确认无误的数字可以 `--min-confirmations 1`；
+- 输出直接覆盖 `apps/web/src/features/import/multisim/multisimProfiles.json`，下次发版生效。
+
+提交内容只有：型号、封装、脚数、`physical/logical/unit/connection/net` 表。服务器不记录 IP，也不接收自由文本。
+
+## 隐私
+
+- nginx 的 `protoroute-pin-profile.log` 只记访问行，不写 body；
+- 服务端只落 payload，不落 RemoteAddr；
+- 合并工具只处理型号身份，不接触任何工程数据。
+

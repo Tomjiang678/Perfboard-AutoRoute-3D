@@ -1,10 +1,11 @@
-import { Layers3 } from "lucide-react";
+﻿import { Layers3 } from "lucide-react";
 import type { LibraryComponentDefinition } from "../features/project/componentLibrary.ts";
 import type { AdapterSpec, BoardSize, DragMoveModifier, PerfboardProject, RoutedNetEndpoint, ThemeMode } from "../types/project.ts";
 import { getBoardModel } from "../features/board/factory.ts";
 import { normalizeAdapter } from "../features/project/adapter.ts";
 import { spacingLimits } from "../features/project/componentTraits.ts";
 import { PLACEHOLDER_NOTE } from "../features/import/componentMapping.ts";
+import { isPlaceholderComponent } from "../features/project/componentTraits.ts";
 import { Perfboard3DViewport, type SelectedPin } from "./Perfboard3DViewport.tsx";
 import type { RouteEditMode } from "./WorkspaceToolbar.tsx";
 
@@ -20,6 +21,8 @@ interface WorkspaceProps {
   onUpdateBoard: (board: BoardSize) => void;
   onRotateSelected: () => void;
   onDeleteSelected: () => void;
+  onAssignPackage: (componentId: string) => void;
+  canAssignPackage: (componentId: string) => boolean;
   onDetachAdapter: () => void;
   onMountSelected: () => void;
   onUnmountSelected: () => void;
@@ -52,6 +55,8 @@ export function Workspace({
   onUpdateBoard,
   onRotateSelected,
   onDeleteSelected,
+  onAssignPackage,
+  canAssignPackage,
   onDetachAdapter,
   onMountSelected,
   onUnmountSelected,
@@ -96,6 +101,8 @@ export function Workspace({
           onMovePin={onMovePin}
           onRotateSelected={onRotateSelected}
           onDeleteSelected={onDeleteSelected}
+          onAssignPackage={onAssignPackage}
+          canAssignPackage={canAssignPackage}
           onDetachAdapter={onDetachAdapter}
           onMountSelected={onMountSelected}
           onUnmountSelected={onUnmountSelected}
@@ -242,7 +249,7 @@ export function Workspace({
                 </div>
               );
             })()}
-            {selectedComponent.isFallback && (
+            {isPlaceholderComponent(selectedComponent) && (
               <div className="fallback-component-note">
                 <strong>库中无对应封装</strong>
                 <span>{selectedComponent.fallbackReason ?? `已将 ${selectedComponent.name} ${PLACEHOLDER_NOTE}。`}</span>
@@ -282,3 +289,5 @@ function formatFallbackPinMap(pinMap: Record<string, number>) {
     .map(([logical, physical]) => `${logical}->${physical}`)
     .join(", ");
 }
+
+

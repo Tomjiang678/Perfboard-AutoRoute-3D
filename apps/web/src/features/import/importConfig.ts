@@ -79,15 +79,16 @@ const rawBehavior = behaviorData as unknown as {
 const rawGenerated = pinLibraryGenerated as unknown as RawPinLibraryData;
 
 const pinCountResolvers: Record<NonNullable<RawComponentMappingRule["pinCountStrategy"]>, (component: ParsedComponent, pinsFromNetlist?: number) => number> = {
-  fromPins: (component, pinsFromNetlist) => Math.max(1, pinsFromNetlist ?? inferPinCountFromDevicePinModels(component.value) ?? 2),
+  fromPins: (component, pinsFromNetlist) => resolvePinCountHint(component, pinsFromNetlist),
   fixed2: () => 2,
   fixed3: () => 3,
   fixed4: () => 4,
   fixed8: () => 8
 };
 
-// Single pin-model source: the library generated from the KiCad symbol
-// libraries. pinLibraryOverrides.json is deprecated and no longer loaded.
+// KiCad pin-name enrichment uses the generated symbol library. The Multisim
+// built-in models are a separate read-only source (multisim/builtinPinModels.ts
+// reads pinLibraryOverrides.json).
 export const devicePinModels: DevicePinModel[] = (rawGenerated.devicePinModels ?? []).map(buildDevicePinModel);
 
 export const componentMappingRules: ComponentMappingRule[] = rawConfig.componentMappingRules.map((rule) => ({
@@ -143,6 +144,42 @@ function inferPinCountFromDevicePinModels(value: string) {
   ];
   const pinCount = Math.max(0, ...pins);
   return pinCount > 0 ? pinCount : undefined;
+}
+
+/**
+ * 封装名里的脚数。只认“数字就是引脚数”的封装族：
+ * TO-220 / SOT-23 这类名字里的数字是封装尺寸，不能当脚数。
+ */
+const PACKAGE_PIN_FAMILIES = [
+  "TSSOP", "SSOP", "MSOP", "QSOP", "SOIC", "SOP", "PDIP", "DIP",
+  "TQFP", "LQFP", "QFP", "PLCC", "QFN", "SOJ", "BGA"
+];
+const PACKAGE_PIN_PATTERN = new RegExp(
+  `\\b(?:${PACKAGE_PIN_FAMILIES.join("|")})[-_ ]?(\\d{1,3})(?!\\d)`,
+  "i"
+);
+
+export function inferPinCountFromPackage(packageName: string): number | undefined {
+  const match = packageName.match(PACKAGE_PIN_PATTERN);
+  if (!match) return undefined;
+  const pins = Number(match[1]);
+  return Number.isInteger(pins) && pins >= 2 && pins <= 256 ? pins : undefined;
+}
+
+/**
+ * 一个元件到底有几个脚：取“网表里用到的脚数 / 型号库 / 封装名”三者的最大值。
+ *
+ * 为什么要取最大：Protel、嘉立创这类网表只记录**接了线的引脚**，
+ * 一颗 8 脚芯片只用 1、2 脚时，网表里只能看到 2 个脚，
+ * 只看它就当成两脚元件了；封装名 DIP-8 和型号库都能把它纠正回来。
+ */
+export function resolvePinCountHint(component: ParsedComponent, pinsFromNetlist?: number): number {
+  const candidates = [
+    pinsFromNetlist,
+    inferPinCountFromDevicePinModels(component.value),
+    inferPinCountFromPackage(component.packageName)
+  ].filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0);
+  return Math.max(2, ...candidates);
 }
 
 function evaluateMatchList(expressions: MatchExpression[], component: NormalizedComponentFields, mode: "any" | "all") {

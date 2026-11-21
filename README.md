@@ -26,10 +26,11 @@ ProtoRoute 3D 是一个面向洞洞板和免焊面包板的 3D 元件布局、�
 ### 网表导入与元件映射
 
 - 导入器支持 KiCad Eeschema 导出的 S-expression `.net` 网表，也支持嘉立创 EDA / 立创EDA 导出的 Protel 2 网表（`.net`）：按内容自动识别（文件头 `PROTEL NETLIST`，缺失时按 `DESIGNATOR` 块结构兜底），无需转换；文件选择器同时接受 `.txt` 后缀的文本。
+- 支持 Multisim 导出的**文本报告**（网表 + 交叉引用报告，`.txt`）：按内容结构识别，自动处理 `_uc` 乱码表头、`U1A` 单元后缀、脏位号与电源符号；之前支持过的型号（TL06x、LM358、LM324、LM393、NE555、74xx、LM317、IRF540、2N3904/3906、OP07、数码管等）由内置型号库自动解析，只有未知型号才进入"Multisim parts"清单，由用户补录**物理脚数**和**逻辑引脚→物理脚**对应，空闲脚可挂到网表已有网络；补录一次后按型号复用。
 - Protel 网表没有库字段，导入时按位号前缀与值/封装关键词推断元件类别，并从内置器件引脚模型补齐引脚名与电源脚；推断不出封装的元件仍走回退封装并给出警告。
 - 可同时导入多个网表，也可重新导入或移除文件；界面会显示元件、网络、节点、已映射引脚和缺失引脚统计。
-- 从网表中的 `libparts`、封装和引脚信息生成物理元件，并通过生成的 KiCad 引脚模型库补充引脚名称和电源脚信息。
-- 无法精确识别的器件会使用回退封装并给出警告，不会静默假定映射正确。
+- 从网表中的 `libparts`、封装和引脚信息生成物理元件，并通过生成的 KiCad 引脚模型库补充引脚名称和电源脚信息；Multisim 型号优先使用内置型号库或用户配置的引脚表。
+- 无法精确识别的器件会使用回退封装并给出警告，不会静默假定映射正确；Multisim 未知型号在补录前不会放置。
 - 内置参数化元件包括电阻、电感、二极管、LED、电容、DIP、排针、晶体管/稳压器封装、继电器、开关、数码管、端子、蜂鸣器和电位器等。
 
 ### 自动放置
@@ -188,7 +189,7 @@ data                     器件、封装和示例数据的预留目录
 docs                     架构记录、设计文档和测试网表
 examples                 示例电路说明
 packages                 预留的共享包目录，当前算法尚未拆分到这些包
-tools                    KiCad 引脚模型生成工具及已弃用的 Multisim 辅助工具
+tools                    KiCad 引脚模型生成、Multisim 引脚配置合并等脚本
 ```
 
 主要实现入口：
@@ -198,6 +199,8 @@ apps/web/src/App.tsx                               应用状态与操作入口
 apps/web/src/features/board                        洞洞板/面包板模型与规则
 apps/web/src/features/import/kicadNetlistParser.ts KiCad 网表解析
 apps/web/src/features/import/protelNetlist.ts     嘉立创 / Protel 2 网表解析
+apps/web/src/features/import/multisim               Multisim 文本报告解析、脚数判定与用户引脚配置
+apps/web/src/components/PinProfilesDialog.tsx       Multisim 单屏映射工作台
 apps/web/src/features/layout/autoPlacement.ts      自动放置与布局优化
 apps/web/src/features/routing/autoRouter.ts        自动布线与 DRC
 apps/web/src/features/constraints                  结构化约束解析与执行
@@ -209,7 +212,8 @@ apps/web/src/renderer3d/parametricComponents.ts    参数化 3D 元件
 
 ## 当前限制
 
-- 当前只实现了 KiCad S-expression 网表与 Protel 2 网表（嘉立创 / 立创EDA）；规划文档中提到的 BOM、SPICE、Multisim 报告和 `.ms14` 导入尚未接入应用。
+- 当前只实现了 KiCad S-expression 网表、Protel 2 网表（嘉立创 / 立创EDA）与 Multisim 文本报告（网表 + 交叉引用）；BOM、SPICE 和 `.ms14` 工程文件尚未接入。
+- Multisim 不内置器件引脚库：不认识的型号需要用户在映射工作台里补一次物理脚数与引脚对应；补录数据可匿名回流，经 `tools/merge-pin-profiles.mjs` 合并后才会进入内置库。
 - `backend`、`packages` 和 `data` 中有多处为未来拆分预留的目录，不能视为已经启用的独立后端或软件包。
 - 自动放置和自动布线是面向项目的启发式实现，不保证得到全局最优解或完成所有复杂网络。
 - 3D 元件是按封装类别生成的参数化模型，不追求具体厂商型号的外观还原。

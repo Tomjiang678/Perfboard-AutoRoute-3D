@@ -1,6 +1,7 @@
 import { AI_PROVIDER_OPTIONS, EMPTY_AI_API_CONFIGURATION, type AiApiConfiguration } from "./aiProvider.ts";
+import { STORAGE_KEYS } from "../storage/storageKeys.ts";
 
-const BROWSER_AI_CONFIG_KEY = "perfboard-ai-api-configuration";
+const BROWSER_AI_CONFIG_KEY = STORAGE_KEYS.aiConfig;
 
 export async function loadAiApiConfiguration(): Promise<AiApiConfiguration> {
   if (window.perfboardDesktop) {

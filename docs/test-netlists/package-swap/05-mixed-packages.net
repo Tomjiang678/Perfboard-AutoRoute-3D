@@ -1,0 +1,168 @@
+(export
+	(version "E")
+	(components
+		(comp
+			(ref "K1")
+			(value "G5V-1")
+			(footprint "Relay_THT:Relay_SPDT")
+			(libsource (lib "Relay") (part "G5V-1"))
+		)
+		(comp
+			(ref "BR1")
+			(value "KBPC3510")
+			(footprint "Diode_THT:Diode_Bridge_KBPC")
+			(libsource (lib "Diode_Bridge") (part "KBPC3510"))
+		)
+		(comp
+			(ref "RV1")
+			(value "10k")
+			(footprint "Potentiometer_THT:Potentiometer_Alps_RK09K_Single_Horizontal")
+			(libsource (lib "Device") (part "R_Potentiometer"))
+		)
+		(comp
+			(ref "U1")
+			(value "TL062")
+			(footprint "Package_DIP:DIP-8_W7.62mm")
+			(libsource (lib "Amplifier_Operational") (part "TL062"))
+		)
+		(comp
+			(ref "Q1")
+			(value "2N2222A")
+			(footprint "Package_TO_SOT_THT:TO-92_Inline")
+			(libsource (lib "Transistor_BJT") (part "2N2222A"))
+		)
+		(comp
+			(ref "J1")
+			(value "Conn_01x06")
+			(footprint "Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Vertical")
+			(libsource (lib "Connector") (part "Conn_01x06"))
+		)
+	)
+	(libparts
+		(libpart
+			(lib "Relay")
+			(part "G5V-1")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+				(pin (num "4") (name "~") (type "passive"))
+				(pin (num "5") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Diode_Bridge")
+			(part "KBPC3510")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+				(pin (num "4") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "R_Potentiometer")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Amplifier_Operational")
+			(part "TL062")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+				(pin (num "4") (name "~") (type "passive"))
+				(pin (num "5") (name "~") (type "passive"))
+				(pin (num "6") (name "~") (type "passive"))
+				(pin (num "7") (name "~") (type "passive"))
+				(pin (num "8") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Transistor_BJT")
+			(part "2N2222A")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Connector")
+			(part "Conn_01x06")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+				(pin (num "4") (name "~") (type "passive"))
+				(pin (num "5") (name "~") (type "passive"))
+				(pin (num "6") (name "~") (type "passive"))
+			)
+		)
+	)
+	(nets
+		(net
+			(name "5V")
+			(node (ref "K1") (pin "2"))
+			(node (ref "BR1") (pin "3"))
+			(node (ref "RV1") (pin "1"))
+			(node (ref "U1") (pin "8"))
+			(node (ref "J1") (pin "1"))
+		)
+		(net
+			(name "0")
+			(node (ref "K1") (pin "5"))
+			(node (ref "BR1") (pin "4"))
+			(node (ref "RV1") (pin "3"))
+			(node (ref "U1") (pin "4"))
+			(node (ref "Q1") (pin "3"))
+			(node (ref "J1") (pin "2"))
+		)
+		(net
+			(name "COIL")
+			(node (ref "K1") (pin "1"))
+			(node (ref "Q1") (pin "1"))
+		)
+		(net
+			(name "CTRL")
+			(node (ref "Q1") (pin "2"))
+			(node (ref "RV1") (pin "2"))
+			(node (ref "J1") (pin "3"))
+		)
+		(net
+			(name "LOAD")
+			(node (ref "K1") (pin "4"))
+			(node (ref "J1") (pin "4"))
+		)
+		(net
+			(name "AC1")
+			(node (ref "BR1") (pin "1"))
+			(node (ref "J1") (pin "5"))
+		)
+		(net
+			(name "AC2")
+			(node (ref "BR1") (pin "2"))
+			(node (ref "J1") (pin "6"))
+		)
+		(net
+			(name "OP1")
+			(node (ref "U1") (pin "1"))
+			(node (ref "U1") (pin "2"))
+		)
+		(net
+			(name "OP2")
+			(node (ref "U1") (pin "3"))
+			(node (ref "U1") (pin "5"))
+		)
+		(net
+			(name "OP3")
+			(node (ref "U1") (pin "6"))
+			(node (ref "U1") (pin "7"))
+		)
+	)
+)

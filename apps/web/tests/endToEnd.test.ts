@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import test from "node:test";
 import { parseKicadNetlist } from "../src/features/import/kicadNetlistParser.ts";
 import { createPlacedComponentsFromParsed } from "../src/features/import/componentMapping.ts";
@@ -86,5 +86,6 @@ test("generated circuit uses no fallback placeholders", () => {
   const board = createBreadboardDefinition(40, 1);
   const importState: ImportState = { components: bundle.components, nets: bundle.nets, warnings: bundle.warnings, pinInfo: bundle.pinInfo };
   const components = createPlacedComponentsFromParsed(importState, [], board.width);
-  assert.equal(components.some((component) => component.isFallback), false);
+  assert.equal(components.some((component) => component.placeholder), false);
 });
+

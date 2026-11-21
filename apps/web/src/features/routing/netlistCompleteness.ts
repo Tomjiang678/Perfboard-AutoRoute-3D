@@ -26,9 +26,11 @@ export function applyNetlistCompleteness(
     severity: "error",
     message: node.reason === "missing_component"
       ? `${node.net}：网表里的 ${node.ref} 在板上不存在（引脚 ${node.pin}）`
-      : node.reason === "invalid_pin"
-        ? `${node.net}：${node.ref} 的引脚号“${node.pin}”不是有效数字，无法连接`
-        : `${node.net}：${node.ref} 没有第 ${node.pin} 脚，无法连接`,
+      : node.reason === "missing_pin_profile"
+        ? `${node.net}：${node.ref}.${node.pin} 缺少物理脚映射`
+        : node.reason === "invalid_pin"
+          ? `${node.net}：${node.ref} 的引脚号“${node.pin}”不是有效数字，无法连接`
+          : `${node.net}：${node.ref} 没有第 ${node.pin} 脚，无法连接`,
     ref: node.ref,
     pin: typeof node.pin === "number" ? node.pin : undefined,
     net: node.net

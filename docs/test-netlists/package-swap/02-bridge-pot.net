@@ -1,0 +1,119 @@
+(export
+	(version "E")
+	(components
+		(comp
+			(ref "BR1")
+			(value "KBPC3510")
+			(footprint "Diode_THT:Diode_Bridge_KBPC")
+			(libsource (lib "Diode_Bridge") (part "KBPC3510"))
+		)
+		(comp
+			(ref "RV1")
+			(value "10k")
+			(footprint "Potentiometer_THT:Potentiometer_Alps_RK09K_Single_Horizontal")
+			(libsource (lib "Device") (part "R_Potentiometer"))
+		)
+		(comp
+			(ref "Q1")
+			(value "BC337")
+			(footprint "Package_TO_SOT_THT:TO-92_Inline")
+			(libsource (lib "Transistor_BJT") (part "BC337"))
+		)
+		(comp
+			(ref "C1")
+			(value "100nF")
+			(footprint "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm")
+			(libsource (lib "Device") (part "C"))
+		)
+		(comp
+			(ref "J1")
+			(value "Conn_01x04")
+			(footprint "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical")
+			(libsource (lib "Connector") (part "Conn_01x04"))
+		)
+	)
+	(libparts
+		(libpart
+			(lib "Diode_Bridge")
+			(part "KBPC3510")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+				(pin (num "4") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "R_Potentiometer")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Transistor_BJT")
+			(part "BC337")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "C")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Connector")
+			(part "Conn_01x04")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+				(pin (num "4") (name "~") (type "passive"))
+			)
+		)
+	)
+	(nets
+		(net
+			(name "AC1")
+			(node (ref "BR1") (pin "1"))
+			(node (ref "J1") (pin "1"))
+		)
+		(net
+			(name "AC2")
+			(node (ref "BR1") (pin "2"))
+			(node (ref "J1") (pin "2"))
+		)
+		(net
+			(name "V+")
+			(node (ref "BR1") (pin "3"))
+			(node (ref "RV1") (pin "1"))
+			(node (ref "C1") (pin "1"))
+		)
+		(net
+			(name "0")
+			(node (ref "BR1") (pin "4"))
+			(node (ref "RV1") (pin "3"))
+			(node (ref "Q1") (pin "3"))
+			(node (ref "C1") (pin "2"))
+			(node (ref "J1") (pin "4"))
+		)
+		(net
+			(name "WIPE")
+			(node (ref "RV1") (pin "2"))
+			(node (ref "Q1") (pin "2"))
+		)
+		(net
+			(name "OUT")
+			(node (ref "Q1") (pin "1"))
+			(node (ref "J1") (pin "3"))
+		)
+	)
+)

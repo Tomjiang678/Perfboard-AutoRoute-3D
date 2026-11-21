@@ -2,10 +2,10 @@
 // 发版流程：把新的 zip 放进 public/downloads/，重新 build（dev 下会自动刷新）。
 export const downloadArtifact = {
   "available": true,
-  "fileName": "protoboard3d.zip",
-  "url": "/downloads/protoboard3d.zip",
+  "fileName": "protoBoard3D.zip",
+  "url": "/downloads/protoBoard3D.zip",
   "size": "约 132 MB",
   "version": "",
   "releasedAt": "2026-11",
-  "generatedAt": "2026-11-03T09:12:04.083Z"
+  "generatedAt": "2026-11-10T10:10:02.747Z"
 } as const;

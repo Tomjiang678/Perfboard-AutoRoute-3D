@@ -5,8 +5,13 @@ import type { DragMoveModifier, KeyboardShortcuts, ShortcutAction } from "../typ
 interface SettingsDialogProps {
   dragMoveModifier: DragMoveModifier;
   shortcuts: KeyboardShortcuts;
+  saveDirectory?: string;
   onUpdate: (dragMoveModifier: DragMoveModifier) => void;
   onUpdateShortcut: (action: ShortcutAction, shortcut: string) => void;
+  onUpdateSaveDirectory: (directory: string | undefined) => void;
+  onChooseSaveDirectory?: () => void;
+  onBackupNow?: () => void;
+  onRestoreBackup?: () => void;
   onClose: () => void;
 }
 
@@ -51,7 +56,7 @@ const shortcutGroups: Array<{
   }
 ];
 
-export function SettingsDialog({ dragMoveModifier, shortcuts, onUpdate, onUpdateShortcut, onClose }: SettingsDialogProps) {
+export function SettingsDialog({ dragMoveModifier, shortcuts, saveDirectory, onUpdate, onUpdateShortcut, onUpdateSaveDirectory, onChooseSaveDirectory, onBackupNow, onRestoreBackup, onClose }: SettingsDialogProps) {
   const [recordingAction, setRecordingAction] = useState<ShortcutAction | undefined>();
   const [shortcutError, setShortcutError] = useState<string | undefined>();
 
@@ -120,6 +125,44 @@ export function SettingsDialog({ dragMoveModifier, shortcuts, onUpdate, onUpdate
                 <option value="none">Drag directly</option>
               </select>
             </label>
+          </section>
+
+          <section className="settings-shortcut-group">
+            <h3>保存位置</h3>
+            <label className="settings-shortcut-row settings-path-row">
+              <span>目录</span>
+              <input
+                className="settings-path-input"
+                value={saveDirectory ?? ""}
+                onChange={(event) => onUpdateSaveDirectory(event.target.value || undefined)}
+              />
+            </label>
+            <div className="settings-storage-actions">
+              <button
+                className="tool-button"
+                type="button"
+                disabled={!onChooseSaveDirectory}
+                onClick={onChooseSaveDirectory}
+              >
+                选择目录
+              </button>
+              <button
+                className="tool-button"
+                type="button"
+                disabled={!saveDirectory || !onBackupNow}
+                onClick={onBackupNow}
+              >
+                备份
+              </button>
+              <button
+                className="tool-button"
+                type="button"
+                disabled={!saveDirectory || !onRestoreBackup}
+                onClick={onRestoreBackup}
+              >
+                恢复
+              </button>
+            </div>
           </section>
 
           {shortcutError && <p className="settings-shortcut-error">{shortcutError}</p>}

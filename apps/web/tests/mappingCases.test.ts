@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import test from "node:test";
 import {
   componentMappingRules,
@@ -273,7 +273,7 @@ test("truly unknown components still fall back to a placeholder", () => {
   );
   const placed = createPlacedComponentsFromParsed(state, [], 30)[0];
   assert.equal(placed.kind, "pin_header");
-  assert.equal(placed.isFallback, true);
+  assert.equal(placed.placeholder, true);
   assert.ok(placed.fallbackReason?.includes("占位排针"));
 });
 
@@ -285,7 +285,7 @@ test("truly unknown refs fall back to a pin header placeholder with the netlist 
   const placed = createPlacedComponentsFromParsed(state, [], 30);
   assert.equal(placed.length, 1);
   assert.equal(placed[0].kind, "pin_header");
-  assert.equal(placed[0].isFallback, true);
+  assert.equal(placed[0].placeholder, true);
   assert.equal(placed[0].pinOffsets.length, 4);
   assert.ok(placed[0].fallbackReason?.includes("占位排针"));
 });
@@ -334,3 +334,4 @@ test("dip_switch pin count drives its label", () => {
   assert.equal(placed[0].label, "DIPSW4");
   assert.equal(placed[0].pinOffsets.length, 8);
 });
+

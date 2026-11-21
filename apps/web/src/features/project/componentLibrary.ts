@@ -38,9 +38,6 @@ const rawLibrary: Array<Omit<LibraryComponentDefinition, "pinOffsets"> & { pinOf
   makeRelay("RLY-DPDT", "继电器 DPDT", 8),
   makeTwoPin("crystal", "Y", "晶振 HC-49", 2),
   makeTwoPin("fuse", "F", "保险丝", 5),
-  makeDip("DIP8", "DIP-8", 8, 3, 1),
-  makeDip("DIP14", "DIP-14", 14, 3, 1),
-  makeDip("DIP16", "DIP-16", 16, 3, 1),
   makeDipSwitch("DIPSW6", "DIP 开关 6 位", 12, 3, 1),
   makeDipSwitch("DIPSW8", "DIP 开关 8 位", 16, 3, 1),
   makeDipSwitch("DIPSW10", "DIP 开关 10 位", 20, 3, 1),
@@ -64,6 +61,11 @@ export const componentLibraryByKey = new Map(
 export function getLibraryComponentByKind(kind: LibraryComponentKind, pinCount?: number) {
   const exact = componentLibrary.find((component) => component.kind === kind && component.pinCount === pinCount);
   return exact ?? (pinCount ? makeDynamicLibraryComponent(kind, pinCount) : undefined) ?? componentLibrary.find((component) => component.kind === kind);
+}
+
+/** Two-terminal templates omit pinCount; this is the only place that fills it. */
+export function libraryPinCount(component: Pick<LibraryComponentDefinition, "pinCount">) {
+  return component.pinCount ?? 2;
 }
 
 export function makeLibraryDragKey(component: LibraryComponentDefinition) {

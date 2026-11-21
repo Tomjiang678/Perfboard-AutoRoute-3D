@@ -1,0 +1,30 @@
+_uc4ea453c95f15752862a58868ff08676581ea65876863ff1a_uc1ff09   (_uc46253537065e5671f: 2026_uc15e748_uc1670822_uc165e5, 21:42:00)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+RefDes                      _uc263cf8ff0                      _uc27cfb5217                      _uc25c0188c5                                        _uc375358def56fe
+------------------------------------------------------------------------------------------------------------------------------------------------------
+0                           0                                 POWER_SOURCES                     -                                                   Main
+5V                          5V                                POWER_SOURCES                     -                                                   Main
+Q1                          2N2222A                           TRANSISTOR                        TO-92                                               Main
+Q2                          BC557                             TRANSISTOR_PNP                    TO-92                                               Main
+Q3                          TIP120                            DARLINGTON                        TO-220                                              Main
+Q4                          2N7000                            MOSFET                            TO-92                                               Main
+Q5                          BS250                             MOSFET_P                          TO-92                                               Main
+Q6                          2N5457                            JFET                              TO-92                                               Main
+Q7                          MPSA42                            TRANSISTOR_HV                     TO-92                                               Main
+Q8                          BT136                             TRIAC                             TO-220                                              Main
+Q9                          2N5060                            SCR                               TO-92                                               Main
+U1                          TL431                             VOLTAGE_REF                       TO-92                                               Main
+D1                          1N4007                            DIODE                             DO-41                                               Main
+D2                          1N4733A                           ZENER                             DO-41                                               Main
+K1                          G5V-1                             RELAY                             G5V-1                                               Main
+OK1                         PC817                             OPTOCOUPLER                       DIP-4                                               Main
+BR1                         KBPC3510                          BRIDGE                            KBPC                                                Main
+T1                          230V_12V                          TRANSFORMER                       TRANSFORMER                                         Main
+Y1                          16MHz                             CRYSTAL                           HC-49                                               Main
+C1                          22pF                              CAPACITOR                         C_DISC                                              Main
+C2                          22pF                              CAPACITOR                         C_DISC                                              Main
+RV1                         10K                               POTENTIOMETER                     POT                                                 Main
+SW1                         SW_PUSH                           SWITCH                            SW                                                  Main
+LS1                         8OHM                              SPEAKER                           SPEAKER                                             Main
+M1                          MOTOR_DC                          MOTOR                             MOTOR                                               Main
+------------------------------------------------------------------------------------------------------------------------------------------------------

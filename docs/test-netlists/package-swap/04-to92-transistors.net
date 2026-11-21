@@ -1,0 +1,125 @@
+(export
+	(version "E")
+	(components
+		(comp
+			(ref "Q1")
+			(value "2N3904")
+			(footprint "Package_TO_SOT_THT:TO-92_Inline")
+			(libsource (lib "Transistor_BJT") (part "2N3904"))
+		)
+		(comp
+			(ref "Q2")
+			(value "BC557")
+			(footprint "Package_TO_SOT_THT:TO-92_Inline")
+			(libsource (lib "Transistor_BJT") (part "BC557"))
+		)
+		(comp
+			(ref "Q3")
+			(value "2N7000")
+			(footprint "Package_TO_SOT_THT:TO-92_Inline")
+			(libsource (lib "Transistor_FET") (part "2N7000"))
+		)
+		(comp
+			(ref "R1")
+			(value "10k")
+			(footprint "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal")
+			(libsource (lib "Device") (part "R"))
+		)
+		(comp
+			(ref "R2")
+			(value "1k")
+			(footprint "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal")
+			(libsource (lib "Device") (part "R"))
+		)
+		(comp
+			(ref "J1")
+			(value "Conn_01x04")
+			(footprint "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical")
+			(libsource (lib "Connector") (part "Conn_01x04"))
+		)
+	)
+	(libparts
+		(libpart
+			(lib "Transistor_BJT")
+			(part "2N3904")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Transistor_BJT")
+			(part "BC557")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Transistor_FET")
+			(part "2N7000")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "R")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Connector")
+			(part "Conn_01x04")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+				(pin (num "4") (name "~") (type "passive"))
+			)
+		)
+	)
+	(nets
+		(net
+			(name "5V")
+			(node (ref "Q1") (pin "3"))
+			(node (ref "Q2") (pin "3"))
+			(node (ref "R1") (pin "1"))
+			(node (ref "J1") (pin "1"))
+		)
+		(net
+			(name "0")
+			(node (ref "Q1") (pin "1"))
+			(node (ref "Q2") (pin "1"))
+			(node (ref "Q3") (pin "2"))
+			(node (ref "R2") (pin "2"))
+			(node (ref "J1") (pin "2"))
+		)
+		(net
+			(name "BASE1")
+			(node (ref "Q1") (pin "2"))
+			(node (ref "R1") (pin "2"))
+		)
+		(net
+			(name "BASE2")
+			(node (ref "Q2") (pin "2"))
+			(node (ref "R2") (pin "1"))
+		)
+		(net
+			(name "GATE")
+			(node (ref "Q3") (pin "1"))
+			(node (ref "J1") (pin "3"))
+		)
+		(net
+			(name "DRAIN")
+			(node (ref "Q3") (pin "3"))
+			(node (ref "J1") (pin "4"))
+		)
+	)
+)

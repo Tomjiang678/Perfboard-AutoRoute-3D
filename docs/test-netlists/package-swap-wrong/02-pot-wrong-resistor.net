@@ -1,0 +1,93 @@
+(export
+	(version "E")
+	(components
+		(comp
+			(ref "RV1")
+			(value "PT10-10K")
+			(libsource (lib "Device") (part "R"))
+		)
+		(comp
+			(ref "U1")
+			(value "S8050")
+			(libsource (lib "Amplifier_Operational") (part "OpAmp"))
+		)
+		(comp
+			(ref "C1")
+			(value "100nF")
+			(libsource (lib "Device") (part "C"))
+		)
+		(comp
+			(ref "J1")
+			(value "Conn_01x04")
+			(libsource (lib "Connector") (part "Conn_01x04"))
+		)
+	)
+	(libparts
+		(libpart
+			(lib "Device")
+			(part "R")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Amplifier_Operational")
+			(part "OpAmp")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "C")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Connector")
+			(part "Conn_01x04")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+				(pin (num "4") (name "~") (type "passive"))
+			)
+		)
+	)
+	(nets
+		(net
+			(name "5V")
+			(node (ref "RV1") (pin "1"))
+			(node (ref "C1") (pin "1"))
+			(node (ref "J1") (pin "1"))
+		)
+		(net
+			(name "0")
+			(node (ref "RV1") (pin "3"))
+			(node (ref "U1") (pin "3"))
+			(node (ref "C1") (pin "2"))
+			(node (ref "J1") (pin "2"))
+		)
+		(net
+			(name "WIPE")
+			(node (ref "RV1") (pin "2"))
+			(node (ref "U1") (pin "2"))
+		)
+		(net
+			(name "OUT")
+			(node (ref "U1") (pin "1"))
+			(node (ref "J1") (pin "3"))
+		)
+		(net
+			(name "SENSE")
+			(node (ref "U1") (pin "2"))
+			(node (ref "J1") (pin "4"))
+		)
+	)
+)

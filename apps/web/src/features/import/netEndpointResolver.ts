@@ -30,7 +30,7 @@ export function resolveNetEndpoints(importState: ImportState, components: Placed
   return endpoints;
 }
 
-export type UnmappedNodeReason = "missing_component" | "pin_out_of_range" | "invalid_pin";
+export type UnmappedNodeReason = "missing_component" | "pin_out_of_range" | "invalid_pin" | "missing_pin_profile";
 
 export interface UnmappedNetNode {
   net: string;
@@ -52,7 +52,12 @@ export function findUnmappedNetNodes(importState: ImportState, components: Place
   for (const net of resolved.nets) {
     // 引脚号无法解析（例如 "A1"）的节点会被放进 unresolved，这里同样要算缺失
     for (const node of net.unresolved) {
-      unmapped.push({ net: net.name, ref: node.ref, pin: node.pin, reason: "invalid_pin" });
+      unmapped.push({
+        net: net.name,
+        ref: node.ref,
+        pin: node.pin,
+        reason: node.logicalPin !== undefined ? "missing_pin_profile" : "invalid_pin"
+      });
     }
     for (const node of net.nodes) {
       const component = componentMap.get(node.physicalRef);

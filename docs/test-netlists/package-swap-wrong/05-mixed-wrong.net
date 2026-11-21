@@ -1,0 +1,163 @@
+﻿(export
+	(version "E")
+	(components
+		(comp
+			(ref "K1")
+			(value "G5V-1")
+			(libsource (lib "Connector") (part "Conn_01x05"))
+		)
+		(comp
+			(ref "BR1")
+			(value "KBU4M")
+			(libsource (lib "Device") (part "D"))
+		)
+		(comp
+			(ref "RV1")
+			(value "PT10-10K")
+			(libsource (lib "Device") (part "R"))
+		)
+		(comp
+			(ref "U1")
+			(value "OPA2134")
+			(libsource (lib "Connector") (part "Conn_01x08"))
+		)
+		(comp
+			(ref "Q1")
+			(value "S8050")
+			(libsource (lib "Amplifier_Operational") (part "OpAmp"))
+		)
+		(comp
+			(ref "J1")
+			(value "Conn_01x06")
+			(libsource (lib "Connector") (part "Conn_01x06"))
+		)
+	)
+	(libparts
+		(libpart
+			(lib "Connector")
+			(part "Conn_01x05")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+				(pin (num "4") (name "~") (type "passive"))
+				(pin (num "5") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "D")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+				(pin (num "4") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "R")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Connector")
+			(part "Conn_01x08")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+				(pin (num "4") (name "~") (type "passive"))
+				(pin (num "5") (name "~") (type "passive"))
+				(pin (num "6") (name "~") (type "passive"))
+				(pin (num "7") (name "~") (type "passive"))
+				(pin (num "8") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Amplifier_Operational")
+			(part "OpAmp")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Connector")
+			(part "Conn_01x06")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+				(pin (num "4") (name "~") (type "passive"))
+				(pin (num "5") (name "~") (type "passive"))
+				(pin (num "6") (name "~") (type "passive"))
+			)
+		)
+	)
+	(nets
+		(net
+			(name "5V")
+			(node (ref "K1") (pin "2"))
+			(node (ref "K1") (pin "3"))
+			(node (ref "BR1") (pin "3"))
+			(node (ref "RV1") (pin "1"))
+			(node (ref "U1") (pin "1"))
+			(node (ref "J1") (pin "1"))
+		)
+		(net
+			(name "0")
+			(node (ref "K1") (pin "5"))
+			(node (ref "BR1") (pin "4"))
+			(node (ref "RV1") (pin "3"))
+			(node (ref "U1") (pin "8"))
+			(node (ref "Q1") (pin "3"))
+			(node (ref "J1") (pin "2"))
+		)
+		(net
+			(name "COIL")
+			(node (ref "K1") (pin "1"))
+			(node (ref "Q1") (pin "1"))
+		)
+		(net
+			(name "CTRL")
+			(node (ref "Q1") (pin "2"))
+			(node (ref "RV1") (pin "2"))
+			(node (ref "J1") (pin "3"))
+		)
+		(net
+			(name "LOAD")
+			(node (ref "K1") (pin "4"))
+			(node (ref "J1") (pin "4"))
+		)
+		(net
+			(name "AC1")
+			(node (ref "BR1") (pin "1"))
+			(node (ref "J1") (pin "5"))
+		)
+		(net
+			(name "AC2")
+			(node (ref "BR1") (pin "2"))
+			(node (ref "J1") (pin "6"))
+		)
+		(net
+			(name "U1-2")
+			(node (ref "U1") (pin "2"))
+			(node (ref "U1") (pin "3"))
+		)
+		(net
+			(name "U1-4")
+			(node (ref "U1") (pin "4"))
+			(node (ref "U1") (pin "5"))
+		)
+		(net
+			(name "U1-6")
+			(node (ref "U1") (pin "6"))
+			(node (ref "U1") (pin "7"))
+		)
+	)
+)

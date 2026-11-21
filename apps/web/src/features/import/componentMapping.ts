@@ -4,7 +4,14 @@ import {
 } from "../project/componentLibrary.ts";
 import { clampSpacing, UNKNOWN_COMPONENT_LABEL } from "../project/componentTraits.ts";
 import type { ImportState, LibraryComponentKind, ParsedComponent, PlacedComponent } from "../../types/project.ts";
-import { componentMappingRules, fallbackComponentMapping, ignoredComponentRules, normalizeComponentFields } from "./importConfig.ts";
+import {
+  componentMappingRules,
+  fallbackComponentMapping,
+  ignoredComponentRules,
+  normalizeComponentFields,
+  resolvePinCountHint
+} from "./importConfig.ts";
+import { pendingComponentRefs } from "./multisim/pending.ts";
 
 export const PLACEHOLDER_NOTE = "已按网表引脚生成占位排针";
 
@@ -14,6 +21,7 @@ export function createPlacedComponentsFromParsed(
   boardWidth: number
 ): PlacedComponent[] {
   const existingNames = new Set(existingComponents.map((component) => component.name));
+  const pendingRefs = pendingComponentRefs(importState);
   const pinCountByRef = new Map<string, number>();
   Object.entries(importState.pinInfo ?? {}).forEach(([ref, pins]) => {
     pinCountByRef.set(ref, Object.keys(pins).length);
@@ -21,13 +29,14 @@ export function createPlacedComponentsFromParsed(
   const nextComponents: PlacedComponent[] = [];
 
   importState.components
+    .filter((component) => !pendingRefs.has(component.ref))
     .filter((component) => !shouldIgnoreComponent(component))
     .forEach((component) => {
       if (existingNames.has(component.ref)) {
         return;
       }
 
-      const mapped = mapParsedComponent(component, pinCountByRef.get(component.ref));
+      const mapped = mapParsedComponent(component, component.pinCount ?? pinCountByRef.get(component.ref));
       const library = getLibraryComponentByKind(mapped.kind, mapped.pinCount);
       if (!library) {
         return;
@@ -61,7 +70,8 @@ export function createPlacedComponentsFromParsed(
         position,
         rotation: 0,
         mounted: false,
-        isFallback: mapped.isFallback,
+        origin: "import",
+        placeholder: Boolean(mapped.placeholder),
         fallbackReason: mapped.fallbackReason
       });
     });
@@ -80,37 +90,58 @@ function mapParsedComponent(component: ParsedComponent, pinsFromNetlist: number 
   pinCount?: number;
   leadSpacing?: number;
   rowSpacing?: number;
-  isFallback?: boolean;
+  placeholder?: boolean;
   fallbackReason?: string;
 } {
   const fields = normalizeComponentFields(component);
+  const pinHint = resolvePinCountHint(component, pinsFromNetlist);
   const rule = componentMappingRules.find((candidate) => candidate.match(fields));
   if (rule) {
-    const pinCount = rule.pinCount?.(component, pinsFromNetlist);
-    return {
+    const pinCount = rule.pinCount?.(component, pinHint);
+    const mapped = {
       kind: rule.kind,
       label: makeMappedLabel(rule.kind, rule.label, pinCount),
       pinCount,
       leadSpacing: rule.leadSpacing,
       rowSpacing: rule.rowSpacing
     };
+    // A connector category is easy to fake or copy wrongly. If the designator
+    // says U/K/Q, a plain header is almost certainly a placeholder, not a
+    // verified package; keep the warning visible until the user assigns one.
+    const inferred = inferKindFromComponent(component, pinHint);
+    if (rule.kind === "pin_header" && inferred && inferred.kind !== "pin_header") {
+      return {
+        ...mapped,
+        placeholder: true,
+        fallbackReason: `元件 ${component.ref} 的类别是 ${component.category}，但位号/型号更像 ${inferred.label}，当前按排针占位，请确认封装。`
+      };
+    }
+    return mapped;
   }
 
   // Generic inference fallback: library-name independent, so netlists exported
   // from schematics that were imported from other EDA tools (LTSpice, Altium,
   // PADS, EasyEDA, ...) still land on a sensible package.
-  const inferred = inferKindFromComponent(component, pinsFromNetlist);
+  const inferred = inferKindFromComponent(component, pinHint);
   if (inferred) {
-    return inferred;
+    return {
+      ...inferred,
+      placeholder: true,
+      fallbackReason: `元件 ${component.ref} (${component.category}) 没有明确封装规则，已按位号/值推断为 ${inferred.label}，请确认封装。`
+    };
   }
 
   return {
     ...fallbackComponentMapping,
     label: UNKNOWN_COMPONENT_LABEL,
-    pinCount: Math.max(2, pinsFromNetlist ?? fallbackComponentMapping.pinCount),
-    isFallback: true,
+    pinCount: pinHint,
+    placeholder: true,
     fallbackReason: `元件 ${component.ref} (${component.category}) 在库中没有对应封装，${PLACEHOLDER_NOTE}。`
   };
+}
+
+export function classifyParsedComponent(component: ParsedComponent) {
+  return mapParsedComponent(component, component.pinCount);
 }
 
 function inferKindFromComponent(component: ParsedComponent, pinsFromNetlist: number | undefined) {

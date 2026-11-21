@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
-import { Check, Eye, Moon, MousePointer2, RefreshCw, RotateCw, ShieldCheck, Trash2, Undo2, XCircle } from "lucide-react";
+import { Boxes, Check, Eye, ListTree, Moon, MousePointer2, RefreshCw, RotateCw, ShieldCheck, Trash2, Undo2, XCircle } from "lucide-react";
 import type { LibraryComponentDefinition } from "../features/project/componentLibrary.ts";
 import type { KeyboardShortcuts, PlacedComponent } from "../types/project.ts";
-import { ComponentLibrary } from "./ComponentLibrary.tsx";
 
 export type RouteEditMode = "select" | "solder" | "jumper" | "erase";
 
@@ -40,7 +39,8 @@ export interface WorkspaceToolbarProps {
   onClearRoutes: () => void;
   onRunDrc: () => void;
   onClearDrc: () => void;
-  onPickComponent: (component: LibraryComponentDefinition) => void;
+  onOpenPackageLibrary: () => void;
+  onOpenMappingLibrary: () => void;
 }
 
 export function WorkspaceToolbar({
@@ -76,7 +76,8 @@ export function WorkspaceToolbar({
   onClearRoutes,
   onRunDrc,
   onClearDrc,
-  onPickComponent
+  onOpenPackageLibrary,
+  onOpenMappingLibrary
 }: WorkspaceToolbarProps) {
   return (
     <>
@@ -146,8 +147,16 @@ export function WorkspaceToolbar({
         </MenuButton>
       </ToolbarMenu>
 
+      <ToolbarMenu label="库" openMenu={openMenu} onOpenMenu={onOpenMenu}>
+        <MenuButton icon={<Boxes size={16} />} onClick={() => { onOpenMenu(undefined); onOpenPackageLibrary(); }}>
+          封装库
+        </MenuButton>
+        <MenuButton icon={<ListTree size={16} />} onClick={() => { onOpenMenu(undefined); onOpenMappingLibrary(); }}>
+          Multisim 映射库
+        </MenuButton>
+      </ToolbarMenu>
+
       {routeDraftStart && <span className="route-draft-status">Start {routeDraftStart[0]},{routeDraftStart[1]}</span>}
-      <ComponentLibrary onPickComponent={onPickComponent} />
       {pendingComponent && <span className="route-draft-status">Place {pendingComponent.title}</span>}
     </>
   );

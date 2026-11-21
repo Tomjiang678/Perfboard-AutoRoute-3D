@@ -1,0 +1,116 @@
+(export
+	(version "E")
+	(components
+		(comp
+			(ref "U1")
+			(value "S8050")
+			(libsource (lib "Amplifier_Operational") (part "OpAmp"))
+		)
+		(comp
+			(ref "U2")
+			(value "BC547")
+			(libsource (lib "Connector") (part "Conn_01x03"))
+		)
+		(comp
+			(ref "K1")
+			(value "G5V-1")
+			(libsource (lib "Connector") (part "Conn_01x05"))
+		)
+		(comp
+			(ref "R1")
+			(value "10k")
+			(libsource (lib "Device") (part "R"))
+		)
+		(comp
+			(ref "R2")
+			(value "1k")
+			(libsource (lib "Device") (part "R"))
+		)
+		(comp
+			(ref "J1")
+			(value "Conn_01x03")
+			(libsource (lib "Connector") (part "Conn_01x03"))
+		)
+	)
+	(libparts
+		(libpart
+			(lib "Amplifier_Operational")
+			(part "OpAmp")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Connector")
+			(part "Conn_01x03")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Connector")
+			(part "Conn_01x05")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+				(pin (num "3") (name "~") (type "passive"))
+				(pin (num "4") (name "~") (type "passive"))
+				(pin (num "5") (name "~") (type "passive"))
+			)
+		)
+		(libpart
+			(lib "Device")
+			(part "R")
+			(pins
+				(pin (num "1") (name "~") (type "passive"))
+				(pin (num "2") (name "~") (type "passive"))
+			)
+		)
+	)
+	(nets
+		(net
+			(name "5V")
+			(node (ref "K1") (pin "2"))
+			(node (ref "K1") (pin "3"))
+			(node (ref "R1") (pin "1"))
+			(node (ref "J1") (pin "1"))
+		)
+		(net
+			(name "0")
+			(node (ref "U1") (pin "3"))
+			(node (ref "U2") (pin "3"))
+			(node (ref "K1") (pin "5"))
+			(node (ref "R2") (pin "2"))
+			(node (ref "J1") (pin "2"))
+		)
+		(net
+			(name "A")
+			(node (ref "U1") (pin "2"))
+			(node (ref "R1") (pin "2"))
+		)
+		(net
+			(name "B")
+			(node (ref "U2") (pin "2"))
+			(node (ref "R2") (pin "1"))
+		)
+		(net
+			(name "C")
+			(node (ref "U1") (pin "1"))
+			(node (ref "K1") (pin "1"))
+		)
+		(net
+			(name "D")
+			(node (ref "U2") (pin "1"))
+			(node (ref "K1") (pin "4"))
+		)
+		(net
+			(name "E")
+			(node (ref "U2") (pin "1"))
+			(node (ref "J1") (pin "3"))
+		)
+	)
+)

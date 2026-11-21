@@ -1,4 +1,4 @@
-import * as THREE from "three";
+﻿import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { getLibraryComponentByKind } from "../features/project/componentLibrary.ts";
 import { adapterPinOffsets } from "../features/project/adapter.ts";
@@ -39,7 +39,7 @@ export interface ParametricComponentSpec {
   pinCount?: number;
   color?: number;
   pinOffsets?: Array<[number, number]>;
-  isFallback?: boolean;
+  placeholder?: boolean;
   /** 转接板规格：元件插在转接板上时带上，用于画板体与排针 */
   adapter?: AdapterSpec;
   /** 芯片插在转接板上时，脚由转接板的排针代替，本体不画脚 */
@@ -125,7 +125,7 @@ const componentFactories: Record<ParametricComponentKind, (spec: ParametricCompo
   dip_switch: (s) => createDipSwitch(s.pinCount ?? 16, s.label ?? `DIPSW${Math.floor((s.pinCount ?? 16) / 2)}`, pins(s)),
   seven_segment_display: (s) => createSevenSegmentDisplay(s.label ?? "7SEG", pins(s)),
   alphanumeric_display: (s) => createAlphanumericDisplay(s.label ?? "ALNUM", pins(s)),
-  pin_header: (s) => createPinHeader(s.pinCount ?? 4, pins(s), s.isFallback),
+  pin_header: (s) => createPinHeader(s.pinCount ?? 4, pins(s), s.placeholder),
   terminal_block: (s) => createTerminalBlock(s.pinCount ?? 2, pins(s)),
   slide_switch: (s) => createSlideSwitch(pins(s)),
   buzzer: (s) => createBuzzer(s.label ?? "BZ", pins(s)),
@@ -610,7 +610,7 @@ function adapterSpecFromPins(pinOffsets: Array<[number, number]>): AdapterSpec {
   };
 }
 
-function createPinHeader(pinCount: number, pinOffsets: Array<[number, number]>, isFallback = false) {  const group = new THREE.Group();
+function createPinHeader(pinCount: number, pinOffsets: Array<[number, number]>, placeholder = false) {  const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
   const baseWidth = Math.max(1, box.width + 0.6);
   const baseDepth = Math.max(0.62, box.height + 0.5);
@@ -618,7 +618,7 @@ function createPinHeader(pinCount: number, pinOffsets: Array<[number, number]>, 
   base.position.set(box.centerX, 0.82, box.centerZ);
   group.add(base);
 
-  if (isFallback) {
+  if (placeholder) {
     const stripeMaterial = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.32 });
     const stripeCount = Math.max(2, pinCount);
     const stripeWidth = baseWidth / stripeCount;
@@ -639,7 +639,7 @@ function createPinHeader(pinCount: number, pinOffsets: Array<[number, number]>, 
     group.add(pin);
   });
 
-  if (isFallback) {
+  if (placeholder) {
     addTextLabel(group, UNKNOWN_COMPONENT_LABEL, box.centerX, 1.26, box.centerZ + baseDepth * 0.28, 0xfacc15, Math.min(2.4, Math.max(1.2, baseWidth * 0.55)));
   }
 
@@ -1049,3 +1049,4 @@ function labelColorForTheme(color: number) {
   const lightness = new THREE.Color(color).getHSL({ h: 0, s: 0, l: 0 }).l;
   return lightness < 0.5 ? 0xd7e3f4 : color;
 }
+

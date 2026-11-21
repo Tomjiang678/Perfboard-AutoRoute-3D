@@ -26,18 +26,56 @@ export interface ImportedFile {
   importedAt: string;
 }
 
+export type NetlistFormat = "kicad" | "protel" | "multisim";
+
 export interface ParsedComponent {
   ref: string;
   value: string;
   category: string;
   packageName: string;
   sourceFile: string;
+  /** Which importer produced this part. Missing on legacy projects. */
+  format?: NetlistFormat;
+  /** Physical pin count N. Only netlists without pin numbers (Multisim) set it. */
+  pinCount?: number;
+  pinCountSource?: "user" | "package" | "netlist" | "builtin";
 }
 
 export interface NetNode {
   ref: string;
   pin: string;
   sourceFile?: string;
+  /** Multisim only: the symbol unit (A/B/...) the logical pin belongs to. */
+  unit?: string;
+  /** Multisim only: the logical pin name ("1OUT", "A", "K"). */
+  logicalPin?: string;
+  /** True when a profile binds this physical pin to a net the netlist never mentions. */
+  synthetic?: boolean;
+}
+
+export interface PinProfilePin {
+  physical: number;
+  logical?: string;
+  /** Alternative names for the same physical pin (built-in models carry these). */
+  aliases?: string[];
+  unit?: string;
+  /** Power pins are shared by every symbol unit (A:VS+ and B:VS+ are pin 4). */
+  shared?: boolean;
+  connection: "netlist" | "bound" | "unconnected";
+  net?: string;
+}
+
+/**
+ * User-taught pinout for one part identity (value + package). Multisim reports
+ * only carry logical pin names, so a part is usable only once these bindings
+ * exist; everything else is derived from them, never guessed.
+ */
+export interface PinProfile {
+  id: string;
+  identity: { value: string; package: string; category?: string };
+  pinCount: number;
+  pins: PinProfilePin[];
+  createdAt: string;
 }
 
 export interface ParsedNet {
@@ -49,6 +87,8 @@ export interface ParsedNet {
 export interface ImportWarning {
   fileName: string;
   message: string;
+  /** Bundle-level issues become stale once the missing half is imported. */
+  code?: "missing_crossref" | "missing_netlist" | "unrecognized_file";
 }
 
 export interface ImportState {
@@ -57,6 +97,12 @@ export interface ImportState {
   warnings: ImportWarning[];
   /** Per-refdes pin metadata from the KiCad netlist: pin number -> name/type. */
   pinInfo?: Record<string, Record<string, { name?: string; type?: string }>>;
+  /** Multisim part pinouts taught by the user (project-scoped). */
+  pinProfiles?: PinProfile[];
+  /** Multisim refs that are power symbols, not parts (e.g. V1, VCC, 0). */
+  powerRefs?: string[];
+  /** Per-identity choice when the user library disagrees with the public one. */
+  pinProfileChoices?: Record<string, "user" | "public">;
 }
 
 export interface RoutedNetEndpoint {
@@ -216,9 +262,16 @@ export interface PlacedComponent {
   mounted: boolean;
   /** 运行期标记：被 component_lock 锁定了方向，自动放置不得再枚举旋转 */
   rotationLocked?: boolean;
-  isFallback?: boolean;
+  /** Where this placed instance came from. */
+  origin?: "import" | "manual";
+  /** Imported but no package binding exists yet; rendered as a warning header. */
+  placeholder?: boolean;
   fallbackReason?: string;
   fallbackPinMap?: Record<string, number>;
+  /** @deprecated migrated to origin/placeholder */
+  isFallback?: boolean;
+  /** @deprecated migrated to origin */
+  fromImport?: boolean;
   /** 芯片插在转接板上时存在：芯片仍然是一颗元件，但它在板上的脚位变成转接板的排针 */
   adapter?: AdapterSpec;
 }
@@ -380,5 +433,7 @@ export interface PerfboardProject {
   routing: RoutingState;
   constraints?: DesignConstraint[];
   constraintSchemaVersion?: number;
+  /** Project document schema; used by one-time migrations. */
+  schemaVersion?: number;
   createdAt: string;
 }

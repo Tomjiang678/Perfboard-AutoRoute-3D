@@ -18,6 +18,11 @@ declare global {
       projectFiles: {
         onOpen(callback: (file: { filePath?: string; content?: string; message?: string }) => void): () => void;
       };
+      storage: {
+        chooseDirectory(): Promise<string | undefined>;
+        writeBackup(payload: { directory: string; content: string }): Promise<{ path: string }>;
+        readBackup(directory: string): Promise<string | undefined>;
+      };
     };
   }
 }

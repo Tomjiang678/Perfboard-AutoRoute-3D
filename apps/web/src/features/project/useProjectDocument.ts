@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PerfboardProject } from "../../types/project.ts";
-import { withMigratedConstraints } from "../constraints/model.ts";
-import { validateProjectShape } from "../project/projectValidation.ts";
+import { prepareProject } from "./prepareProject.ts";
+import { validateProjectShape } from "./projectValidation.ts";
 import { invalidateDrcIfInputsChanged } from "../project/projectTransitions.ts";
+import { STORAGE_KEYS } from "../storage/storageKeys.ts";
 
-export const PROJECT_STORAGE_KEY = "perfboard-autoroute-project";
+export const PROJECT_STORAGE_KEY = STORAGE_KEYS.project;
 const MAX_UNDO_HISTORY = 50;
 
 export interface ProjectDocument {
@@ -74,7 +75,7 @@ export function useProjectDocument(): ProjectDocument {
         window.localStorage.removeItem(PROJECT_STORAGE_KEY);
         return;
       }
-      replaceProject(withMigratedConstraints(parsed as PerfboardProject));
+      replaceProject(prepareProject(parsed as PerfboardProject));
     } catch {
       window.localStorage.removeItem(PROJECT_STORAGE_KEY);
     }

@@ -1,12 +1,17 @@
 import type { ImportState, ImportWarning, ParsedComponent, ParsedNet } from "../../types/project.ts";
 import { findDevicePinModel, pinNameFromModel } from "./pinModels.ts";
 import { isProtelNetlist, parseProtelNetlist } from "./protelNetlist.ts";
+import { isMultisimFile, parseMultisimFiles } from "./multisim/multisimReport.ts";
 
 export interface ParsedImportBundle {
   components: ParsedComponent[];
   nets: ParsedNet[];
   pinInfo: NonNullable<ImportState["pinInfo"]>;
   warnings: ImportWarning[];
+  /** True when at least one file came from the Multisim text importer. */
+  hasMultisim?: boolean;
+  /** Multisim power-symbol refs; used to clean nodes imported from an earlier half. */
+  powerRefs?: string[];
 }
 
 interface SExprNode {
@@ -25,12 +30,24 @@ interface LibPartPins {
  * extension so 嘉立创/立创EDA exports (Protel 2, `.net`) and KiCad exports (both
  * `.net`) land on the right parser; anything else is treated as KiCad and will
  * report a parse error through the usual warning path.
+ *
+ * Multisim reports are plain fixed-width tables (netlist + cross reference), so
+ * they are parsed as one bundle before the per-file KiCad/Protel dispatch.
  */
 export async function parseImportFiles(files: File[]): Promise<ParsedImportBundle> {
   const bundle: ParsedImportBundle = { components: [], nets: [], pinInfo: {}, warnings: [] };
-  for (const file of files) {
-    const text = await file.text();
-    mergeBundle(bundle, isProtelNetlist(text) ? parseProtelNetlist(text, file.name) : parseKicadNetlist(text, file.name));
+  const inputs = await Promise.all(files.map(async (file) => ({ name: file.name, text: await file.text() })));
+  const multisimInputs = inputs.filter((input) => isMultisimFile(input.text));
+  if (multisimInputs.length > 0) {
+    const multisim = parseMultisimFiles(multisimInputs);
+    mergeBundle(bundle, { ...multisim, pinInfo: {} });
+    bundle.hasMultisim = true;
+    bundle.powerRefs = multisim.powerRefs;
+  }
+
+  for (const input of inputs) {
+    if (isMultisimFile(input.text)) continue;
+    mergeBundle(bundle, isProtelNetlist(input.text) ? parseProtelNetlist(input.text, input.name) : parseKicadNetlist(input.text, input.name));
   }
   return bundle;
 }
@@ -55,6 +72,8 @@ export function mergeImportState(current: ImportState, next: ParsedImportBundle)
     components: [...components.values()].sort((a, b) => naturalCompare(a.ref, b.ref)),
     nets: [...nets.values()].sort((a, b) => naturalCompare(a.name, b.name)),
     pinInfo: { ...current.pinInfo, ...next.pinInfo },
+    pinProfiles: current.pinProfiles,
+    powerRefs: current.powerRefs,
     warnings: [...current.warnings, ...next.warnings]
   };
 }
@@ -81,7 +100,9 @@ export function removeFileData(importState: ImportState, fileNames: string[]): I
     components,
     nets,
     warnings: importState.warnings.filter((warning) => !names.has(warning.fileName)),
-    pinInfo
+    pinInfo,
+    pinProfiles: importState.pinProfiles,
+    powerRefs: importState.powerRefs
   };
 }
 

@@ -9,6 +9,10 @@ export const transistorKinds = kinds("to92", "to39", "to220");
 
 export const UNKNOWN_COMPONENT_LABEL = "UNK";
 
+export function isPlaceholderComponent(component: Pick<PlacedComponent, "placeholder">) {
+  return component.placeholder === true;
+}
+
 export function hasKind(component: Pick<PlacedComponent, "kind">, set: ReadonlySet<LibraryComponentKind>) {
   return set.has(component.kind);
 }

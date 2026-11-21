@@ -2,6 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { HeaderBar } from "./components/HeaderBar.tsx";
 import { NewProjectDialog } from "./components/NewProjectDialog.tsx";
 import { ProjectSidebar } from "./components/ProjectSidebar.tsx";
+import { PinProfilesDialog } from "./components/PinProfilesDialog.tsx";
+import { PackageLibraryDialog } from "./components/PackageLibraryDialog.tsx";
+import { MappingLibraryDialog } from "./components/MappingLibraryDialog.tsx";
+import { ProfileConflictDialog } from "./components/ProfileConflictDialog.tsx";
+import { HelpDialog } from "./components/help/HelpDialog.tsx";
 import { Workspace } from "./components/Workspace.tsx";
 import { AutoPlacementDialog } from "./components/AutoPlacementDialog.tsx";
 import { SettingsDialog } from "./components/SettingsDialog.tsx";
@@ -10,37 +15,40 @@ import {
   type LibraryComponentDefinition
 } from "./features/project/componentLibrary.ts";
 import { mergeImportState, parseImportFiles, removeFileData } from "./features/import/kicadNetlistParser.ts";
+import { pruneResolvedBundleWarnings, stripBundleWarnings } from "./features/import/importWarnings.ts";
+import { mergePowerRefs, stripPowerNodes } from "./features/import/multisim/normalizeImport.ts";
 import { createPlacedComponentsFromParsed } from "./features/import/componentMapping.ts";
+import { applyLibraryProfiles, loadUserProfiles, removeProfileFromLibrary, removeUserProfilesForIdentity, saveProfileToLibrary, upsertProfile } from "./features/import/multisim/library.ts";
+import { collectPendingParts } from "./features/import/multisim/pending.ts";
+import { componentIdentity, identityKey, profileMatchesComponent } from "./features/import/multisim/profile.ts";
+import { queueProfileSubmission, flushProfileSubmissions } from "./features/import/multisim/submit.ts";
+import { clearPinDraft } from "./features/import/multisim/draftStore.ts";
+import type { ProfileConflict } from "./features/import/multisim/conflicts.ts";
 import { useAutoPlacement } from "./features/layout/useAutoPlacement.ts";
 import { useAiConstraintAssistant } from "./features/ai/useAiConstraintAssistant.ts";
-import { projectConstraints, withMigratedConstraints } from "./features/constraints/model.ts";
-import { buildPowerRailTraces } from "./features/constraints/execution.ts";
-import { bendComponentPin, pinGridPosition } from "./features/layout/manualPlacement.ts";
 import { resolveNetEndpoints } from "./features/import/netEndpointResolver.ts";
-import { MANUAL_NET_NAME } from "./features/routing/autoRouter.ts";
-import { autoRouteInWorker } from "./features/routing/autoRouteWorkerClient.ts";
-import { buildDrcReport } from "./features/routing/drcReport.ts";
-import { stripConstraintWarnings, stripDrcWarnings } from "./features/routing/drcWarnings.ts";
-import { expandOrthogonalPath } from "./features/routing/routingGeometry.ts";
-import { removeRoutesToComponent } from "./features/routing/removeComponentRoutes.ts";
+import { invalidateComponentRouting } from "./features/routing/invalidateComponentRouting.ts";
+import { usePackageAssignment } from "./features/project/usePackageAssignment.ts";
+import { useComponentActions } from "./features/project/useComponentActions.ts";
+import { useRoutingActions } from "./features/routing/useRoutingActions.ts";
+import { STORAGE_KEYS } from "./features/storage/storageKeys.ts";
+import { confirmAction, notify } from "./features/storage/notify.ts";
 import { createProject } from "./features/project/projectFactory.ts";
 import { useProjectDocument, PROJECT_STORAGE_KEY } from "./features/project/useProjectDocument.ts";
 import { validateProjectShape } from "./features/project/projectValidation.ts";
-import { adapterContainsPoint } from "./features/project/adapter.ts";
-import { checkComponentPlacement } from "./features/layout/placementValidity.ts";
+import { prepareProject } from "./features/project/prepareProject.ts";
 import { getBoardModel, normalizeBoardDefinition } from "./features/board/factory.ts";
-import { componentPinHoles } from "./features/board/placement.ts";
-import { clampSpacing } from "./features/project/componentTraits.ts";
-import type { AdapterSpec, BoardSize, DragMoveModifier, ImportState, KeyboardShortcuts, PerfboardProject, PlacedComponent, RoutedNetEndpoint, ThemeMode } from "./types/project.ts";
+import type { BoardSize, DragMoveModifier, ImportState, KeyboardShortcuts, PerfboardProject, PinProfile, PlacedComponent, RoutedNetEndpoint, ThemeMode } from "./types/project.ts";
 import type { SelectedPin } from "./components/Perfboard3DViewport.tsx";
 import type { RouteEditMode, WorkspaceToolbarProps } from "./components/WorkspaceToolbar.tsx";
 
-const SETTINGS_KEY = "perfboard-autoroute-settings";
+const SETTINGS_KEY = STORAGE_KEYS.settings;
 
 interface AppSettings {
   dragMoveModifier: DragMoveModifier;
   shortcuts: KeyboardShortcuts;
   theme: ThemeMode;
+  saveDirectory?: string;
 }
 
 const defaultShortcuts: KeyboardShortcuts = {
@@ -70,8 +78,14 @@ const defaultSettings: AppSettings = {
 export function App() {
   // 工程文档（状态 + 撤销 + 持久化）统一由文档层负责
   const { project, projectRef, undoCount, commitProject, replaceProject, undo, clearUndoHistory } = useProjectDocument();
+  const packageAssignment = usePackageAssignment(projectRef, commitProject);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isMappingLibraryOpen, setIsMappingLibraryOpen] = useState(false);
+  const [isConflictOpen, setIsConflictOpen] = useState(false);
+  const [isPinProfilesOpen, setIsPinProfilesOpen] = useState(false);
+  const [pinProfileFocus, setPinProfileFocus] = useState<string | undefined>();
   const [selectedComponentId, setSelectedComponentId] = useState<string | undefined>();
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [isTransparentBoard, setIsTransparentBoard] = useState(false);
@@ -81,6 +95,38 @@ export function App() {
   const [selectedPin, setSelectedPin] = useState<SelectedPin | undefined>();
   const [toolbarOpenMenu, setToolbarOpenMenu] = useState<string | undefined>();
   const [routingRunning, setRoutingRunning] = useState(false);
+  const {
+    updateComponent,
+    handleMoveComponent,
+    handleMovePin,
+    handleRotateSelected,
+    handleDeleteSelected,
+    handleMountSelected,
+    handleUnmountSelected,
+    handleUpdateSelected,
+    handleDetachAdapter
+  } = useComponentActions({
+    projectRef,
+    commitProject,
+    selectedComponentId,
+    setSelectedComponentId,
+    setSelectedPin
+  });
+  const {
+    handleAutoRoute,
+    handleClearRoutes,
+    handleRunDrc,
+    handleClearDrc,
+    handleAddBottomTrace,
+    handleAddJumper,
+    handleRemoveRouteAt
+  } = useRoutingActions({
+    projectRef,
+    commitProject,
+    routingRunning,
+    setRoutingRunning,
+    setRouteDraftStart
+  });
 
   useEffect(() => {
     const savedSettings = window.localStorage.getItem(SETTINGS_KEY);
@@ -98,11 +144,15 @@ export function App() {
     }
   }, []);
 
+  useEffect(() => {
+    void flushProfileSubmissions();
+  }, []);
+
   useEffect(() => window.perfboardDesktop?.projectFiles.onOpen((file) => {
     if (file.content !== undefined) {
       handleOpenProjectText(file.content);
     } else {
-      window.alert(`无法打开工程文件：${file.filePath ?? ""}\n${file.message ?? "读取失败"}`);
+      notify(`无法打开工程文件：${file.filePath ?? ""}\n${file.message ?? "读取失败"}`);
     }
   }), []);
 
@@ -111,22 +161,21 @@ export function App() {
   }, [settings]);
 
   useEffect(() => {
+    const directory = settings.saveDirectory?.trim();
+    if (!project || !directory || !window.perfboardDesktop?.storage) return;
+    const timeout = window.setTimeout(() => {
+      void window.perfboardDesktop?.storage
+        .writeBackup({ directory, content: buildBackupContent(project) })
+        .catch(() => undefined);
+    }, 900);
+    return () => window.clearTimeout(timeout);
+  }, [project, settings.saveDirectory]);
+
+  useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
     document.documentElement.style.colorScheme = settings.theme;
   }, [settings.theme]);
 
-
-  function updateComponent(
-    componentId: string,
-    transform: (component: PlacedComponent) => PlacedComponent | undefined
-  ) {
-    commitProject((current) => {
-      const component = current.components.find((item) => item.id === componentId);
-      const updated = component && transform(component);
-      if (!updated || updated === component) return current;
-      return { ...current, components: current.components.map((item) => item.id === componentId ? updated : item) };
-    });
-  }
 
   const aiAssistant = useAiConstraintAssistant({ project, commitProject });
   const autoPlacement = useAutoPlacement({ project, commitProject });
@@ -209,6 +258,12 @@ export function App() {
   }
 
   function handlePickComponent(component: LibraryComponentDefinition) {
+    if (packageAssignment.assignTargetId) {
+      if (packageAssignment.assign(component)) {
+        setSelectedPin(undefined);
+      }
+      return;
+    }
     setPendingComponent(component);
     setRouteEditMode("select");
     setRouteDraftStart(undefined);
@@ -290,7 +345,8 @@ export function App() {
     onClearRoutes: handleClearRoutes,
     onRunDrc: handleRunDrc,
     onClearDrc: handleClearDrc,
-    onPickComponent: handlePickComponent
+    onOpenPackageLibrary: packageAssignment.openPicker,
+    onOpenMappingLibrary: () => setIsMappingLibraryOpen(true)
   } : undefined;
 
   function handleUndo() {
@@ -314,11 +370,63 @@ export function App() {
     URL.revokeObjectURL(url);
   }
 
+  async function handleChooseSaveDirectory() {
+    const directory = await window.perfboardDesktop?.storage.chooseDirectory();
+    if (directory) {
+      setSettings((current) => ({ ...current, saveDirectory: directory }));
+    }
+  }
+
+  async function handleBackupNow() {
+    const directory = settings.saveDirectory?.trim();
+    if (!project || !directory || !window.perfboardDesktop?.storage) return;
+    try {
+      await window.perfboardDesktop.storage.writeBackup({ directory, content: buildBackupContent(project) });
+    } catch (error) {
+      notify(`备份失败：${error instanceof Error ? error.message : "未知错误"}`);
+    }
+  }
+
+  async function handleRestoreBackup() {
+    const directory = settings.saveDirectory?.trim();
+    if (!directory || !window.perfboardDesktop?.storage) return;
+    const text = await window.perfboardDesktop.storage.readBackup(directory);
+    if (!text) {
+      notify("保存位置里没有找到备份文件。");
+      return;
+    }
+    try {
+      const data = JSON.parse(text) as { project?: unknown; pinProfiles?: PinProfile[] };
+      const validation = validateProjectShape(data.project);
+      if (!validation.ok) {
+        notify(`备份不完整，已拒绝载入：\n${validation.issues.slice(0, 6).join("\n")}`);
+        return;
+      }
+      for (const profile of Array.isArray(data.pinProfiles) ? data.pinProfiles : []) {
+        try {
+          saveProfileToLibrary(profile);
+        } catch {
+          // A bad profile should not block restoring the project.
+        }
+      }
+      const restored = prepareProject(data.project as PerfboardProject);
+      replaceProject(restored);
+      window.localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(restored));
+      setSelectedComponentId(undefined);
+      setSelectedPin(undefined);
+      setPendingComponent(undefined);
+      clearUndoHistory();
+      setIsSettingsOpen(false);
+    } catch {
+      notify("无法读取备份文件。");
+    }
+  }
+
   async function handleOpenProject(file: File) {
     try {
       handleOpenProjectText(await file.text());
     } catch {
-      window.alert("无法打开工程文件，请确认是导出的 JSON 工程。");
+      notify("无法打开工程文件，请确认是导出的 JSON 工程。");
     }
   }
 
@@ -327,19 +435,19 @@ export function App() {
     try {
       parsed = JSON.parse(text);
     } catch {
-      window.alert("无法打开工程文件，请确认是导出的 JSON 工程。");
+      notify("无法打开工程文件，请确认是导出的 JSON 工程。");
       return;
     }
 
     // 先校验结构，再动状态和本地存储：坏工程不能覆盖掉当前工程
     const validation = validateProjectShape(parsed);
     if (!validation.ok) {
-      window.alert(`工程文件不完整，已拒绝载入：\n${validation.issues.slice(0, 6).join("\n")}`);
+      notify(`工程文件不完整，已拒绝载入：\n${validation.issues.slice(0, 6).join("\n")}`);
       return;
     }
 
     try {
-      const next = withMigratedConstraints(parsed as PerfboardProject);
+      const next = prepareProject(parsed as PerfboardProject);
       replaceProject(next);
       setSelectedComponentId(undefined);
       setSelectedPin(undefined);
@@ -347,7 +455,7 @@ export function App() {
       clearUndoHistory();
       window.localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(next));
     } catch {
-      window.alert("无法打开工程文件，请确认是导出的 JSON 工程。");
+      notify("无法打开工程文件，请确认是导出的 JSON 工程。");
     }
   }
 
@@ -360,6 +468,23 @@ export function App() {
     setIsCreatingProject(false);
   }
 
+  /** Removes every component and all copper; the netlist stays so parts can be regenerated. */
+  function handleClearProject() {
+    if (!projectRef.current) return;
+    if (!confirmAction("清空工程：删除全部元件与走线？导入的网表记录会保留，可重新生成元件。")) return;
+    commitProject((current) => ({
+      ...current,
+      components: [],
+      selectedNetName: undefined,
+      routing: { traces: [], jumpers: [], failedNets: [], warnings: [] }
+    }));
+    setSelectedComponentId(undefined);
+    setSelectedPin(undefined);
+    setPendingComponent(undefined);
+    setRouteEditMode("select");
+    setRouteDraftStart(undefined);
+  }
+
   async function handleImportFiles(files: File[]) {
     // 记录下来这次导入属于哪个工程：读文件期间可能新建/打开了别的工程
     const targetProjectId = projectRef.current?.id;
@@ -368,7 +493,7 @@ export function App() {
       parsed = await parseImportFiles(files);
     } catch (error) {
       const message = error instanceof Error ? error.message : "未知错误";
-      window.alert(`网表导入失败：${message}`);
+      notify(`网表导入失败：${message}`);
       console.error("netlist import failed", error);
       return;
     }
@@ -379,7 +504,14 @@ export function App() {
         console.warn("[import] 工程已切换，本次导入结果已丢弃");
         return current;
       }
-      const importState = mergeImportState(removeFileData(current.importState, fileNames), parsed);
+      const base = removeFileData(current.importState, fileNames);
+      const cleaned = parsed.hasMultisim ? { ...base, warnings: stripBundleWarnings(base.warnings) } : base;
+      const powerRefs = mergePowerRefs(base.powerRefs, parsed.powerRefs);
+      const merged = applyLibraryProfiles(mergeImportState(cleaned, parsed));
+      const withoutPowerNodes = parsed.hasMultisim ? stripPowerNodes(merged, powerRefs) : merged;
+      const importState = pruneResolvedBundleWarnings(
+        powerRefs.length > 0 && parsed.hasMultisim ? { ...withoutPowerNodes, powerRefs } : withoutPowerNodes
+      );
       const newFiles = [
         ...current.files.filter((file) => !fileNames.includes(file.name)),
         ...files.map((file) => ({
@@ -395,6 +527,12 @@ export function App() {
         importState
       };
     });
+
+    const imported = projectRef.current;
+    if (imported && collectPendingParts(imported.importState).length > 0) {
+      setPinProfileFocus(undefined);
+      setIsPinProfilesOpen(true);
+    }
   }
 
   function handleRemoveImportedFile(fileId: string) {
@@ -405,8 +543,10 @@ export function App() {
       }
 
       const files = current.files.filter((item) => item.id !== fileId);
+      const components = current.importState.components.filter((component) => component.sourceFile !== file.name);
+      const identities = new Set(components.map((component) => identityKey(componentIdentity(component))));
       const importState: ImportState = {
-        components: current.importState.components.filter((component) => component.sourceFile !== file.name),
+        components,
         nets: current.importState.nets
           .map((net) => ({
             ...net,
@@ -414,7 +554,9 @@ export function App() {
           }))
           .filter((net) => net.nodes.length > 0),
         warnings: current.importState.warnings.filter((warning) => warning.fileName !== file.name),
-        pinInfo: current.importState.pinInfo
+        pinInfo: current.importState.pinInfo,
+        pinProfiles: (current.importState.pinProfiles ?? []).filter((profile) => identities.has(identityKey(profile.identity))),
+        powerRefs: current.importState.powerRefs
       };
 
       return {
@@ -424,6 +566,143 @@ export function App() {
         selectedNetName: undefined
       };
     });
+  }
+
+  function handleSavePinProfile(profile: PinProfile) {
+    commitProject((current) => {
+      const refs = new Set(
+        current.importState.components
+          .filter((component) => profileMatchesComponent(profile, component))
+          .map((component) => component.ref)
+      );
+      const components = current.components.map((component) => {
+        if (!refs.has(component.name) || component.pinCount === profile.pinCount) return component;
+        const next = {
+          ...component,
+          pinCount: profile.pinCount,
+          mounted: false,
+          placeholder: false,
+          fallbackReason: undefined,
+          adapter: component.adapter?.pinCount === profile.pinCount ? component.adapter : undefined
+        };
+        return { ...next, pinOffsets: buildPinOffsetsForComponent(next) };
+      });
+      const changed = new Set(
+        components.filter((component, index) => component !== current.components[index]).map((component) => component.name)
+      );
+      const routing = changed.size > 0
+        ? invalidateComponentRouting(current, [...changed])
+        : current.routing;
+
+      return {
+        ...current,
+        components,
+        routing,
+        importState: {
+          ...current.importState,
+          pinProfiles: upsertProfile(current.importState.pinProfiles ?? [], profile),
+          pinProfileChoices: Object.fromEntries(
+            Object.entries(current.importState.pinProfileChoices ?? {})
+              .filter(([key]) => key !== identityKey(profile.identity))
+          ),
+          components: current.importState.components.map((component) =>
+            refs.has(component.ref)
+              ? { ...component, pinCount: profile.pinCount, pinCountSource: "user" as const }
+              : component
+          )
+        }
+      };
+    });
+
+    // Persist immediately: the debounced writer can lose the last edit if the
+    // window is refreshed right after pressing Save.
+    try {
+      if (projectRef.current) {
+        window.localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(projectRef.current));
+      }
+    } catch {
+      // Quota errors must not undo the in-memory save.
+    }
+    try {
+      saveProfileToLibrary(profile);
+    } catch {
+      // The project copy is authoritative; the share library is best-effort.
+    }
+    queueProfileSubmission(profile);
+  }
+
+  function handleDeletePinProfile(profileId: string) {
+    const projectProfile = projectRef.current?.importState.pinProfiles?.find((profile) => profile.id === profileId);
+    const libraryProfile = loadUserProfiles().find((profile) => profile.id === profileId);
+    const identity = projectProfile?.identity ?? libraryProfile?.identity;
+
+    try {
+      removeProfileFromLibrary(profileId);
+    } catch {
+      // Deleting the project copy below still works.
+    }
+    if (!identity) return;
+
+    const currentProjectId = projectRef.current?.id;
+    commitProject((current) => {
+      const profiles = current.importState.pinProfiles ?? [];
+      const next = profiles.filter((profile) => identityKey(profile.identity) !== identityKey(identity));
+      if (next.length === profiles.length) return current;
+      return {
+        ...current,
+        importState: { ...current.importState, pinProfiles: next }
+      };
+    });
+    if (currentProjectId) {
+      clearPinDraft(currentProjectId, identityKey(identity));
+    }
+    // The part is still in the netlist, so it now shows up as "needs pin map".
+  }
+
+  function handleChooseProfileConflict(conflict: ProfileConflict, choice: "public" | "user") {
+    const key = identityKey(conflict.userProfile.identity);
+    if (choice === "user") {
+      commitProject((current) => ({
+        ...current,
+        importState: {
+          ...current.importState,
+          pinProfileChoices: { ...(current.importState.pinProfileChoices ?? {}), [key]: "user" }
+        }
+      }));
+      return;
+    }
+
+    try {
+      removeUserProfilesForIdentity(conflict.userProfile.identity);
+    } catch {
+      // Removing the project copy below is enough for this project.
+    }
+    const projectId = projectRef.current?.id;
+    commitProject((current) => {
+      const profiles = (current.importState.pinProfiles ?? [])
+        .filter((profile) => identityKey(profile.identity) !== key);
+      if (conflict.publicSource === "public") {
+        profiles.push(conflict.publicProfile);
+      }
+      const choices = { ...(current.importState.pinProfileChoices ?? {}) };
+      delete choices[key];
+      return {
+        ...current,
+        importState: {
+          ...current.importState,
+          pinProfiles: profiles,
+          components: current.importState.components.map((component) =>
+            identityKey(componentIdentity(component)) === key
+              ? { ...component, pinCount: conflict.publicProfile.pinCount, pinCountSource: "builtin" as const }
+              : component
+          ),
+          pinProfileChoices: choices
+        }
+      };
+    });
+    if (projectId) {
+      clearPinDraft(projectId, key);
+    }
   }
 
   function handlePlaceComponent(component: LibraryComponentDefinition, position: [number, number]) {
@@ -445,7 +724,9 @@ export function App() {
       adapter: component.adapter,
       position,
       rotation: 0,
-      mounted: false
+      mounted: false,
+      origin: "manual",
+      placeholder: false
     };
     // Manual placement is an editing action: keep the part visible even when
     // its pins do not fit the board rules. DRC remains responsible for
@@ -461,51 +742,6 @@ export function App() {
   function handleSelectComponent(componentId: string | undefined) {
     setSelectedComponentId(componentId);
     setSelectedPin((current) => (current && current.componentId !== componentId ? undefined : current));
-  }
-
-  function handleMoveComponent(componentId: string, position: [number, number]) {
-    commitProject((current) => {
-      const moving = current.components.find((component) => component.id === componentId);
-      if (!moving) return current;
-
-      // 把芯片放到转接板上：脚数完全一致的才合并，脚数不同就不认这块板
-      const host =
-        moving.kind === "adapter"
-          ? undefined
-          : current.components.find(
-              (component) =>
-                component.kind === "adapter" &&
-                component.id !== componentId &&
-                component.adapter !== undefined &&
-                component.adapter.pinCount === moving.pinOffsets.length &&
-                adapterContainsPoint(component.position, component.adapter, position)
-            );
-
-      if (!host?.adapter) {
-        // 与自动放置共用同一套“能不能放”判定：重叠 + 硬禁布区
-        const check = checkComponentPlacement(current, { ...moving, position });
-        if (!check.valid) return current;
-        return {
-          ...current,
-          components: current.components.map((component) =>
-            component.id === componentId ? { ...component, position } : component
-          )
-        };
-      }
-
-      const merged = {
-        ...moving,
-        adapter: host.adapter,
-        position: host.position,
-        rotation: host.rotation
-      };
-      return {
-        ...current,
-        components: current.components
-          .filter((component) => component.id !== host.id)
-          .map((component) => (component.id === componentId ? merged : component))
-      };
-    });
   }
 
   function handleUpdateBoard(board: BoardSize) {
@@ -527,10 +763,6 @@ export function App() {
     });
   }
 
-  function handleMovePin(componentId: string, pin: number, position: [number, number]) {
-    updateComponent(componentId, (component) => bendComponentPin(component, pin, position));
-  }
-
   function handleCreateComponentsFromImport() {
     commitProject((current) => {
       const importedComponents = createPlacedComponentsFromParsed(
@@ -550,309 +782,6 @@ export function App() {
     });
   }
 
-  async function handleAutoRoute() {
-    const sourceProject = projectRef.current;
-    if (!sourceProject || routingRunning) return;
-    setRoutingRunning(true);
-    try {
-      const endpoints = resolveNetEndpoints(sourceProject.importState, sourceProject.components);
-      const allConstraints = projectConstraints(sourceProject);
-      const extraWarnings: string[] = [];
-      let constraints = allConstraints;
-      if ((sourceProject.board.kind ?? "perfboard") === "breadboard") {
-        const railConstraints = allConstraints.filter((constraint) => constraint.kind === "power_rail");
-        if (railConstraints.length > 0) {
-          extraWarnings.push(...railConstraints.map((constraint) => `面包板不支持电源母线约束：${constraint.net}（已忽略）。`));
-          constraints = allConstraints.filter((constraint) => constraint.kind !== "power_rail");
-        }
-      }
-      const rails = buildPowerRailTraces(constraints, endpoints, sourceProject.components);
-      if (rails.errors.length > 0) {
-        commitProject((current) => ({
-          ...current,
-          routing: {
-            ...current.routing,
-            warnings: [...current.routing.warnings, ...rails.errors]
-          }
-        }));
-        return;
-      }
-      const fixedTraces = [
-        ...rails.traces,
-        ...sourceProject.routing.traces.filter((trace) => trace.locked && !trace.id.startsWith("constraint-rail-"))
-      ];
-      const fixedJumpers = sourceProject.routing.jumpers.filter((jumper) => jumper.locked);
-
-      // 放到 worker 里跑：这里是最重的一段，主线程不能卡
-      const routing = await autoRouteInWorker({
-        board: sourceProject.board,
-        endpoints,
-        components: sourceProject.components,
-        fixedTraces,
-        constraints,
-        fixedJumpers
-      });
-
-      // 布线结果也走同一个 DRC 真值入口（接线校验 + 网表完整性 + 约束报告）
-      const report = buildDrcReport(sourceProject, routing);
-      const routed = {
-        ...routing,
-        drc: report.drc,
-        diagnostics: report.diagnostics,
-        failedNets: report.failedNets
-      };
-      // 布线期间用户可能改了布局/线路：输入变了就丢弃这次结果，不能覆盖它
-      commitProject((current) => {
-        if (current.id !== sourceProject.id) return current;
-        const inputsUnchanged =
-          current.components === sourceProject.components &&
-          current.board === sourceProject.board &&
-          current.routing === sourceProject.routing &&
-          current.constraints === sourceProject.constraints &&
-          // 布线期间重新导入网表同样会让结果过期
-          current.importState === sourceProject.importState;
-        if (!inputsUnchanged) {
-          return {
-            ...current,
-            routing: {
-              ...current.routing,
-              warnings: [...current.routing.warnings, "布线期间工程已被修改，本次自动布线结果已丢弃。"]
-            }
-          };
-        }
-        return {
-          ...current,
-          routing: {
-            ...routed,
-            warnings: [...stripConstraintWarnings(routed.warnings), ...report.warnings, ...extraWarnings]
-          }
-        };
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "自动布线失败。";
-      commitProject((current) => ({
-        ...current,
-        routing: { ...current.routing, warnings: [...current.routing.warnings, `自动布线失败：${message}`] }
-      }));
-    } finally {
-      setRoutingRunning(false);
-    }
-  }
-
-  /** Removes all copper and DRC marks, keeping components and their placement. */
-  function handleClearRoutes() {
-    if (!projectRef.current) return;
-    if (!window.confirm("清除全部走锡、跳线与 DRC 标记？元件与摆放位置会保留。")) return;
-    commitProject((current) => ({
-      ...current,
-      // Routing warnings describe copper that no longer exists, so they go too.
-      routing: { traces: [], jumpers: [], failedNets: [], warnings: [] }
-    }));
-    setRouteDraftStart(undefined);
-  }
-
-  /** Removes every component and all copper; the netlist stays so parts can be regenerated. */
-  function handleClearProject() {
-    if (!projectRef.current) return;
-    if (!window.confirm("清空工程：删除全部元件与走线？导入的网表记录会保留，可重新生成元件。")) return;
-    commitProject((current) => ({
-      ...current,
-      components: [],
-      selectedNetName: undefined,
-      routing: { traces: [], jumpers: [], failedNets: [], warnings: [] }
-    }));
-    setSelectedComponentId(undefined);
-    setSelectedPin(undefined);
-    setPendingComponent(undefined);
-    setRouteEditMode("select");
-    setRouteDraftStart(undefined);
-  }
-
-  function handleRunDrc() {
-    commitProject((current) => {
-      // 唯一的 DRC 真值来源：接线校验 + 网表完整性 + 约束报告
-      const report = buildDrcReport(current, current.routing);
-      return {
-        ...current,
-        routing: {
-          ...current.routing,
-          drc: report.drc,
-          diagnostics: report.diagnostics,
-          warnings: [...stripConstraintWarnings(stripDrcWarnings(current.routing.warnings)), ...report.warnings],
-          failedNets: report.failedNets
-        }
-      };
-    });
-  }
-
-  function handleClearDrc() {
-    commitProject((current) => ({
-      ...current,
-      routing: {
-        ...current.routing,
-        drc: undefined,
-        diagnostics: undefined,
-        warnings: stripDrcWarnings(current.routing.warnings)
-      }
-    }));
-  }
-
-  function handleAddBottomTrace(from: [number, number], to: [number, number]) {
-    commitProject((current) => {
-      if (!getBoardModel(current.board).capabilities.routePrimitives.has("bottom_trace")) {
-        return current;
-      }
-      const net = current.selectedNetName ?? MANUAL_NET_NAME;
-      return {
-        ...current,
-        routing: {
-          ...current.routing,
-          traces: [
-            ...current.routing.traces,
-            {
-              id: crypto.randomUUID(),
-              net,
-              points: createManualBottomPath(from, to),
-              layer: "bottom",
-              locked: true
-            }
-          ]
-        }
-      };
-    });
-  }
-
-  function handleAddJumper(from: [number, number], to: [number, number]) {
-    commitProject((current) => {
-      const net = current.selectedNetName ?? MANUAL_NET_NAME;
-      const nextFrom = relocateJumperEndpoint(current, from);
-      const nextTo = relocateJumperEndpoint(current, to);
-      if (!nextFrom || !nextTo || samePoint(nextFrom, nextTo)) {
-        return current;
-      }
-      return {
-        ...current,
-        routing: {
-          ...current.routing,
-          jumpers: [
-            ...current.routing.jumpers,
-            {
-              id: crypto.randomUUID(),
-              net,
-              from: nextFrom,
-              to: nextTo,
-              layer: "jumper",
-              locked: true
-            }
-          ]
-        }
-      };
-    });
-  }
-
-  function handleRemoveRouteAt(point: [number, number]) {
-    commitProject((current) => {
-      const traceRemoval = removeBottomTraceSegmentAt(current.routing.traces, point);
-      const nextJumpers = current.routing.jumpers.filter((jumper) => !samePoint(jumper.from, point) && !samePoint(jumper.to, point));
-      if (!traceRemoval.removed && nextJumpers.length === current.routing.jumpers.length) {
-        return current;
-      }
-
-      return {
-        ...current,
-        routing: {
-          ...current.routing,
-          traces: traceRemoval.traces,
-          jumpers: nextJumpers
-        }
-      };
-    });
-  }
-
-  function handleRotateSelected() {
-    if (selectedComponentId) updateComponent(selectedComponentId, (component) => ({ ...component, rotation: component.rotation + Math.PI / 2 }));
-  }
-
-  function handleDeleteSelected() {
-    if (!selectedComponentId) {
-      return;
-    }
-
-    commitProject((current) => {
-      const selected = current.components.find((component) => component.id === selectedComponentId);
-      if (!selected) {
-        return current;
-      }
-      const deletedPinCells = selected.pinOffsets.map((_, index) => pinGridPosition(selected, index + 1));
-      const remainingPinCells = current.components
-        .filter((component) => component.id !== selectedComponentId)
-        .flatMap((component) => component.pinOffsets.map((_, index) => pinGridPosition(component, index + 1)));
-      return {
-        ...current,
-        components: current.components.filter((component) => component.id !== selectedComponentId),
-        routing: removeRoutesToComponent(current.routing, deletedPinCells, remainingPinCells)
-      };
-    });
-    setSelectedComponentId(undefined);
-  }
-
-  function handleMountSelected() {
-    if (selectedComponentId) updateComponent(selectedComponentId, (component) => ({ ...component, mounted: true }));
-  }
-
-  function handleUnmountSelected() {
-    if (selectedComponentId) updateComponent(selectedComponentId, (component) => ({ ...component, mounted: false }));
-  }
-
-  function handleUpdateSelected(patch: {
-    name?: string;
-    value?: string;
-    leadSpacing?: number;
-    rowSpacing?: number;
-    sameSidePitch?: number;
-    adapter?: AdapterSpec;
-  }) {
-    if (!selectedComponentId) return;
-    commitProject((current) => {
-      const component = current.components.find((item) => item.id === selectedComponentId);
-      if (!component) return current;
-      // 放置之后脚位已经定了，转接板规格不允许再变
-      if (patch.adapter !== undefined && component.mounted) return current;
-      const next = {
-        ...component,
-        ...patch,
-        leadSpacing: patch.leadSpacing !== undefined ? clampSpacing(component.kind, patch.leadSpacing, "leadSpacing") : component.leadSpacing,
-        rowSpacing: patch.rowSpacing !== undefined ? clampSpacing(component.kind, patch.rowSpacing, "rowSpacing") : component.rowSpacing,
-        sameSidePitch: patch.sameSidePitch !== undefined ? clampSpacing(component.kind, patch.sameSidePitch, "sameSidePitch") : component.sameSidePitch
-      };
-      const updated = { ...next, pinOffsets: buildPinOffsetsForComponent(next) };
-      return { ...current, components: current.components.map((item) => item.id === component.id ? updated : item) };
-    });
-  }
-
-  function handleDetachAdapter() {
-    if (!selectedComponentId) return;
-    const selected = projectRef.current?.components.find((component) => component.id === selectedComponentId);
-    // 独立转接板（还没装芯片）本身就是这块板：移除=删掉这个元件（连带清掉它引出的走线）
-    if (selected?.kind === "adapter") {
-      const deletedPinCells = selected.pinOffsets.map((_, index) => pinGridPosition(selected, index + 1));
-      const remainingPinCells = (projectRef.current?.components ?? [])
-        .filter((component) => component.id !== selectedComponentId)
-        .flatMap((component) => component.pinOffsets.map((_, index) => pinGridPosition(component, index + 1)));
-      commitProject((current) => ({
-        ...current,
-        components: current.components.filter((component) => component.id !== selectedComponentId),
-        routing: removeRoutesToComponent(current.routing, deletedPinCells, remainingPinCells)
-      }));
-      setSelectedComponentId(undefined);
-      return;
-    }
-    // 已经放到板上的元件不允许摘转接板：脚位已经参与布线
-    updateComponent(selectedComponentId, (component) =>
-      component.mounted ? component : { ...component, adapter: undefined }
-    );
-  }
-
   return (
     <div className="app-shell">
       <HeaderBar
@@ -866,10 +795,11 @@ export function App() {
         onUndo={handleUndo}
         canUndo={undoCount > 0}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenHelp={() => setIsHelpOpen(true)}
         toolbar={toolbar}
       />
       <div className={project ? "main-layout with-sidebar" : "main-layout"}>
-        {project && <ProjectSidebar project={project} aiAssistant={aiAssistant} onImportFiles={handleImportFiles} onRemoveImportedFile={handleRemoveImportedFile} onSelectNet={handleSelectNet} />}
+        {project && <ProjectSidebar project={project} aiAssistant={aiAssistant} onImportFiles={handleImportFiles} onRemoveImportedFile={handleRemoveImportedFile} onSelectNet={handleSelectNet} onOpenPinProfiles={() => { setPinProfileFocus(undefined); setIsPinProfilesOpen(true); }} onEditPinProfile={(key) => { setPinProfileFocus(key); setIsPinProfilesOpen(true); }} onOpenConflicts={() => setIsConflictOpen(true)} />}
         <Workspace
           project={project}
           selectedComponentId={selectedComponentId}
@@ -882,6 +812,8 @@ export function App() {
           onUpdateBoard={handleUpdateBoard}
           onRotateSelected={handleRotateSelected}
           onDeleteSelected={handleDeleteSelected}
+          onAssignPackage={packageAssignment.openAssign}
+          canAssignPackage={packageAssignment.canAssign}
           onMountSelected={handleMountSelected}
           onUnmountSelected={handleUnmountSelected}
           onUpdateSelected={handleUpdateSelected}
@@ -899,6 +831,18 @@ export function App() {
       {isCreatingProject && (
         <NewProjectDialog onCancel={() => setIsCreatingProject(false)} onCreate={handleCreateProject} />
       )}
+      {isPinProfilesOpen && project && (
+        <PinProfilesDialog
+          importState={project.importState}
+          projectId={project.id}
+          focusKey={pinProfileFocus}
+          onSave={handleSavePinProfile}
+          onClose={() => {
+            setIsPinProfilesOpen(false);
+            setPinProfileFocus(undefined);
+          }}
+        />
+      )}
       {autoPlacement.dialogOpen && project && (
         <AutoPlacementDialog
           boardWidth={project.board.width}
@@ -912,20 +856,55 @@ export function App() {
           onPlace={autoPlacement.run}
         />
       )}
+      {isHelpOpen && <HelpDialog onClose={() => setIsHelpOpen(false)} />}
+      {packageAssignment.isOpen && (
+        <PackageLibraryDialog
+          onPickComponent={handlePickComponent}
+          pinCount={packageAssignment.targetPinCount}
+          onClose={packageAssignment.close}
+        />
+      )}
+      {isMappingLibraryOpen && (
+        <MappingLibraryDialog
+          onDeleteProfile={handleDeletePinProfile}
+          onClose={() => setIsMappingLibraryOpen(false)}
+        />
+      )}
+      {isConflictOpen && project && (
+        <ProfileConflictDialog
+          importState={project.importState}
+          onChoose={handleChooseProfileConflict}
+          onClose={() => setIsConflictOpen(false)}
+        />
+      )}
       {isSettingsOpen && project && (
         <SettingsDialog
           dragMoveModifier={settings.dragMoveModifier}
           shortcuts={settings.shortcuts}
+          saveDirectory={settings.saveDirectory}
           onUpdate={(dragMoveModifier) => setSettings((current) => ({ ...current, dragMoveModifier }))}
           onUpdateShortcut={(action, shortcut) => setSettings((current) => ({
             ...current,
             shortcuts: { ...current.shortcuts, [action]: shortcut }
           }))}
+          onUpdateSaveDirectory={(saveDirectory) => setSettings((current) => ({ ...current, saveDirectory }))}
+          onChooseSaveDirectory={window.perfboardDesktop?.storage ? handleChooseSaveDirectory : undefined}
+          onBackupNow={window.perfboardDesktop?.storage ? handleBackupNow : undefined}
+          onRestoreBackup={window.perfboardDesktop?.storage ? handleRestoreBackup : undefined}
           onClose={() => setIsSettingsOpen(false)}
         />
       )}
     </div>
   );
+}
+
+function buildBackupContent(project: PerfboardProject) {
+  return JSON.stringify({
+    version: 1,
+    savedAt: new Date().toISOString(),
+    project,
+    pinProfiles: loadUserProfiles()
+  }, null, 2);
 }
 
 function getHighlightedEndpoints(
@@ -1008,130 +987,3 @@ function makeDefaultComponentName(label: string, index: number) {
   return `${prefix}${index}`;
 }
 
-function createManualBottomPath(from: [number, number], to: [number, number]): Array<[number, number]> {
-  if (from[0] === to[0] || from[1] === to[1]) {
-    return expandOrthogonalPath([from, to]);
-  }
-  return expandOrthogonalPath([from, [to[0], from[1]], to]);
-}
-
-function removeBottomTraceSegmentAt(traces: PerfboardProject["routing"]["traces"], point: [number, number]) {
-  const nextTraces: PerfboardProject["routing"]["traces"] = [];
-  let removed = false;
-
-  for (const trace of traces) {
-    if (removed) {
-      nextTraces.push(trace);
-      continue;
-    }
-
-    const removal = findStraightRunAtPoint(trace.points, point);
-    if (!removal) {
-      nextTraces.push(trace);
-      continue;
-    }
-
-    removed = true;
-    const before = trace.points.slice(0, removal.startIndex + 1);
-    const after = trace.points.slice(removal.endIndex);
-    if (before.length >= 2) {
-      nextTraces.push({ ...trace, id: crypto.randomUUID(), points: before });
-    }
-    if (after.length >= 2) {
-      nextTraces.push({ ...trace, id: crypto.randomUUID(), points: after });
-    }
-  }
-
-  return { traces: nextTraces, removed };
-}
-
-function findStraightRunAtPoint(points: Array<[number, number]>, point: [number, number]) {
-  for (let segmentIndex = 0; segmentIndex < points.length - 1; segmentIndex += 1) {
-    const from = points[segmentIndex];
-    const to = points[segmentIndex + 1];
-    if (!pointOnSegment(point, from, to)) {
-      continue;
-    }
-
-    let startIndex = segmentIndex;
-    let endIndex = segmentIndex + 1;
-    while (startIndex > 0 && isSameStraightLine(points[startIndex - 1], points[startIndex], from, to)) {
-      startIndex -= 1;
-    }
-    while (endIndex < points.length - 1 && isSameStraightLine(points[endIndex], points[endIndex + 1], from, to)) {
-      endIndex += 1;
-    }
-    return { startIndex, endIndex };
-  }
-
-  return undefined;
-}
-
-function pointOnSegment(point: [number, number], from: [number, number], to: [number, number]) {
-  if (from[0] === to[0]) {
-    return point[0] === from[0] && point[1] >= Math.min(from[1], to[1]) && point[1] <= Math.max(from[1], to[1]);
-  }
-  if (from[1] === to[1]) {
-    return point[1] === from[1] && point[0] >= Math.min(from[0], to[0]) && point[0] <= Math.max(from[0], to[0]);
-  }
-
-  return false;
-}
-
-function isSameStraightLine(a: [number, number], b: [number, number], from: [number, number], to: [number, number]) {
-  const horizontal = from[1] === to[1];
-  const vertical = from[0] === to[0];
-  if (horizontal) {
-    return a[1] === from[1] && b[1] === from[1];
-  }
-  if (vertical) {
-    return a[0] === from[0] && b[0] === from[0];
-  }
-
-  return false;
-}
-
-function samePoint(a: [number, number], b: [number, number]) {
-  return a[0] === b[0] && a[1] === b[1];
-}
-
-/**
- * Breadboard rule: one hole takes one wire. A manually drawn jumper endpoint
- * that lands on a component pin hole or another jumper's hole is moved to the
- * nearest free hole of the same electrical node (same 5-hole row / same rail);
- * if no free hole exists there, the jumper is rejected.
- */
-function relocateJumperEndpoint(project: PerfboardProject, point: [number, number]): [number, number] | undefined {
-  if ((project.board.kind ?? "perfboard") !== "breadboard") {
-    return point;
-  }
-  const boardModel = getBoardModel(project.board);
-  const occupied = new Set<string>();
-  project.components.forEach((component) => componentPinHoles(component).forEach(([x, y]) => occupied.add(`${x},${y}`)));
-  project.routing.jumpers.forEach((jumper) => {
-    occupied.add(`${jumper.from[0]},${jumper.from[1]}`);
-    occupied.add(`${jumper.to[0]},${jumper.to[1]}`);
-  });
-
-  const pointId = `${point[0]},${point[1]}`;
-  if (!occupied.has(pointId)) {
-    return point;
-  }
-  const node = boardModel.getElectricalNode(point);
-  if (!node) {
-    return undefined;
-  }
-  let best: [number, number] | undefined;
-  let bestDistance = Number.POSITIVE_INFINITY;
-  boardModel.getAllHoles().forEach((hole) => {
-    if (boardModel.getElectricalNode(hole.id) !== node) return;
-    const holeId = `${hole.grid[0]},${hole.grid[1]}`;
-    if (occupied.has(holeId)) return;
-    const distance = Math.abs(hole.grid[0] - point[0]) + Math.abs(hole.grid[1] - point[1]);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      best = hole.grid;
-    }
-  });
-  return best;
-}

@@ -1,0 +1,18 @@
+[Unit]
+Description=ProtoRoute pin-profile sink
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+Environment=PIN_PROFILE_PORT=8099
+Environment=PIN_PROFILE_DIR=/var/lib/protoroute/pin-profiles
+ExecStart=/usr/bin/node /srv/protoroute/pin-profile-server.mjs
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

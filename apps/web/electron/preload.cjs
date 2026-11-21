@@ -19,5 +19,10 @@ contextBridge.exposeInMainWorld("perfboardDesktop", {
         ipcRenderer.removeListener("project:open-file-error", listener);
       };
     }
+  },
+  storage: {
+    chooseDirectory: () => ipcRenderer.invoke("storage:choose-directory"),
+    writeBackup: (payload) => ipcRenderer.invoke("storage:write-backup", payload),
+    readBackup: (directory) => ipcRenderer.invoke("storage:read-backup", directory)
   }
 });

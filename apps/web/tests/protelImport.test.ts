@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import test from "node:test";
 import {
   classifyProtelComponent,
@@ -183,7 +183,7 @@ test("a Protel file imported through the file API lands on the library as real p
   assert.equal(byName.get("U1")?.kind, "dip");
   assert.equal(byName.get("U1")?.pinCount, 8);
   assert.equal(byName.get("J1")?.kind, "pin_header");
-  assert.ok(placed.every((component) => !component.isFallback), "no part should degrade to a placeholder header");
+  assert.ok(placed.every((component) => !component.placeholder), "no part should degrade to a placeholder header");
 });
 
 test("KiCad files still go through the KiCad parser when both formats are present", async () => {
@@ -197,3 +197,4 @@ test("KiCad files still go through the KiCad parser when both formats are presen
   ]);
   assert.deepEqual(bundle.components.map((component) => component.ref).sort(), ["C1", "J1", "R1", "R7", "U1"]);
 });
+

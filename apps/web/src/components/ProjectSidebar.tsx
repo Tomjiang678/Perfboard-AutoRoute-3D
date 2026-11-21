@@ -2,6 +2,9 @@ import { Box, Grid3X3 } from "lucide-react";
 import { useState } from "react";
 import { resolveImportPins } from "../features/import/pinResolver.ts";
 import { resolveNetEndpoints } from "../features/import/netEndpointResolver.ts";
+import { collectPendingParts } from "../features/import/multisim/pending.ts";
+import { collectProfileConflicts } from "../features/import/multisim/conflicts.ts";
+import { componentIdentity, identityKey } from "../features/import/multisim/profile.ts";
 import { pinGridPosition } from "../features/board/placement.ts";
 import { AiConstraintLists } from "../features/ai/components/AiConstraintLists.tsx";
 import type { AiConstraintAssistantController } from "../features/ai/useAiConstraintAssistant.ts";
@@ -15,9 +18,21 @@ interface ProjectSidebarProps {
   onImportFiles: (files: File[]) => void | Promise<void>;
   onRemoveImportedFile: (fileId: string) => void;
   onSelectNet: (netName: string | undefined) => void;
+  onOpenPinProfiles: () => void;
+  onEditPinProfile: (key: string) => void;
+  onOpenConflicts: () => void;
 }
 
-export function ProjectSidebar({ project, aiAssistant, onImportFiles, onRemoveImportedFile, onSelectNet }: ProjectSidebarProps) {
+export function ProjectSidebar({ project, aiAssistant, onImportFiles, onRemoveImportedFile, onSelectNet, onOpenPinProfiles, onEditPinProfile, onOpenConflicts }: ProjectSidebarProps) {
+  const pendingParts = collectPendingParts(project.importState);
+  const conflicts = collectProfileConflicts(project.importState);
+  const pendingKeys = new Set(pendingParts.map((part) => part.key));
+  const componentKeys = new Set(project.importState.components.map((component) => identityKey(componentIdentity(component))));
+  const storedProfiles = (project.importState.pinProfiles ?? []).filter((profile) => {
+    const key = identityKey(profile.identity);
+    return componentKeys.has(key) && !pendingKeys.has(key);
+  });
+
   return (
     <aside className="sidebar">
       <section className="sidebar-section">
@@ -42,6 +57,64 @@ export function ProjectSidebar({ project, aiAssistant, onImportFiles, onRemoveIm
         <FileList title="Netlist files" files={project.files} emptyText="No netlist imported" onRemove={onRemoveImportedFile} />
       </section>
 
+      {pendingParts.length > 0 && (
+        <section className="sidebar-section">
+          <h2>Multisim parts</h2>
+          <div className="parsed-list">
+            {pendingParts.map((part) => (
+              <button className="parsed-row selectable" type="button" key={part.key} onClick={onOpenPinProfiles}>
+                <span>{part.value}</span>
+                <small>{part.packageName || "-"} · {part.refs.join(", ")}</small>
+              </button>
+            ))}
+          </div>
+          <button className="text-button" type="button" onClick={onOpenPinProfiles}>
+            Resolve
+          </button>
+        </section>
+      )}
+
+      {storedProfiles.length > 0 && (
+        <section className="sidebar-section">
+          <h2>Pin profiles</h2>
+          <div className="parsed-list">
+            {storedProfiles.map((profile) => (
+              <button
+                className="parsed-row selectable"
+                type="button"
+                key={profile.id}
+                onClick={() => onEditPinProfile(identityKey(profile.identity))}
+              >
+                <span>{profile.identity.value}</span>
+                <small>{profile.identity.package || "-"} · {profile.pinCount}p</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {conflicts.length > 0 && (
+        <section className="sidebar-section">
+          <h2>库冲突</h2>
+          <div className="parsed-list">
+            {conflicts.map((conflict) => (
+              <button
+                className="parsed-row selectable"
+                type="button"
+                key={conflict.key}
+                onClick={onOpenConflicts}
+              >
+                <span>{conflict.value}</span>
+                <small>{conflict.packageName || "-"} · {conflict.refs.join(", ")}</small>
+              </button>
+            ))}
+          </div>
+          <button className="text-button" type="button" onClick={onOpenConflicts}>
+            对比
+          </button>
+        </section>
+      )}
+
       {(aiAssistant.draftConstraints.length > 0 || aiAssistant.activeConstraints.length > 0) && (
         <section className="sidebar-section">
           <h2>AI 约束</h2>
@@ -63,6 +136,7 @@ function ImportSummary({
 }) {
   const { components, nets, warnings } = project.importState;
   const resolvedPins = resolveImportPins(project.importState);
+  const pendingParts = collectPendingParts(project.importState);
   const connectedNodes = nets.reduce((sum, net) => sum + net.nodes.length, 0);
   const resolvedNodeCount = resolvedPins.nets.reduce((sum, net) => sum + net.nodes.length, 0);
   const unresolvedNodeCount = resolvedPins.nets.reduce((sum, net) => sum + net.unresolved.length, 0);
@@ -73,6 +147,7 @@ function ImportSummary({
   const missingCount = unresolvedNodeCount + (resolvedNodeCount - mappedCount);
   const endpointCountByNet = new Map<string, number>();
   endpoints.forEach((endpoint) => endpointCountByNet.set(endpoint.net, (endpointCountByNet.get(endpoint.net) ?? 0) + 1));
+  const resolvedNodeCountByNet = new Map(resolvedPins.nets.map((net) => [net.name, net.nodes.length]));
   const pinNetRows = buildPinNetRows(project.components, endpoints);
   const [showComponents, setShowComponents] = useState(true);
   const [showAllNets, setShowAllNets] = useState(false);
@@ -89,6 +164,7 @@ function ImportSummary({
         <Summary label="Nodes" value={connectedNodes} />
         <Summary label="Mapped" value={mappedCount} />
         <Summary label="Missing" value={missingCount} />
+        {pendingParts.length > 0 && <Summary label="Unsupported" value={pendingParts.length} />}
       </div>
 
       {components.length > 0 && (
@@ -125,7 +201,7 @@ function ImportSummary({
               onClick={() => onSelectNet(net.name)}
             >
               <span>{net.name}</span>
-              <small>{endpointCountByNet.get(net.name) ?? 0}/{net.nodes.length} holes</small>
+              <small>{endpointCountByNet.get(net.name) ?? 0}/{resolvedNodeCountByNet.get(net.name) ?? net.nodes.length} holes</small>
             </button>
           ))}
           </div>

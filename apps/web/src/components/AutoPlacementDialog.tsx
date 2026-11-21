@@ -6,6 +6,7 @@ import type { AutoPlacementProgress, PlacementRegion } from "../features/layout/
 import { AutoPlacementProgressPanel } from "../features/layout/components/AutoPlacementProgressPanel.tsx";
 import { PlacementRegionFields } from "../features/layout/components/PlacementRegionFields.tsx";
 import type { BoardKind } from "../types/project.ts";
+import { useDialogDrag } from "./useDialogDrag.ts";
 
 interface AutoPlacementDialogProps {
   boardWidth: number;
@@ -34,6 +35,7 @@ export function AutoPlacementDialog({
   const [y, setY] = useState(1);
   const [width, setWidth] = useState(Math.max(1, boardWidth - 2));
   const [height, setHeight] = useState(Math.max(1, boardHeight - 2));
+  const drag = useDialogDrag();
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -47,8 +49,21 @@ export function AutoPlacementDialog({
 
   return (
     <div className="dialog-backdrop" role="presentation">
-      <section className="dialog" role="dialog" aria-modal="true" aria-labelledby="auto-place-title">
-        <div className="dialog-header">
+      <section
+        className="dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auto-place-title"
+        ref={drag.ref}
+        style={{ transform: `translate3d(${drag.offset.x}px, ${drag.offset.y}px, 0)` }}
+      >
+        <div
+          className="dialog-header draggable"
+          onPointerDown={drag.onPointerDown}
+          onPointerMove={drag.onPointerMove}
+          onPointerUp={drag.onPointerUp}
+          onPointerCancel={drag.onPointerCancel}
+        >
           <h2 id="auto-place-title">自动放置</h2>
           <button className="icon-button" type="button" onClick={onCancel} title={running ? "取消自动放置" : "关闭"}>
             <X size={18} />
