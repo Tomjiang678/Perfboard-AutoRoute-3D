@@ -1,4 +1,4 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import test from "node:test";
 import { updateComponentGeometry } from "../src/features/project/updateComponentGeometry.ts";
 import { getLibraryComponentByKind } from "../src/features/project/componentLibrary.ts";
@@ -63,5 +63,16 @@ test("mounting does not move pins and keeps routing", () => {
   const next = updateComponentGeometry(project(), "k1", (component) => ({ ...component, mounted: true }));
   assert.equal(next.routing.traces.length, 1);
   assert.equal(next.routing.jumpers.length, 1);
+});
+
+test("renaming the display name still invalidates by stable import ref", () => {
+  const renamed = project();
+  renamed.components[0].name = "Relay Main";
+  renamed.components[0].importRef = "K1";
+  const next = updateComponentGeometry(renamed, "k1", (component) => ({
+    ...component,
+    position: [12, 12]
+  }));
+  assert.equal(next.routing.traces.length, 0);
 });
 

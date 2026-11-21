@@ -2,7 +2,7 @@ import {
   buildPinOffsetsForComponent,
   getLibraryComponentByKind
 } from "../project/componentLibrary.ts";
-import { clampSpacing, UNKNOWN_COMPONENT_LABEL } from "../project/componentTraits.ts";
+import { clampSpacing, componentImportRef, UNKNOWN_COMPONENT_LABEL } from "../project/componentTraits.ts";
 import type { ImportState, LibraryComponentKind, ParsedComponent, PlacedComponent } from "../../types/project.ts";
 import {
   componentMappingRules,
@@ -20,7 +20,7 @@ export function createPlacedComponentsFromParsed(
   existingComponents: PlacedComponent[],
   boardWidth: number
 ): PlacedComponent[] {
-  const existingNames = new Set(existingComponents.map((component) => component.name));
+  const existingRefs = new Set(existingComponents.map((component) => componentImportRef(component)));
   const pendingRefs = pendingComponentRefs(importState);
   const pinCountByRef = new Map<string, number>();
   Object.entries(importState.pinInfo ?? {}).forEach(([ref, pins]) => {
@@ -32,7 +32,7 @@ export function createPlacedComponentsFromParsed(
     .filter((component) => !pendingRefs.has(component.ref))
     .filter((component) => !shouldIgnoreComponent(component))
     .forEach((component) => {
-      if (existingNames.has(component.ref)) {
+      if (existingRefs.has(component.ref)) {
         return;
       }
 
@@ -71,6 +71,7 @@ export function createPlacedComponentsFromParsed(
         rotation: 0,
         mounted: false,
         origin: "import",
+        importRef: component.ref,
         placeholder: Boolean(mapped.placeholder),
         fallbackReason: mapped.fallbackReason
       });

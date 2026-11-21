@@ -13,6 +13,11 @@ export function isPlaceholderComponent(component: Pick<PlacedComponent, "placeho
   return component.placeholder === true;
 }
 
+/** Netlist identity survives display-name edits. */
+export function componentImportRef(component: Pick<PlacedComponent, "importRef" | "name">) {
+  return component.importRef ?? component.name;
+}
+
 export function hasKind(component: Pick<PlacedComponent, "kind">, set: ReadonlySet<LibraryComponentKind>) {
   return set.has(component.kind);
 }

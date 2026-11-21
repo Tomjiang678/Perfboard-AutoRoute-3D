@@ -12,6 +12,10 @@ import {
 import { createAdapterDefinition, defaultAdapterForChip, normalizeAdapterSpec } from "../features/project/adapter.ts";
 import { applyPackageOverride, savePackageOverride } from "../features/project/packageOverrides.ts";
 import { PackagePinNumbersDialog } from "./PackagePinNumbersDialog.tsx";
+import { UserPackageEditorDialog } from "../features/userPackage/editor/UserPackageEditorDialog.tsx";
+import { UserPackageLibraryList } from "../features/userPackage/editor/UserPackageLibraryList.tsx";
+import { loadUserPackages, saveUserPackage, deleteUserPackage } from "../features/userPackage/model/store.ts";
+import type { UserPackageDraft } from "../features/userPackage/model/types.ts";
 import type { AdapterSpec } from "../types/project.ts";
 
 interface PackageLibraryDialogProps {
@@ -19,9 +23,11 @@ interface PackageLibraryDialogProps {
   onClose: () => void;
   /** When set, only package entries with this pin count can be picked. */
   pinCount?: number;
+  /** True only for "使用元件库封装" on an imported component. */
+  assigning?: boolean;
 }
 
-export function PackageLibraryDialog({ onPickComponent, onClose, pinCount }: PackageLibraryDialogProps) {
+export function PackageLibraryDialog({ onPickComponent, onClose, pinCount, assigning = false }: PackageLibraryDialogProps) {
   const drag = useDialogDrag();
   const availableComponents = (pinCount === undefined
     ? componentLibrary
@@ -32,6 +38,10 @@ export function PackageLibraryDialog({ onPickComponent, onClose, pinCount }: Pac
   const [dipConfiguratorOpen, setDipConfiguratorOpen] = useState(false);
   const [dipPinCount, setDipPinCount] = useState(14);
   const [numberTarget, setNumberTarget] = useState<LibraryComponentDefinition | undefined>();
+  const [tab, setTab] = useState<"public" | "user">("public");
+  const [userPackages, setUserPackages] = useState<UserPackageDraft[]>(() => loadUserPackages());
+  const [editorPackage, setEditorPackage] = useState<UserPackageDraft | undefined>();
+  const [editorOpen, setEditorOpen] = useState(false);
   const [pinHeaderConfiguratorOpen, setPinHeaderConfiguratorOpen] = useState(false);
   const [pinHeaderRows, setPinHeaderRows] = useState(DEFAULT_PIN_HEADER_ROWS);
   const [pinHeaderColumns, setPinHeaderColumns] = useState(DEFAULT_PIN_HEADER_COLUMNS);
@@ -46,6 +56,11 @@ export function PackageLibraryDialog({ onPickComponent, onClose, pinCount }: Pac
     setAdapterSpec((current) => normalizeAdapterSpec({ ...current, ...change }));
 
   function choosePackage(definition: LibraryComponentDefinition) {
+    if (!assigning) {
+      onPickComponent(definition);
+      onClose();
+      return;
+    }
     setNumberTarget(applyPackageOverride(definition));
   }
 
@@ -53,6 +68,23 @@ export function PackageLibraryDialog({ onPickComponent, onClose, pinCount }: Pac
     const definition = getLibraryComponentByKind("dip", count);
     if (!definition) return;
     choosePackage(definition);
+  }
+
+  function openNewUserPackage() {
+    setEditorPackage(undefined);
+    setEditorOpen(true);
+  }
+
+  function handleSaveUserPackage(draft: UserPackageDraft) {
+    saveUserPackage(draft);
+    setUserPackages(loadUserPackages());
+    setEditorOpen(false);
+    setEditorPackage(undefined);
+  }
+
+  function handleDeleteUserPackage(id: string) {
+    deleteUserPackage(id);
+    setUserPackages(loadUserPackages());
   }
 
   return (
@@ -79,7 +111,25 @@ export function PackageLibraryDialog({ onPickComponent, onClose, pinCount }: Pac
             ×
           </button>
         </div>
-        <div className="library-body">
+        <div className="library-tabs">
+          <button
+            className={tab === "public" ? "library-tab active" : "library-tab"}
+            type="button"
+            onClick={() => setTab("public")}
+          >
+            公用
+          </button>
+          <button
+            className={tab === "user" ? "library-tab active" : "library-tab"}
+            type="button"
+            onClick={() => setTab("user")}
+          >
+            用户
+          </button>
+        </div>
+
+        {tab === "public" && (
+          <div className="library-body">
           <div className="component-library-dialog-grid">
             {dipEligible && (
               <button
@@ -267,8 +317,36 @@ export function PackageLibraryDialog({ onPickComponent, onClose, pinCount }: Pac
             )}
           </div>
         </div>
+        )}
+        {tab === "user" && (
+          <div className="library-body">
+            <section className="library-section">
+              <button className="tool-button user-package-new" type="button" onClick={openNewUserPackage}>
+                新增
+              </button>
+              <UserPackageLibraryList
+                packages={userPackages}
+                onEdit={(draft) => {
+                  setEditorPackage(draft);
+                  setEditorOpen(true);
+                }}
+                onDelete={handleDeleteUserPackage}
+              />
+            </section>
+          </div>
+        )}
       </section>
       </div>
+      {editorOpen && (
+        <UserPackageEditorDialog
+          initial={editorPackage}
+          onSave={handleSaveUserPackage}
+          onClose={() => {
+            setEditorOpen(false);
+            setEditorPackage(undefined);
+          }}
+        />
+      )}
       {numberTarget && (
         <PackagePinNumbersDialog
           key={`${numberTarget.kind}:${numberTarget.pinCount ?? 0}:${numberTarget.label}`}

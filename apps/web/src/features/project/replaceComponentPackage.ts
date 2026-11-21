@@ -1,6 +1,6 @@
 import type { LibraryComponentDefinition } from "./componentLibrary.ts";
 import type { PerfboardProject } from "../../types/project.ts";
-import { clampSpacing } from "./componentTraits.ts";
+import { clampSpacing, componentImportRef } from "./componentTraits.ts";
 import { invalidateComponentRouting } from "../routing/invalidateComponentRouting.ts";
 
 /** Swap the physical package of an imported component and drop stale copper. */
@@ -36,11 +36,13 @@ export function replaceComponentPackage(
           pinHeaderColumns: undefined,
           adapter: undefined,
           origin: "import",
+          importRef: component.importRef ?? component.name,
+          packageBound: true,
           placeholder: false,
           fallbackReason: undefined
         }
         : item
     ),
-    routing: invalidateComponentRouting(project, component.name)
+    routing: invalidateComponentRouting(project, componentImportRef(component))
   };
 }

@@ -264,6 +264,10 @@ export interface PlacedComponent {
   rotationLocked?: boolean;
   /** Where this placed instance came from. */
   origin?: "import" | "manual";
+  /** Stable netlist ref; display name may be renamed by the user. */
+  importRef?: string;
+  /** True once the user explicitly assigned a package. */
+  packageBound?: boolean;
   /** Imported but no package binding exists yet; rendered as a warning header. */
   placeholder?: boolean;
   fallbackReason?: string;

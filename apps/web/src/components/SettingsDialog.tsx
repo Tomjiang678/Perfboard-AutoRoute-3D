@@ -6,12 +6,13 @@ interface SettingsDialogProps {
   dragMoveModifier: DragMoveModifier;
   shortcuts: KeyboardShortcuts;
   saveDirectory?: string;
+  packageDirectory?: string;
   onUpdate: (dragMoveModifier: DragMoveModifier) => void;
   onUpdateShortcut: (action: ShortcutAction, shortcut: string) => void;
   onUpdateSaveDirectory: (directory: string | undefined) => void;
   onChooseSaveDirectory?: () => void;
-  onBackupNow?: () => void;
-  onRestoreBackup?: () => void;
+  onUpdatePackageDirectory: (directory: string | undefined) => void;
+  onChoosePackageDirectory?: () => void;
   onClose: () => void;
 }
 
@@ -56,7 +57,7 @@ const shortcutGroups: Array<{
   }
 ];
 
-export function SettingsDialog({ dragMoveModifier, shortcuts, saveDirectory, onUpdate, onUpdateShortcut, onUpdateSaveDirectory, onChooseSaveDirectory, onBackupNow, onRestoreBackup, onClose }: SettingsDialogProps) {
+export function SettingsDialog({ dragMoveModifier, shortcuts, saveDirectory, packageDirectory, onUpdate, onUpdateShortcut, onUpdateSaveDirectory, onChooseSaveDirectory, onUpdatePackageDirectory, onChoosePackageDirectory, onClose }: SettingsDialogProps) {
   const [recordingAction, setRecordingAction] = useState<ShortcutAction | undefined>();
   const [shortcutError, setShortcutError] = useState<string | undefined>();
 
@@ -128,7 +129,7 @@ export function SettingsDialog({ dragMoveModifier, shortcuts, saveDirectory, onU
           </section>
 
           <section className="settings-shortcut-group">
-            <h3>保存位置</h3>
+            <h3>映射保存位置</h3>
             <label className="settings-shortcut-row settings-path-row">
               <span>目录</span>
               <input
@@ -146,21 +147,27 @@ export function SettingsDialog({ dragMoveModifier, shortcuts, saveDirectory, onU
               >
                 选择目录
               </button>
+            </div>
+          </section>
+
+          <section className="settings-shortcut-group">
+            <h3>封装库保存位置</h3>
+            <label className="settings-shortcut-row settings-path-row">
+              <span>目录</span>
+              <input
+                className="settings-path-input"
+                value={packageDirectory ?? ""}
+                onChange={(event) => onUpdatePackageDirectory(event.target.value || undefined)}
+              />
+            </label>
+            <div className="settings-storage-actions">
               <button
                 className="tool-button"
                 type="button"
-                disabled={!saveDirectory || !onBackupNow}
-                onClick={onBackupNow}
+                disabled={!onChoosePackageDirectory}
+                onClick={onChoosePackageDirectory}
               >
-                备份
-              </button>
-              <button
-                className="tool-button"
-                type="button"
-                disabled={!saveDirectory || !onRestoreBackup}
-                onClick={onRestoreBackup}
-              >
-                恢复
+                选择目录
               </button>
             </div>
           </section>

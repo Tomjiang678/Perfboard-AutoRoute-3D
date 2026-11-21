@@ -1,0 +1,880 @@
+{
+  "version": 1,
+  "savedAt": "2026-11-21T15:15:15.470Z",
+  "project": {
+    "id": "a8a3cd8b-31c6-4b03-800a-56d6d975e5f2",
+    "name": "Untitled Perfboard",
+    "board": {
+      "kind": "perfboard",
+      "width": 30,
+      "height": 20
+    },
+    "files": [
+      {
+        "id": "433481a7-2def-4b6e-bf9e-ff13fb285c62",
+        "name": "crossref.txt",
+        "size": 1675,
+        "importedAt": "2026-11-21T15:14:34.446Z"
+      },
+      {
+        "id": "779369bc-a7bd-4f77-948d-65d380f4f829",
+        "name": "netlist.txt",
+        "size": 2410,
+        "importedAt": "2026-11-21T15:14:34.446Z"
+      }
+    ],
+    "importState": {
+      "components": [
+        {
+          "ref": "U1",
+          "value": "MCP23017",
+          "category": "IO_EXPANDER",
+          "packageName": "DIP-28",
+          "sourceFile": "crossref.txt",
+          "format": "multisim",
+          "pinCount": 28,
+          "pinCountSource": "user"
+        },
+        {
+          "ref": "U2",
+          "value": "ULN2003A",
+          "category": "DARLINGTON",
+          "packageName": "DIP-16",
+          "sourceFile": "crossref.txt",
+          "format": "multisim",
+          "pinCount": 16,
+          "pinCountSource": "user"
+        },
+        {
+          "ref": "U3",
+          "value": "2N3904",
+          "category": "TRANSISTOR",
+          "packageName": "TO-92",
+          "sourceFile": "crossref.txt",
+          "format": "multisim",
+          "pinCount": 3,
+          "pinCountSource": "builtin"
+        }
+      ],
+      "nets": [
+        {
+          "name": "0",
+          "nodes": [
+            {
+              "ref": "U1",
+              "pin": "VSS",
+              "logicalPin": "VSS",
+              "sourceFile": "netlist.txt"
+            },
+            {
+              "ref": "U1",
+              "pin": "A0",
+              "logicalPin": "A0",
+              "sourceFile": "netlist.txt"
+            },
+            {
+              "ref": "U1",
+              "pin": "A1",
+              "logicalPin": "A1",
+              "sourceFile": "netlist.txt"
+            },
+            {
+              "ref": "U1",
+              "pin": "A2",
+              "logicalPin": "A2",
+              "sourceFile": "netlist.txt"
+            },
+            {
+              "ref": "U2",
+              "pin": "GND",
+              "logicalPin": "GND",
+              "sourceFile": "netlist.txt"
+            },
+            {
+              "ref": "U3",
+              "pin": "E",
+              "logicalPin": "E",
+              "sourceFile": "netlist.txt"
+            }
+          ]
+        },
+        {
+          "name": "3V3",
+          "nodes": [
+            {
+              "ref": "U1",
+              "pin": "VDD",
+              "logicalPin": "VDD",
+              "sourceFile": "netlist.txt"
+            },
+            {
+              "ref": "U1",
+              "pin": "RESET",
+              "logicalPin": "RESET",
+              "sourceFile": "netlist.txt"
+            }
+          ]
+        },
+        {
+          "name": "5V",
+          "nodes": [
+            {
+              "ref": "U2",
+              "pin": "COM",
+              "logicalPin": "COM",
+              "sourceFile": "netlist.txt"
+            },
+            {
+              "ref": "U3",
+              "pin": "C",
+              "logicalPin": "C",
+              "sourceFile": "netlist.txt"
+            }
+          ]
+        },
+        {
+          "name": "BASE",
+          "nodes": [
+            {
+              "ref": "U2",
+              "pin": "OUT1",
+              "logicalPin": "OUT1",
+              "sourceFile": "netlist.txt"
+            },
+            {
+              "ref": "U3",
+              "pin": "B",
+              "logicalPin": "B",
+              "sourceFile": "netlist.txt"
+            }
+          ]
+        },
+        {
+          "name": "CTRL1",
+          "nodes": [
+            {
+              "ref": "U1",
+              "pin": "GPA0",
+              "logicalPin": "GPA0",
+              "sourceFile": "netlist.txt"
+            },
+            {
+              "ref": "U2",
+              "pin": "IN1",
+              "logicalPin": "IN1",
+              "sourceFile": "netlist.txt"
+            }
+          ]
+        }
+      ],
+      "pinInfo": {},
+      "pinProfiles": [
+        {
+          "id": "uln2003a@dip-16",
+          "identity": {
+            "value": "ULN2003A",
+            "package": "DIP-16",
+            "category": "DARLINGTON"
+          },
+          "pinCount": 16,
+          "pins": [
+            {
+              "physical": 1,
+              "logical": "GND",
+              "shared": true,
+              "connection": "netlist"
+            },
+            {
+              "physical": 2,
+              "logical": "COM",
+              "connection": "netlist"
+            },
+            {
+              "physical": 3,
+              "logical": "OUT1",
+              "connection": "netlist"
+            },
+            {
+              "physical": 4,
+              "logical": "IN1",
+              "connection": "netlist"
+            },
+            {
+              "physical": 5,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 6,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 7,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 8,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 9,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 10,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 11,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 12,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 13,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 14,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 15,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 16,
+              "connection": "unconnected"
+            }
+          ],
+          "createdAt": "2026-11-21T14:44:47.407Z"
+        },
+        {
+          "id": "mcp23017@dip-28",
+          "identity": {
+            "value": "MCP23017",
+            "package": "DIP-28",
+            "category": "IO_EXPANDER"
+          },
+          "pinCount": 28,
+          "pins": [
+            {
+              "physical": 1,
+              "logical": "VSS",
+              "shared": true,
+              "connection": "netlist"
+            },
+            {
+              "physical": 2,
+              "logical": "A0",
+              "connection": "netlist"
+            },
+            {
+              "physical": 3,
+              "logical": "A1",
+              "connection": "netlist"
+            },
+            {
+              "physical": 4,
+              "logical": "VDD",
+              "shared": true,
+              "connection": "netlist"
+            },
+            {
+              "physical": 5,
+              "logical": "RESET",
+              "connection": "netlist"
+            },
+            {
+              "physical": 6,
+              "logical": "A2",
+              "connection": "netlist"
+            },
+            {
+              "physical": 7,
+              "logical": "GPA0",
+              "connection": "netlist"
+            },
+            {
+              "physical": 8,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 9,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 10,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 11,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 12,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 13,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 14,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 15,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 16,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 17,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 18,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 19,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 20,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 21,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 22,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 23,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 24,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 25,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 26,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 27,
+              "connection": "unconnected"
+            },
+            {
+              "physical": 28,
+              "connection": "unconnected"
+            }
+          ],
+          "createdAt": "2026-11-21T14:44:48.916Z"
+        }
+      ],
+      "powerRefs": [
+        "0",
+        "3V3",
+        "5V"
+      ],
+      "warnings": []
+    },
+    "components": [
+      {
+        "id": "8e71b54a-b46e-4169-bed5-7ae04a954375",
+        "kind": "dip",
+        "label": "DIP28",
+        "name": "U1",
+        "value": "MCP23017",
+        "pinCount": 28,
+        "leadSpacing": 1,
+        "rowSpacing": 3,
+        "sameSidePitch": 1,
+        "pinOffsets": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            0,
+            4
+          ],
+          [
+            0,
+            5
+          ],
+          [
+            0,
+            6
+          ],
+          [
+            0,
+            7
+          ],
+          [
+            0,
+            8
+          ],
+          [
+            0,
+            9
+          ],
+          [
+            0,
+            10
+          ],
+          [
+            0,
+            11
+          ],
+          [
+            0,
+            12
+          ],
+          [
+            0,
+            13
+          ],
+          [
+            3,
+            13
+          ],
+          [
+            3,
+            12
+          ],
+          [
+            3,
+            11
+          ],
+          [
+            3,
+            10
+          ],
+          [
+            3,
+            9
+          ],
+          [
+            3,
+            8
+          ],
+          [
+            3,
+            7
+          ],
+          [
+            3,
+            6
+          ],
+          [
+            3,
+            5
+          ],
+          [
+            3,
+            4
+          ],
+          [
+            3,
+            3
+          ],
+          [
+            3,
+            2
+          ],
+          [
+            3,
+            1
+          ],
+          [
+            3,
+            0
+          ]
+        ],
+        "position": [
+          3,
+          3
+        ],
+        "rotation": 0,
+        "mounted": false,
+        "origin": "import",
+        "importRef": "U1",
+        "placeholder": true,
+        "fallbackReason": "元件 U1 (IO_EXPANDER) 没有明确封装规则，已按位号/值推断为 DIP28，请确认封装。"
+      },
+      {
+        "id": "9b6b0761-3d10-4c4b-bc81-28e25bee5406",
+        "kind": "dip",
+        "label": "DIP16",
+        "name": "U2",
+        "value": "ULN2003A",
+        "pinCount": 16,
+        "leadSpacing": 1,
+        "rowSpacing": 3,
+        "sameSidePitch": 1,
+        "pinOffsets": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            0,
+            4
+          ],
+          [
+            0,
+            5
+          ],
+          [
+            0,
+            6
+          ],
+          [
+            0,
+            7
+          ],
+          [
+            3,
+            7
+          ],
+          [
+            3,
+            6
+          ],
+          [
+            3,
+            5
+          ],
+          [
+            3,
+            4
+          ],
+          [
+            3,
+            3
+          ],
+          [
+            3,
+            2
+          ],
+          [
+            3,
+            1
+          ],
+          [
+            3,
+            0
+          ]
+        ],
+        "position": [
+          11,
+          3
+        ],
+        "rotation": 0,
+        "mounted": false,
+        "origin": "import",
+        "importRef": "U2",
+        "placeholder": true,
+        "fallbackReason": "元件 U2 (DARLINGTON) 没有明确封装规则，已按位号/值推断为 DIP16，请确认封装。"
+      },
+      {
+        "id": "839a1f85-a140-4d6a-8849-d1ff10a776f1",
+        "kind": "to92",
+        "label": "Q",
+        "name": "U3",
+        "value": "2N3904",
+        "pinCount": 3,
+        "leadSpacing": 1,
+        "rowSpacing": 1,
+        "sameSidePitch": 1,
+        "pinOffsets": [
+          [
+            -1,
+            0
+          ],
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "position": [
+          19,
+          3
+        ],
+        "rotation": 0,
+        "mounted": false,
+        "origin": "import",
+        "importRef": "U3",
+        "placeholder": false,
+        "packageBound": true
+      }
+    ],
+    "routing": {
+      "traces": [],
+      "jumpers": [],
+      "failedNets": [],
+      "warnings": []
+    },
+    "constraints": [],
+    "constraintSchemaVersion": 1,
+    "schemaVersion": 3,
+    "createdAt": "2026-11-21T15:14:29.630Z"
+  },
+  "pinProfiles": [
+    {
+      "id": "uln2003a@dip-16",
+      "identity": {
+        "value": "ULN2003A",
+        "package": "DIP-16",
+        "category": "DARLINGTON"
+      },
+      "pinCount": 16,
+      "pins": [
+        {
+          "physical": 1,
+          "logical": "GND",
+          "shared": true,
+          "connection": "netlist"
+        },
+        {
+          "physical": 2,
+          "logical": "COM",
+          "connection": "netlist"
+        },
+        {
+          "physical": 3,
+          "logical": "OUT1",
+          "connection": "netlist"
+        },
+        {
+          "physical": 4,
+          "logical": "IN1",
+          "connection": "netlist"
+        },
+        {
+          "physical": 5,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 6,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 7,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 8,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 9,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 10,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 11,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 12,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 13,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 14,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 15,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 16,
+          "connection": "unconnected"
+        }
+      ],
+      "createdAt": "2026-11-21T14:44:47.407Z"
+    },
+    {
+      "id": "mcp23017@dip-28",
+      "identity": {
+        "value": "MCP23017",
+        "package": "DIP-28",
+        "category": "IO_EXPANDER"
+      },
+      "pinCount": 28,
+      "pins": [
+        {
+          "physical": 1,
+          "logical": "VSS",
+          "shared": true,
+          "connection": "netlist"
+        },
+        {
+          "physical": 2,
+          "logical": "A0",
+          "connection": "netlist"
+        },
+        {
+          "physical": 3,
+          "logical": "A1",
+          "connection": "netlist"
+        },
+        {
+          "physical": 4,
+          "logical": "VDD",
+          "shared": true,
+          "connection": "netlist"
+        },
+        {
+          "physical": 5,
+          "logical": "RESET",
+          "connection": "netlist"
+        },
+        {
+          "physical": 6,
+          "logical": "A2",
+          "connection": "netlist"
+        },
+        {
+          "physical": 7,
+          "logical": "GPA0",
+          "connection": "netlist"
+        },
+        {
+          "physical": 8,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 9,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 10,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 11,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 12,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 13,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 14,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 15,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 16,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 17,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 18,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 19,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 20,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 21,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 22,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 23,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 24,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 25,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 26,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 27,
+          "connection": "unconnected"
+        },
+        {
+          "physical": 28,
+          "connection": "unconnected"
+        }
+      ],
+      "createdAt": "2026-11-21T14:44:48.916Z"
+    }
+  ]
+}

@@ -22,7 +22,7 @@ export function createProject(name: string, board: BoardSize): PerfboardProject 
     },
     constraints: [],
     constraintSchemaVersion: 1,
-    schemaVersion: 2,
+    schemaVersion: 3,
     createdAt: new Date().toISOString()
   };
 }

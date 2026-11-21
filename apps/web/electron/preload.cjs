@@ -22,7 +22,8 @@ contextBridge.exposeInMainWorld("perfboardDesktop", {
   },
   storage: {
     chooseDirectory: () => ipcRenderer.invoke("storage:choose-directory"),
-    writeBackup: (payload) => ipcRenderer.invoke("storage:write-backup", payload),
-    readBackup: (directory) => ipcRenderer.invoke("storage:read-backup", directory)
+    getDefaultDirectory: () => ipcRenderer.invoke("storage:get-default-directory"),
+    getDefaultPackageDirectory: () => ipcRenderer.invoke("storage:get-default-package-directory"),
+    writeBackup: (payload) => ipcRenderer.invoke("storage:write-backup", payload)
   }
 });

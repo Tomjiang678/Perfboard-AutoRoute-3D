@@ -1,6 +1,7 @@
 import type { PerfboardProject, PlacedComponent } from "../../types/project.ts";
 import { pinGridPosition } from "../board/placement.ts";
 import { componentBoardPinCount } from "./adapter.ts";
+import { componentImportRef } from "./componentTraits.ts";
 import { invalidateComponentRouting } from "../routing/invalidateComponentRouting.ts";
 
 /**
@@ -24,7 +25,7 @@ export function updateComponentGeometry(
     components: project.components.map((component) => component.id === componentId ? updated : component)
   };
   return pinsChanged
-    ? { ...next, routing: invalidateComponentRouting(project, current.name) }
+    ? { ...next, routing: invalidateComponentRouting(project, componentImportRef(current)) }
     : next;
 }
 

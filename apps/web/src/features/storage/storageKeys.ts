@@ -6,5 +6,6 @@ export const STORAGE_KEYS = {
   pinProfiles: "protoroute-pin-profiles",
   profileOutbox: "protoroute-profile-outbox",
   packagePinOverrides: "protoroute-package-pin-overrides",
+  userPackages: "protoroute-user-packages",
   pinDraftPrefix: "protoroute-pin-draft"
 } as const;

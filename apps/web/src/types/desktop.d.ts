@@ -20,8 +20,9 @@ declare global {
       };
       storage: {
         chooseDirectory(): Promise<string | undefined>;
+        getDefaultDirectory(): Promise<string>;
+        getDefaultPackageDirectory(): Promise<string>;
         writeBackup(payload: { directory: string; content: string }): Promise<{ path: string }>;
-        readBackup(directory: string): Promise<string | undefined>;
       };
     };
   }

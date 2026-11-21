@@ -11,16 +11,18 @@ import { Workspace } from "./components/Workspace.tsx";
 import { AutoPlacementDialog } from "./components/AutoPlacementDialog.tsx";
 import { SettingsDialog } from "./components/SettingsDialog.tsx";
 import {
-  buildPinOffsetsForComponent,
   type LibraryComponentDefinition
 } from "./features/project/componentLibrary.ts";
+import { componentImportRef } from "./features/project/componentTraits.ts";
+import { applyPinProfile } from "./features/project/applyPinProfile.ts";
+import { updateBoard } from "./features/project/updateBoard.ts";
 import { mergeImportState, parseImportFiles, removeFileData } from "./features/import/kicadNetlistParser.ts";
 import { pruneResolvedBundleWarnings, stripBundleWarnings } from "./features/import/importWarnings.ts";
 import { mergePowerRefs, stripPowerNodes } from "./features/import/multisim/normalizeImport.ts";
 import { createPlacedComponentsFromParsed } from "./features/import/componentMapping.ts";
-import { applyLibraryProfiles, loadUserProfiles, removeProfileFromLibrary, removeUserProfilesForIdentity, saveProfileToLibrary, upsertProfile } from "./features/import/multisim/library.ts";
+import { applyLibraryProfiles, loadUserProfiles, removeProfileFromLibrary, removeUserProfilesForIdentity, saveProfileToLibrary } from "./features/import/multisim/library.ts";
 import { collectPendingParts } from "./features/import/multisim/pending.ts";
-import { componentIdentity, identityKey, profileMatchesComponent } from "./features/import/multisim/profile.ts";
+import { componentIdentity, identityKey } from "./features/import/multisim/profile.ts";
 import { queueProfileSubmission, flushProfileSubmissions } from "./features/import/multisim/submit.ts";
 import { clearPinDraft } from "./features/import/multisim/draftStore.ts";
 import type { ProfileConflict } from "./features/import/multisim/conflicts.ts";
@@ -37,7 +39,7 @@ import { createProject } from "./features/project/projectFactory.ts";
 import { useProjectDocument, PROJECT_STORAGE_KEY } from "./features/project/useProjectDocument.ts";
 import { validateProjectShape } from "./features/project/projectValidation.ts";
 import { prepareProject } from "./features/project/prepareProject.ts";
-import { getBoardModel, normalizeBoardDefinition } from "./features/board/factory.ts";
+import { getBoardModel } from "./features/board/factory.ts";
 import type { BoardSize, DragMoveModifier, ImportState, KeyboardShortcuts, PerfboardProject, PinProfile, PlacedComponent, RoutedNetEndpoint, ThemeMode } from "./types/project.ts";
 import type { SelectedPin } from "./components/Perfboard3DViewport.tsx";
 import type { RouteEditMode, WorkspaceToolbarProps } from "./components/WorkspaceToolbar.tsx";
@@ -49,6 +51,7 @@ interface AppSettings {
   shortcuts: KeyboardShortcuts;
   theme: ThemeMode;
   saveDirectory?: string;
+  packageDirectory?: string;
 }
 
 const defaultShortcuts: KeyboardShortcuts = {
@@ -159,6 +162,42 @@ export function App() {
   useEffect(() => {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => {
+    if (settings.saveDirectory?.trim()) return;
+    const storage = window.perfboardDesktop?.storage;
+    if (!storage?.getDefaultDirectory) return;
+    let active = true;
+    void storage.getDefaultDirectory()
+      .then((directory) => {
+        if (!active || !directory) return;
+        setSettings((current) => current.saveDirectory?.trim()
+          ? current
+          : { ...current, saveDirectory: directory });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [settings.saveDirectory]);
+
+  useEffect(() => {
+    if (settings.packageDirectory?.trim()) return;
+    const storage = window.perfboardDesktop?.storage;
+    if (!storage?.getDefaultPackageDirectory) return;
+    let active = true;
+    void storage.getDefaultPackageDirectory()
+      .then((directory) => {
+        if (!active || !directory) return;
+        setSettings((current) => current.packageDirectory?.trim()
+          ? current
+          : { ...current, packageDirectory: directory });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [settings.packageDirectory]);
 
   useEffect(() => {
     const directory = settings.saveDirectory?.trim();
@@ -377,48 +416,10 @@ export function App() {
     }
   }
 
-  async function handleBackupNow() {
-    const directory = settings.saveDirectory?.trim();
-    if (!project || !directory || !window.perfboardDesktop?.storage) return;
-    try {
-      await window.perfboardDesktop.storage.writeBackup({ directory, content: buildBackupContent(project) });
-    } catch (error) {
-      notify(`备份失败：${error instanceof Error ? error.message : "未知错误"}`);
-    }
-  }
-
-  async function handleRestoreBackup() {
-    const directory = settings.saveDirectory?.trim();
-    if (!directory || !window.perfboardDesktop?.storage) return;
-    const text = await window.perfboardDesktop.storage.readBackup(directory);
-    if (!text) {
-      notify("保存位置里没有找到备份文件。");
-      return;
-    }
-    try {
-      const data = JSON.parse(text) as { project?: unknown; pinProfiles?: PinProfile[] };
-      const validation = validateProjectShape(data.project);
-      if (!validation.ok) {
-        notify(`备份不完整，已拒绝载入：\n${validation.issues.slice(0, 6).join("\n")}`);
-        return;
-      }
-      for (const profile of Array.isArray(data.pinProfiles) ? data.pinProfiles : []) {
-        try {
-          saveProfileToLibrary(profile);
-        } catch {
-          // A bad profile should not block restoring the project.
-        }
-      }
-      const restored = prepareProject(data.project as PerfboardProject);
-      replaceProject(restored);
-      window.localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(restored));
-      setSelectedComponentId(undefined);
-      setSelectedPin(undefined);
-      setPendingComponent(undefined);
-      clearUndoHistory();
-      setIsSettingsOpen(false);
-    } catch {
-      notify("无法读取备份文件。");
+  async function handleChoosePackageDirectory() {
+    const directory = await window.perfboardDesktop?.storage.chooseDirectory();
+    if (directory) {
+      setSettings((current) => ({ ...current, packageDirectory: directory }));
     }
   }
 
@@ -569,50 +570,7 @@ export function App() {
   }
 
   function handleSavePinProfile(profile: PinProfile) {
-    commitProject((current) => {
-      const refs = new Set(
-        current.importState.components
-          .filter((component) => profileMatchesComponent(profile, component))
-          .map((component) => component.ref)
-      );
-      const components = current.components.map((component) => {
-        if (!refs.has(component.name) || component.pinCount === profile.pinCount) return component;
-        const next = {
-          ...component,
-          pinCount: profile.pinCount,
-          mounted: false,
-          placeholder: false,
-          fallbackReason: undefined,
-          adapter: component.adapter?.pinCount === profile.pinCount ? component.adapter : undefined
-        };
-        return { ...next, pinOffsets: buildPinOffsetsForComponent(next) };
-      });
-      const changed = new Set(
-        components.filter((component, index) => component !== current.components[index]).map((component) => component.name)
-      );
-      const routing = changed.size > 0
-        ? invalidateComponentRouting(current, [...changed])
-        : current.routing;
-
-      return {
-        ...current,
-        components,
-        routing,
-        importState: {
-          ...current.importState,
-          pinProfiles: upsertProfile(current.importState.pinProfiles ?? [], profile),
-          pinProfileChoices: Object.fromEntries(
-            Object.entries(current.importState.pinProfileChoices ?? {})
-              .filter(([key]) => key !== identityKey(profile.identity))
-          ),
-          components: current.importState.components.map((component) =>
-            refs.has(component.ref)
-              ? { ...component, pinCount: profile.pinCount, pinCountSource: "user" as const }
-              : component
-          )
-        }
-      };
-    });
+    commitProject((current) => applyPinProfile(current, profile));
 
     // Persist immediately: the debounced writer can lose the last edit if the
     // window is refreshed right after pressing Save.
@@ -745,13 +703,7 @@ export function App() {
   }
 
   function handleUpdateBoard(board: BoardSize) {
-    commitProject((current) => {
-      const normalizedBoard = normalizeBoardDefinition(board);
-      return {
-        ...current,
-        board: normalizedBoard,
-      };
-    });
+    commitProject((current) => updateBoard(current, board));
   }
 
   function handleSelectNet(netName: string | undefined) {
@@ -861,6 +813,7 @@ export function App() {
         <PackageLibraryDialog
           onPickComponent={handlePickComponent}
           pinCount={packageAssignment.targetPinCount}
+          assigning={Boolean(packageAssignment.assignTargetId)}
           onClose={packageAssignment.close}
         />
       )}
@@ -882,6 +835,7 @@ export function App() {
           dragMoveModifier={settings.dragMoveModifier}
           shortcuts={settings.shortcuts}
           saveDirectory={settings.saveDirectory}
+          packageDirectory={settings.packageDirectory}
           onUpdate={(dragMoveModifier) => setSettings((current) => ({ ...current, dragMoveModifier }))}
           onUpdateShortcut={(action, shortcut) => setSettings((current) => ({
             ...current,
@@ -889,8 +843,8 @@ export function App() {
           }))}
           onUpdateSaveDirectory={(saveDirectory) => setSettings((current) => ({ ...current, saveDirectory }))}
           onChooseSaveDirectory={window.perfboardDesktop?.storage ? handleChooseSaveDirectory : undefined}
-          onBackupNow={window.perfboardDesktop?.storage ? handleBackupNow : undefined}
-          onRestoreBackup={window.perfboardDesktop?.storage ? handleRestoreBackup : undefined}
+          onUpdatePackageDirectory={(packageDirectory) => setSettings((current) => ({ ...current, packageDirectory }))}
+          onChoosePackageDirectory={window.perfboardDesktop?.storage ? handleChoosePackageDirectory : undefined}
           onClose={() => setIsSettingsOpen(false)}
         />
       )}

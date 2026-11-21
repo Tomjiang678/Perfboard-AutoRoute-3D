@@ -129,6 +129,28 @@ async function chooseStorageDirectory() {
   return result.canceled ? undefined : result.filePaths[0];
 }
 
+function defaultStorageDirectory() {
+  return path.join(app.getPath("documents"), "ProtoRoute 3D");
+}
+
+async function getDefaultStorageDirectory() {
+  try {
+    const directory = defaultStorageDirectory();
+    await fs.mkdir(directory, { recursive: true });
+    return directory;
+  } catch {
+    const fallback = path.join(app.getPath("userData"), "library");
+    await fs.mkdir(fallback, { recursive: true });
+    return fallback;
+  }
+}
+
+async function getDefaultPackageDirectory() {
+  const directory = path.join(await getDefaultStorageDirectory(), "封装库");
+  await fs.mkdir(directory, { recursive: true });
+  return directory;
+}
+
 async function writeStorageBackup(_event, payload) {
   const directory = typeof payload?.directory === "string" ? payload.directory.trim() : "";
   const content = typeof payload?.content === "string" ? payload.content : "";
@@ -139,15 +161,6 @@ async function writeStorageBackup(_event, payload) {
   const target = path.join(directory, BACKUP_FILE);
   await fs.writeFile(target, content, "utf8");
   return { path: target };
-}
-
-async function readStorageBackup(_event, directory) {
-  if (typeof directory !== "string" || !directory.trim()) return undefined;
-  try {
-    return await fs.readFile(path.join(directory.trim(), BACKUP_FILE), "utf8");
-  } catch {
-    return undefined;
-  }
 }
 
 function createWindow() {
@@ -180,8 +193,9 @@ app.whenReady().then(() => {
   ipcMain.handle("ai-config:save", writeAiConfig);
   ipcMain.handle("ai-api:request", requestAiApi);
   ipcMain.handle("storage:choose-directory", chooseStorageDirectory);
+  ipcMain.handle("storage:get-default-directory", getDefaultStorageDirectory);
+  ipcMain.handle("storage:get-default-package-directory", getDefaultPackageDirectory);
   ipcMain.handle("storage:write-backup", writeStorageBackup);
-  ipcMain.handle("storage:read-backup", readStorageBackup);
   ipcMain.on("project:renderer-ready", () => {
     rendererReady = true;
     dispatchProjectFiles();

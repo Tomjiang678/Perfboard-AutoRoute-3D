@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { prepareProject } from "../src/features/project/prepareProject.ts";
-import type { PerfboardProject, PlacedComponent } from "../src/types/project.ts";
+import type { PerfboardProject, PinProfile, PlacedComponent } from "../src/types/project.ts";
 
 function project(component: PlacedComponent, refs: string[]): PerfboardProject {
   return {
@@ -91,4 +91,60 @@ test("unflagged manual components stay manual and are not placeholders", () => {
   const next = prepareProject(project(manual, []));
   assert.equal(next.components[0].origin, "manual");
   assert.equal(next.components[0].placeholder, false);
+});
+
+test("a completed profile clears an existing placeholder on load", () => {
+  const chip: PlacedComponent = {
+    id: "c1",
+    kind: "dip",
+    label: "DIP16",
+    name: "U2",
+    value: "ULN2003A",
+    pinCount: 16,
+    leadSpacing: 1,
+    rowSpacing: 3,
+    sameSidePitch: 1,
+    pinOffsets: [],
+    position: [0, 0],
+    rotation: 0,
+    mounted: false,
+    origin: "import",
+    importRef: "U2",
+    placeholder: true,
+    fallbackReason: "old"
+  };
+  const base = project(chip, ["U2"]);
+  base.schemaVersion = 3;
+  base.importState.components[0] = {
+    ref: "U2",
+    value: "ULN2003A",
+    category: "DARLINGTON",
+    packageName: "DIP-16",
+    sourceFile: "x"
+  };
+  base.importState.nets = [{
+    name: "0",
+    nodes: [
+      { ref: "U2", pin: "GND", logicalPin: "GND" },
+      { ref: "U2", pin: "COM", logicalPin: "COM" },
+      { ref: "U2", pin: "OUT1", logicalPin: "OUT1" },
+      { ref: "U2", pin: "IN1", logicalPin: "IN1" }
+    ]
+  }];
+  const profile: PinProfile = {
+    id: "uln",
+    identity: { value: "ULN2003A", package: "DIP-16", category: "DARLINGTON" },
+    pinCount: 16,
+    pins: [
+      { physical: 1, logical: "GND", shared: true, connection: "netlist" },
+      { physical: 2, logical: "COM", connection: "netlist" },
+      { physical: 3, logical: "OUT1", connection: "netlist" },
+      { physical: 4, logical: "IN1", connection: "netlist" }
+    ],
+    createdAt: "2026-01-01"
+  };
+  base.importState.pinProfiles = [profile];
+  const next = prepareProject(base);
+  assert.equal(next.components[0].placeholder, false);
+  assert.equal(next.components[0].fallbackReason, undefined);
 });

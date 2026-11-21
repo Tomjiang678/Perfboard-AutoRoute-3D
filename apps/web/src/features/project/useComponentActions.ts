@@ -1,9 +1,9 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import type { AdapterSpec, PerfboardProject, PlacedComponent } from "../../types/project.ts";
 import { bendComponentPin } from "../layout/manualPlacement.ts";
 import { checkComponentPlacement } from "../layout/placementValidity.ts";
-import { adapterContainsPoint } from "./adapter.ts";
-import { clampSpacing } from "./componentTraits.ts";
+import { adapterContainsPoint, componentBoardPinCount } from "./adapter.ts";
+import { clampSpacing, componentImportRef } from "./componentTraits.ts";
 import { buildPinOffsetsForComponent } from "./componentLibrary.ts";
 import { invalidateComponentRouting } from "../routing/invalidateComponentRouting.ts";
 import { updateComponentGeometry } from "./updateComponentGeometry.ts";
@@ -47,7 +47,7 @@ export function useComponentActions({
                 component.kind === "adapter" &&
                 component.id !== componentId &&
                 component.adapter !== undefined &&
-                component.adapter.pinCount === moving.pinOffsets.length &&
+                component.adapter.pinCount === componentBoardPinCount(moving) &&
                 adapterContainsPoint(component.position, component.adapter, position)
             );
 
@@ -68,7 +68,7 @@ export function useComponentActions({
         components: current.components
           .filter((component) => component.id !== host.id)
           .map((component) => (component.id === componentId ? merged : component)),
-        routing: invalidateComponentRouting(current, moving.name)
+        routing: invalidateComponentRouting(current, componentImportRef(moving))
       };
     });
   }
@@ -90,7 +90,7 @@ export function useComponentActions({
       return {
         ...current,
         components: current.components.filter((component) => component.id !== selectedComponentId),
-        routing: invalidateComponentRouting(current, selected.name)
+        routing: invalidateComponentRouting(current, componentImportRef(selected))
       };
     });
     setSelectedComponentId(undefined);
@@ -133,7 +133,7 @@ export function useComponentActions({
       commitProject((current) => ({
         ...current,
         components: current.components.filter((component) => component.id !== selectedComponentId),
-        routing: invalidateComponentRouting(current, selected.name)
+        routing: invalidateComponentRouting(current, componentImportRef(selected))
       }));
       setSelectedComponentId(undefined);
       return;
@@ -155,3 +155,4 @@ export function useComponentActions({
     handleDetachAdapter
   };
 }
+

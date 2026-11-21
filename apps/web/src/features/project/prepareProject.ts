@@ -2,6 +2,8 @@ import type { PerfboardProject } from "../../types/project.ts";
 import { withMigratedConstraints } from "../constraints/model.ts";
 import { pruneProjectImportWarnings } from "../import/importWarnings.ts";
 import { applyLibraryProfiles } from "../import/multisim/library.ts";
+import { pendingComponentRefs } from "../import/multisim/pending.ts";
+import { resolveProfileForComponent } from "../import/multisim/builtinProfiles.ts";
 import { UNKNOWN_COMPONENT_LABEL } from "./componentTraits.ts";
 import { classifyParsedComponent } from "../import/componentMapping.ts";
 
@@ -30,6 +32,7 @@ export function prepareProject(project: PerfboardProject): PerfboardProject {
       return {
         ...rest,
         origin,
+        importRef: origin === "import" ? component.importRef ?? component.name : undefined,
         placeholder,
         fallbackReason: placeholder ? component.fallbackReason : undefined
       };
@@ -39,11 +42,12 @@ export function prepareProject(project: PerfboardProject): PerfboardProject {
 
   if ((migrated.schemaVersion ?? 1) < PROJECT_SCHEMA_VERSION) {
     // Schema 2 was written before prefix-inferred packages were marked as
-    // placeholders. Repair only unbound inferred parts; a user-assigned
-    // package has a different label, so it is left alone.
+    // placeholders. Repair only unbound inferred parts; an explicitly selected
+    // package is tracked by packageBound from schema 3 onward.
     const components = migrated.components.map((component) => {
       if (component.origin !== "import" || component.placeholder) return component;
-      const parsed = migrated.importState.components.find((item) => item.ref === component.name);
+      const ref = component.importRef ?? component.name;
+      const parsed = migrated.importState.components.find((item) => item.ref === ref);
       if (!parsed) return component;
       const classified = classifyParsedComponent(parsed);
       if (!classified.placeholder || classified.label !== component.label) return component;
@@ -57,5 +61,23 @@ export function prepareProject(project: PerfboardProject): PerfboardProject {
   }
 
   const importState = applyLibraryProfiles(migrated.importState);
-  return importState === migrated.importState ? migrated : { ...migrated, importState };
+  const pending = pendingComponentRefs(importState);
+  const parsedRefs = new Set(importState.components.map((component) => component.ref));
+  let healed = false;
+  const components = migrated.components.map((component) => {
+    if (component.origin !== "import") return component;
+    const ref = component.importRef ?? component.name;
+    const next = component.importRef ? component : { ...component, importRef: ref };
+    const hasProfile = importState.components.some((parsed) =>
+      parsed.ref === ref && Boolean(resolveProfileForComponent(importState.pinProfiles ?? [], parsed))
+    );
+    if (next.placeholder && hasProfile && parsedRefs.has(ref) && !pending.has(ref)) {
+      healed = true;
+      return { ...next, placeholder: false, fallbackReason: undefined };
+    }
+    if (next !== component) healed = true;
+    return next;
+  });
+  const normalized = healed ? { ...migrated, components } : migrated;
+  return importState === normalized.importState ? normalized : { ...normalized, importState };
 }
