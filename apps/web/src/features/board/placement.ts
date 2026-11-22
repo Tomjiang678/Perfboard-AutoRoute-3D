@@ -12,7 +12,8 @@ export function componentPinHoles(component: PlacedComponent): GridPoint[] {
 export function pinGridPosition(component: PlacedComponent, pin: number): GridPoint {
   // 插在转接板上的芯片，落到板上的脚位是转接板的排针
   const offsets = componentBoardPinOffsets(component);
-  const anchor = offsets[0] ?? [0, 0];
+  // 用户封装的本体固定在第一个引脚的初始孔位；第一个引脚自己也可掰动。
+  const anchor = component.userPackage ? [0, 0] as GridPoint : offsets[0] ?? [0, 0];
   const offset = offsets[pin - 1] ?? anchor;
   const [x, y] = rotateGridOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
   return [component.position[0] + x, component.position[1] + y];

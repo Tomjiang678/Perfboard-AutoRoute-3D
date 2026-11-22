@@ -1,4 +1,5 @@
-import type { UserPackageDraft, UserPackageShape } from "../model/types.ts";
+import { pinBend } from "../model/pinBend.ts";
+import type { UserPackageBendDirection, UserPackageDraft, UserPackageShape } from "../model/types.ts";
 
 interface PackageEditorInspectorProps {
   draft: UserPackageDraft;
@@ -9,6 +10,8 @@ interface PackageEditorInspectorProps {
 
 export function PackageEditorInspector({ draft, selectedShape, onUpdate, onSelect }: PackageEditorInspectorProps) {
   const pins = draft.shapes.filter((shape): shape is Extract<UserPackageShape, { kind: "pin" }> => shape.kind === "pin");
+  const selectedPin = selectedShape?.kind === "pin" ? selectedShape : undefined;
+  const selectedBend = selectedPin ? pinBend(selectedPin) : undefined;
 
   return (
     <aside className="user-package-inspector">
@@ -21,7 +24,7 @@ export function PackageEditorInspector({ draft, selectedShape, onUpdate, onSelec
             field("长", selectedShape.length, 0.5, 14, 0.1, (value) => onUpdate(selectedShape.id, { length: value })),
             field("宽", selectedShape.width, 0.5, 14, 0.1, (value) => onUpdate(selectedShape.id, { width: value })),
             field("角度", selectedShape.angle, 0, 360, 1, (value) => onUpdate(selectedShape.id, { angle: value }), "°"),
-            field("高度", selectedShape.height, 0.2, 12, 0.1, (value) => onUpdate(selectedShape.id, { height: value }))
+            field("高度 Y", selectedShape.height, 0.2, 12, 0.1, (value) => onUpdate(selectedShape.id, { height: value }))
           ]}
           color={selectedShape.color}
           onColor={(color) => onUpdate(selectedShape.id, { color })}
@@ -35,20 +38,48 @@ export function PackageEditorInspector({ draft, selectedShape, onUpdate, onSelec
             field("中心 X", selectedShape.center[0], 0, 29, 0.5, (value) => onUpdate(selectedShape.id, { center: [value, selectedShape.center[1]] })),
             field("中心 Z", selectedShape.center[1], 0, 19, 0.5, (value) => onUpdate(selectedShape.id, { center: [selectedShape.center[0], value] })),
             field("半径", selectedShape.radius, 0.2, 8, 0.1, (value) => onUpdate(selectedShape.id, { radius: value })),
-            field("高度", selectedShape.height, 0.2, 12, 0.1, (value) => onUpdate(selectedShape.id, { height: value }))
+            field("高度 Y", selectedShape.height, 0.2, 12, 0.1, (value) => onUpdate(selectedShape.id, { height: value }))
           ]}
           color={selectedShape.color}
           onColor={(color) => onUpdate(selectedShape.id, { color })}
         />
       )}
 
-      {selectedShape?.kind === "pin" && (
+      {selectedPin && (
         <section className="user-package-fields">
           <h3>引脚</h3>
           <div className="user-package-readout">
             <span>孔位</span>
-            <strong>{selectedShape.hole[0]}, {selectedShape.hole[1]}</strong>
+            <strong>{displayHole(selectedPin.hole)}</strong>
           </div>
+          <label className="user-package-slider">
+            <span>活动范围</span>
+            <input
+              type="number"
+              min="0"
+              max="20"
+              step="1"
+              value={selectedBend?.range ?? 0}
+              onChange={(event) => onUpdate(selectedPin.id, {
+                bendRange: Math.max(0, Math.min(20, Math.round(Number(event.target.value) || 0)))
+              })}
+            />
+            <output>{selectedBend?.range ?? 0}</output>
+          </label>
+          <label className="user-package-slider">
+            <span>活动方向</span>
+            <select
+              value={selectedBend?.direction ?? "+z"}
+              onChange={(event) => onUpdate(selectedPin.id, {
+                bendDirection: event.target.value as UserPackageBendDirection
+              })}
+            >
+              <option value="+x">+X</option>
+              <option value="-x">-X</option>
+              <option value="+z">+Z</option>
+              <option value="-z">-Z</option>
+            </select>
+          </label>
         </section>
       )}
 
@@ -65,7 +96,7 @@ export function PackageEditorInspector({ draft, selectedShape, onUpdate, onSelec
               onClick={() => onSelect(pin.id)}
             >
               <span>Pin {index + 1}</span>
-              <small>{pin.hole[0]}, {pin.hole[1]}</small>
+              <small>{displayHole(pin.hole)}</small>
             </button>
           ))}
         </section>
@@ -134,4 +165,9 @@ function ShapeFields({
 
 function round(value: number) {
   return Number(value.toFixed(1));
+}
+
+/** Internal holes are 0-based; the board labels and pin list are 1-based. */
+function displayHole([x, z]: [number, number]) {
+  return `${x + 1}, ${z + 1}`;
 }

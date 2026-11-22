@@ -3,7 +3,8 @@ import { activeConstraints } from "../constraints/model.ts";
 import { autoRouteBoard } from "../routing/autoRouter.ts";
 import { getBoardModel } from "../board/factory.ts";
 import { componentPinHoles, layoutFromComponent, pinsConflict, placementHasPinConflicts, rotateGridOffset } from "../board/placement.ts";
-import { componentBoardPinOffsets, componentOccupiedCells } from "../project/adapter.ts";
+import { componentBoardPinOffsets } from "../project/adapter.ts";
+import { bodiesOverlap, bodyPinOverlap, componentOccupiedCells as collisionCells, footprintBox as collisionFootprintBox } from "../collision/footprint.ts";
 import type { BoardModel, ElectricalNodeId, GridPoint } from "../board/types.ts";
 import { key, manhattan } from "../routing/routingGeometry.ts";
 import { isBendableTwoPin, preferredLeadSpan, spacingLimits } from "../project/componentTraits.ts";
@@ -991,15 +992,9 @@ function pinsConflictWithPlaced(
   const boardModel = getBoardModel(board);
   const candidateNets = pinNetsForComponent(candidate, endpointMap);
   const candidateHoles = componentPinHoles(candidate);
-  // 只有涉及转接板时才需要比板面；普通元件之间的同孔冲突由下面的引脚检查覆盖
-  const candidateCells = candidate.adapter ? occupiedCells(candidate) : undefined;
   return placedComponents.some((other) => {
-    if (candidateCells || other.adapter) {
-      const otherCells = occupiedCells(other);
-      const cells = candidateCells ?? occupiedCells(candidate);
-      for (const cell of otherCells) {
-        if (cells.has(cell)) return true;
-      }
+    if (bodiesOverlap(candidate, other) || bodyPinOverlap(candidate, other)) {
+      return true;
     }
     const otherNets = pinNetsForComponent(other, endpointMap);
     const otherHoles = componentPinHoles(other);
@@ -1011,17 +1006,6 @@ function pinsConflictWithPlaced(
       otherNets[otherIndex + 1]
     )));
   });
-}
-
-/** 同一个元件在一次放置里会被反复检查，占位集合只算一次。 */
-const occupiedCellsCache = new WeakMap<PlacedComponent, Set<string>>();
-
-function occupiedCells(component: PlacedComponent): Set<string> {
-  const cached = occupiedCellsCache.get(component);
-  if (cached) return cached;
-  const cells = componentOccupiedCells(component);
-  occupiedCellsCache.set(component, cells);
-  return cells;
 }
 
 function crossComponentPinLayouts(components: PlacedComponent[], endpointMap: EndpointMap) {
@@ -1238,52 +1222,15 @@ function isWithinRequiredEdgeRegion(
 }
 
 function getComponentOccupiedCells(component: PlacedComponent): Array<[number, number]> {
-  const box = getFootprintBox(component);
-  const margin = courtyardMargin(component);
-  const cells: Array<[number, number]> = [];
-  for (let y = box.minY - margin; y <= box.maxY + margin; y += 1) {
-    for (let x = box.minX - margin; x <= box.maxX + margin; x += 1) {
-      cells.push([component.position[0] + x, component.position[1] + y]);
-    }
-  }
-  return dedupePositions([...cells, ...getComponentOccupiedHoles(component)]);
-}
-
-function courtyardMargin(component: PlacedComponent) {
-  if (component.kind === "dip" || component.kind === "dip_switch" || component.kind === "seven_segment_display" || component.kind === "alphanumeric_display" || component.kind === "pin_header") {
-    return 0;
-  }
-  if (component.kind === "resistor" || component.kind === "inductor" || component.kind === "diode" || component.kind === "led") {
-    return 1;
-  }
-  return 1;
+  return [...collisionCells(component)].map((cell) => cell.split(",").map(Number) as [number, number]);
 }
 
 function estimateCourtyardArea(component: PlacedComponent) {
-  return getComponentOccupiedCells({ ...component, position: [0, 0] }).length;
-}
-
-function getComponentOccupiedHoles(component: PlacedComponent): Array<[number, number]> {
-  return componentPinHoles(component);
+  return collisionCells({ ...component, position: [0, 0] }).size;
 }
 
 function getFootprintBox(component: PlacedComponent): FootprintBox {
-  const anchor = component.pinOffsets[0] ?? [0, 0];
-  const holes = component.pinOffsets.map((offset) => rotateGridOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation));
-  const xs = holes.map(([x]) => x);
-  const ys = holes.map(([, y]) => y);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  return {
-    minX,
-    minY,
-    maxX,
-    maxY,
-    width: maxX - minX + 1,
-    height: maxY - minY + 1
-  };
+  return collisionFootprintBox(component);
 }
 
 function buildOccupiedCells(components: PlacedComponent[]) {

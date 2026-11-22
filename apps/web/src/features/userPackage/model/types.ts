@@ -4,10 +4,16 @@ export const USER_PACKAGE_PIN_HEIGHT = 0.8;
 
 export type UserPackageShapeKind = "cuboid" | "cylinder" | "pin";
 
+export type UserPackageBendDirection = "+x" | "-x" | "+z" | "-z";
+
 export interface UserPackagePin {
   id: string;
   kind: "pin";
   hole: [number, number];
+  /** Maximum cells this pin can move from its initial hole. Missing/0 means fixed. */
+  bendRange?: number;
+  /** One of the four board-plane directions (X/Z); Y is height only. */
+  bendDirection?: UserPackageBendDirection;
 }
 
 export interface UserPackageCuboid {

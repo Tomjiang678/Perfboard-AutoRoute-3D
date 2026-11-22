@@ -62,7 +62,8 @@ test("auto-placement keeps unplaced components inside the region or reports them
 });
 
 test("auto-placement reports every component it could not place", () => {
-  const { placed } = pipeline(2, 18, 40, { x: 0, y: 10, width: 18, height: 15 });
+  // 8x6 after the outer inset is physically too small for the DIP parts.
+  const { placed } = pipeline(2, 18, 40, { x: 0, y: 10, width: 10, height: 6 });
   assert.ok(placed.unplaced.length > 0, "这组数据本来就放不下，应当报告 unplaced");
   for (const name of placed.unplaced) {
     const component = placed.components.find((item) => item.name === name);
@@ -94,7 +95,7 @@ test("DIP chips straddle the center channel after auto-placement", () => {
     const xs = dip.pinOffsets.map((_, index) => {
       const anchor = dip.pinOffsets[0];
       const offset = dip.pinOffsets[index];
-      const [dx, dy] = rotateGridOffset([offset[0] - anchor[0], offset[1] - anchor[1]], dip.rotation);
+      const [dx] = rotateGridOffset([offset[0] - anchor[0], offset[1] - anchor[1]], dip.rotation);
       return dip.position[0] + dx;
     });
     assert.ok(xs.some((x) => x <= 7) && xs.some((x) => x >= 10), `${dip.name} pins at ${[...new Set(xs)].sort().join(",")}`);

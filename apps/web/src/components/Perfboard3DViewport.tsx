@@ -7,35 +7,29 @@ import {
 } from "../features/project/componentLibrary.ts";
 import type { BoardSize } from "../types/project.ts";
 import type { DragMoveModifier } from "../types/project.ts";
-import type { JumperRoute } from "../types/project.ts";
 import type { PlacedComponent } from "../types/project.ts";
 import type { RoutedNetEndpoint } from "../types/project.ts";
 import type { RoutingState } from "../types/project.ts";
 import type { ThemeMode } from "../types/project.ts";
-import { ADAPTER_PLATE_SURFACE_Y, createAdapterPlate, createParametricComponent, setComponentTheme } from "../renderer3d/parametricComponents.ts";
 import { bendComponentPin, isManuallyBendable, pinGridPosition } from "../features/layout/manualPlacement.ts";
 import { createBreadboardDefinition } from "../features/board/breadboard.ts";
-import { componentBoardPinOffsets, centeredChipPinOffsets } from "../features/project/adapter.ts";
 import { getBoardModel } from "../features/board/factory.ts";
 import { rotateGridOffset } from "../features/board/placement.ts";
-import { segmentsIntersect, shareEndpoint } from "../features/routing/routingGeometry.ts";
 import { createBoardObject } from "../features/board/rendering.ts";
 import { registerSharedRenderer } from "../renderer3d/sharedRenderer.ts";
+import { VIEWPORT_LIGHTING } from "../renderer3d/lighting.ts";
 import {
   createPlacedComponents,
-  createPinHighlights,
-  createBacksidePins,
   createNetEndpointHighlights,
   createRoutingIssueHighlights,
   createRouteObjects,
   updateRouteOverlayVisibility,
-  applyThemeToGroup,
   getComponentWorldPosition,
   sameGridPosition,
   disposeObject,
   findComponentRoot,
   findPinObject,
-  getPinAnchor
+  getComponentPinAnchor
 } from "../renderer3d/boardObjects.ts";
 
 interface Perfboard3DViewportProps {
@@ -154,11 +148,11 @@ export function Perfboard3DViewport({
     camera.lookAt(0, 0, 0);
     controls.update();
 
-    const ambient = new THREE.AmbientLight(0xffffff, 0.72);
+    const ambient = new THREE.AmbientLight(0xffffff, VIEWPORT_LIGHTING.ambientIntensity);
     scene.add(ambient);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 1.15);
-    keyLight.position.set(80, 110, 95);
+    const keyLight = new THREE.DirectionalLight(0xffffff, VIEWPORT_LIGHTING.keyIntensity);
+    keyLight.position.set(...VIEWPORT_LIGHTING.keyPosition);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.set(2048, 2048);
     keyLight.shadow.bias = -0.0004;
@@ -167,8 +161,11 @@ export function Perfboard3DViewport({
     scene.add(keyLight);
 
     // Soft fill light from below so the back side of the board is not much darker than the front.
-    const fillLight = new THREE.DirectionalLight(0xffffff, 0.55);
-    fillLight.position.set(-70, -45, -80);
+    const fillLight = new THREE.DirectionalLight(
+      VIEWPORT_LIGHTING.fillColor,
+      VIEWPORT_LIGHTING.fillIntensity
+    );
+    fillLight.position.set(...VIEWPORT_LIGHTING.fillPosition);
     scene.add(fillLight);
 
     const resizeObserver = new ResizeObserver(() => {
@@ -611,7 +608,7 @@ export function Perfboard3DViewport({
       return undefined;
     }
 
-    const anchor = getPinAnchor(component.pinOffsets);
+    const anchor = getComponentPinAnchor(component);
     const matchedPinIndex = component.pinOffsets.findIndex((offset) => {
       const [rx, ry] = rotateGridOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
       return component.position[0] + rx === gridPosition[0] && component.position[1] + ry === gridPosition[1];
@@ -706,14 +703,6 @@ function isMoveShortcutPressed(event: React.PointerEvent<HTMLDivElement>, modifi
     return event.altKey;
   }
   return event.ctrlKey || event.metaKey;
-}
-
-function toBoardSize(value: string) {
-  const next = Number(value);
-  if (!Number.isFinite(next)) {
-    return 20;
-  }
-  return Math.max(5, Math.min(150, Math.round(next)));
 }
 
 /**

@@ -1,15 +1,6 @@
 import type { AdapterSpec, PlacedComponent } from "../../types/project.ts";
 import type { GridPoint } from "../board/types.ts";
 
-/** 与 board/placement 的 rotateGridOffset 同规则；放这里避免 adapter ↔ placement 循环引用。 */
-function rotateOffset([x, y]: GridPoint, rotation: number): GridPoint {
-  const quarterTurns = ((Math.round(rotation / (Math.PI / 2)) % 4) + 4) % 4;
-  if (quarterTurns === 1) return [y, -x];
-  if (quarterTurns === 2) return [-x, -y];
-  if (quarterTurns === 3) return [-y, x];
-  return [x, y];
-}
-
 export const MIN_ADAPTER_PINS = 2;
 export const MAX_ADAPTER_PINS = 64;
 /** 转接板至少要比芯片宽出这些孔，否则排针插不进芯片的两侧 */
@@ -254,57 +245,4 @@ function pinBoxCenter(offsets: GridPoint[]): GridPoint {
   const xs = offsets.map(([x]) => x);
   const ys = offsets.map(([, y]) => y);
   return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
-}
-
-type OccupancySource = Pick<PlacedComponent, "position" | "rotation" | "pinOffsets" | "adapter">;
-
-/**
- * 转接板在板面上占的格子（含芯片本体）。
- * 板面以排针为中心、宽高取 max(设定值, 排针跨度 + 2)，随元件旋转。
- */
-export function adapterOccupiedCells(component: OccupancySource): Set<string> {
-  const cells = new Set<string>();
-  if (!component.adapter) return cells;
-
-  const offsets = adapterPinOffsets(component.adapter);
-  const xs = offsets.map(([x]) => x);
-  const ys = offsets.map(([, y]) => y);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  const width = Math.max(component.adapter.width, maxX - minX + 2);
-  const height = Math.max(component.adapter.height, maxY - minY + 2);
-  const left = (minX + maxX) / 2 - width / 2;
-  const top = (minY + maxY) / 2 - height / 2;
-
-  for (let x = Math.floor(left); x < Math.ceil(left + width); x += 1) {
-    for (let y = Math.floor(top); y < Math.ceil(top + height); y += 1) {
-      const [rx, ry] = rotateOffset([x, y], component.rotation);
-      cells.add(`${component.position[0] + rx},${component.position[1] + ry}`);
-    }
-  }
-  return cells;
-}
-
-/** 普通元件占自己的引脚孔；插在转接板上的元件占整块板面。 */
-export function componentOccupiedCells(component: OccupancySource): Set<string> {
-  if (component.adapter) return adapterOccupiedCells(component);
-  const cells = new Set<string>();
-  const anchor = component.pinOffsets[0] ?? [0, 0];
-  for (const [x, y] of component.pinOffsets) {
-    const [rx, ry] = rotateOffset([x - anchor[0], y - anchor[1]], component.rotation);
-    cells.add(`${component.position[0] + rx},${component.position[1] + ry}`);
-  }
-  return cells;
-}
-
-/** 两个元件是否在板面上抢到同一格（转接板板面按整块算）。 */
-export function componentsOverlap(a: OccupancySource, b: OccupancySource): boolean {
-  const first = componentOccupiedCells(a);
-  if (first.size === 0) return false;
-  for (const cell of componentOccupiedCells(b)) {
-    if (first.has(cell)) return true;
-  }
-  return false;
 }

@@ -1,4 +1,4 @@
-﻿import * as THREE from "three";
+import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { getLibraryComponentByKind } from "../features/project/componentLibrary.ts";
 import { adapterPinOffsets } from "../features/project/adapter.ts";
@@ -118,15 +118,15 @@ const componentFactories: Record<ParametricComponentKind, (spec: ParametricCompo
   to3: (s) => createTo3(s.label ?? "Q", pins(s)),
   to247: (s) => createTo247(s.label ?? "Q", pins(s)),
   bridge_rectifier: (s) => createBridgeRectifier(s.label ?? "BR", pins(s)),
-  relay: (s) => createRelay(s.label ?? "RLY", s.pinCount ?? 5, pins(s)),
+  relay: (s) => createRelay(s.label ?? "RLY", pins(s)),
   crystal: (s) => createCrystal(s.label ?? "Y", pins(s)),
   fuse: (s) => createFuse(s.label ?? "F", pins(s)),
-  dip: (s) => createDip(s.pinCount ?? 8, s.label ?? `DIP-${s.pinCount ?? 8}`, pins(s), s.hidePins),
+  dip: (s) => createDip(s.label ?? `DIP-${s.pinCount ?? 8}`, pins(s), s.hidePins),
   dip_switch: (s) => createDipSwitch(s.pinCount ?? 16, s.label ?? `DIPSW${Math.floor((s.pinCount ?? 16) / 2)}`, pins(s)),
   seven_segment_display: (s) => createSevenSegmentDisplay(s.label ?? "7SEG", pins(s)),
   alphanumeric_display: (s) => createAlphanumericDisplay(s.label ?? "ALNUM", pins(s)),
   pin_header: (s) => createPinHeader(s.pinCount ?? 4, pins(s), s.placeholder),
-  terminal_block: (s) => createTerminalBlock(s.pinCount ?? 2, pins(s)),
+  terminal_block: (s) => createTerminalBlock(pins(s)),
   slide_switch: (s) => createSlideSwitch(pins(s)),
   buzzer: (s) => createBuzzer(s.label ?? "BZ", pins(s)),
   tactile_switch: (s) => createTactileSwitch(pins(s)),
@@ -424,7 +424,7 @@ function createTo39(label: string, pinOffsets: Array<[number, number]>) {
   return group;
 }
 
-function createDip(pinCount: number, label: string, pinOffsets: Array<[number, number]>, hidePins = false) {
+function createDip(label: string, pinOffsets: Array<[number, number]>, hidePins = false) {
   const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
   const bodyWidth = Math.max(2.4, box.width - 0.45);
@@ -646,7 +646,7 @@ function createPinHeader(pinCount: number, pinOffsets: Array<[number, number]>, 
   return group;
 }
 
-function createTerminalBlock(pinCount: number, pinOffsets: Array<[number, number]>) {
+function createTerminalBlock(pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
   const body = new THREE.Mesh(new THREE.BoxGeometry(Math.max(1.2, box.width + 0.8), 1.15, Math.max(1.15, box.height + 1.1)), materials.terminalGreen);
@@ -795,7 +795,7 @@ function createBridgeRectifier(label: string, pinOffsets: Array<[number, number]
   return group;
 }
 
-function createRelay(label: string, pinCount: number, pinOffsets: Array<[number, number]>) {
+function createRelay(label: string, pinOffsets: Array<[number, number]>) {
   const group = new THREE.Group();
   const box = getPinBox(pinOffsets);
   const bodyWidth = Math.max(2.6, box.width + 0.6);

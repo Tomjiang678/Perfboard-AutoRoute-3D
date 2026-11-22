@@ -6,7 +6,6 @@ import {
   ignoredComponentRules,
   normalizeComponentFields
 } from "../src/features/import/importConfig.ts";
-import { parseKicadNetlist } from "../src/features/import/kicadNetlistParser.ts";
 import { createPlacedComponentsFromParsed } from "../src/features/import/componentMapping.ts";
 import type { ImportState, LibraryComponentKind, ParsedComponent } from "../src/types/project.ts";
 

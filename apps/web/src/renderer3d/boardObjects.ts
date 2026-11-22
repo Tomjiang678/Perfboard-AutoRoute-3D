@@ -7,21 +7,24 @@ import { rotateGridOffset } from "../features/board/placement.ts";
 import { pinGridPosition } from "../features/layout/manualPlacement.ts";
 import { segmentsIntersect, shareEndpoint } from "../features/routing/routingGeometry.ts";
 import { isPlaceholderComponent } from "../features/project/componentTraits.ts";
+import { createUserPackageModel } from "../features/userPackage/scene/placedModel.ts";
 
 export function createPlacedComponents(components: PlacedComponent[], board: BoardSize, selectedComponentId: string | undefined, theme: ThemeMode) {
   const dark = theme === "dark";
   setComponentTheme(dark);
   const group = new THREE.Group();
   components.forEach((placed) => {
-    const mesh = createParametricComponent({
-      kind: placed.kind,
-      label: placed.label,
-      pinCount: placed.pinCount,
-      pinOffsets: centeredChipPins(placed),
-      placeholder: isPlaceholderComponent(placed),
-      adapter: placed.adapter,
-      hidePins: Boolean(placed.adapter)
-    });
+    const mesh = placed.userPackage
+      ? createUserPackageModel(placed.userPackage, placed.pinOffsets)
+      : createParametricComponent({
+        kind: placed.kind,
+        label: placed.label,
+        pinCount: placed.pinCount,
+        pinOffsets: centeredChipPins(placed),
+        placeholder: isPlaceholderComponent(placed),
+        adapter: placed.adapter,
+        hidePins: Boolean(placed.adapter)
+      });
     const component = new THREE.Group();
     component.add(mesh);
     // 独立转接板（kind=adapter）本身就是板，别再叠一层
@@ -75,7 +78,7 @@ export function centeredChipPins(placed: PlacedComponent): Array<[number, number
 }
 
 export function createPinLandingRings(group: THREE.Group, placed: PlacedComponent, board: BoardSize) {  const offsets = componentBoardPinOffsets(placed);
-  const anchor = getPinAnchor(offsets);
+  const anchor = getComponentPinAnchor(placed);
   const boardModel = getBoardModel(board);
   const ringMaterial = new THREE.MeshStandardMaterial({
     color: board.kind === "breadboard" ? 0x8b969d : 0xb9c2c8,
@@ -132,7 +135,7 @@ export function applyThemeToGroup(group: THREE.Group, dark: boolean) {
 }
 
 export function getComponentWorldPosition(component: PlacedComponent, board: BoardSize) {
-  const anchor = getPinAnchor(component.pinOffsets);
+  const anchor = getComponentPinAnchor(component);
   const rotatedAnchor = rotateGridOffset(anchor, component.rotation);
   const [gridX, gridY] = component.position;
   return new THREE.Vector3(
@@ -147,7 +150,7 @@ export function sameGridPosition(a: [number, number] | undefined, b: [number, nu
 }
 
 export function createPinHighlights(component: PlacedComponent, board: BoardSize) {
-  const anchor = getPinAnchor(component.pinOffsets);
+  const anchor = getComponentPinAnchor(component);
   return component.pinOffsets.map((offset, index) => {
     const [rx, ry] = rotateGridOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
     const gridX = component.position[0] + rx;
@@ -170,7 +173,7 @@ export function createPinHighlights(component: PlacedComponent, board: BoardSize
 }
 
 export function createBacksidePins(component: PlacedComponent, board: BoardSize) {
-  const anchor = getPinAnchor(component.pinOffsets);
+  const anchor = getComponentPinAnchor(component);
   return component.pinOffsets.map((offset, index) => {
     const [rx, ry] = rotateGridOffset([offset[0] - anchor[0], offset[1] - anchor[1]], component.rotation);
     const gridX = component.position[0] + rx;
@@ -638,6 +641,14 @@ export function getPinAnchor(pinOffsets: Array<[number, number]>): [number, numb
   }
 
   return pinOffsets[0];
+}
+
+/**
+ * A user package body is authored relative to its first pin's initial hole.
+ * Bending pin 1 must move that pin, not drag the body with it.
+ */
+export function getComponentPinAnchor(component: PlacedComponent): [number, number] {
+  return component.userPackage ? [0, 0] : getPinAnchor(component.pinOffsets);
 }
 
 export function findComponentRoot(object: THREE.Object3D): THREE.Object3D | undefined {

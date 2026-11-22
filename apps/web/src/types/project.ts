@@ -1,3 +1,5 @@
+import type { UserPackageDraft } from "../features/userPackage/model/types.ts";
+
 export type DragMoveModifier = "shift" | "alt" | "ctrl" | "none";
 export type ThemeMode = "light" | "dark";
 export type ShortcutAction =
@@ -278,6 +280,8 @@ export interface PlacedComponent {
   fromImport?: boolean;
   /** 芯片插在转接板上时存在：芯片仍然是一颗元件，但它在板上的脚位变成转接板的排针 */
   adapter?: AdapterSpec;
+  /** Optional custom model; its body footprint must participate in collision. */
+  userPackage?: UserPackageDraft;
 }
 
 /**

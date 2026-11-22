@@ -1,4 +1,5 @@
 import type { AdapterSpec, LibraryComponentKind } from "../../types/project.ts";
+import type { UserPackageDraft } from "../userPackage/model/types.ts";
 import { createAdapterDefinition } from "./adapter.ts";
 import { createPinHeaderDefinition, createPinHeaderOffsets } from "./pinHeader.ts";
 import { centerBridgeKinds, threeInlinePinKinds } from "./componentTraits.ts";
@@ -148,7 +149,15 @@ export function buildPinOffsetsForComponent(component: {
   sameSidePitch: number;
   pinHeaderRows?: number;
   pinHeaderColumns?: number;
+  pinOffsets?: Array<[number, number]>;
+  userPackage?: UserPackageDraft;
 }): Array<[number, number]> {
+  // A user package owns its pin geometry. The generic same-side/opposite-side
+  // pitch fields must never regenerate (and destroy) those holes.
+  if (component.userPackage) {
+    return component.pinOffsets ?? [];
+  }
+
   if (centerBridgeKinds.has(component.kind)) {
     return makeDipPinOffsetsWithPitch(component.pinCount ?? 8, component.rowSpacing, component.sameSidePitch);
   }

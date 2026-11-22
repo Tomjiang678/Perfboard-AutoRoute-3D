@@ -1,6 +1,6 @@
 import type { PerfboardProject, PlacedComponent } from "../../types/project.ts";
 import { activeConstraints, projectConstraints } from "../constraints/model.ts";
-import { componentOccupiedCells, componentsOverlap } from "../project/adapter.ts";
+import { componentOccupiedCells, componentsOverlap } from "../collision/footprint.ts";
 
 export interface PlacementCheck {
   valid: boolean;
@@ -22,6 +22,15 @@ export function checkComponentPlacement(
   const reasons: string[] = [];
   const ignore = new Set([candidate.id, ...(options.ignoreIds ?? [])]);
   const others = project.components.filter((component) => !ignore.has(component.id));
+  const candidateCells = componentOccupiedCells(candidate);
+
+  for (const cell of candidateCells) {
+    const [x, y] = cell.split(",").map(Number);
+    if (x < 0 || y < 0 || x >= project.board.width || y >= project.board.height) {
+      reasons.push("超出板面范围");
+      break;
+    }
+  }
 
   for (const other of others) {
     if (componentsOverlap(candidate, other)) {
@@ -33,7 +42,7 @@ export function checkComponentPlacement(
     (constraint) => constraint.kind === "region_keepout" && constraint.strength === "hard" && constraint.blockPlacement
   );
   if (keepouts.length > 0) {
-    const cells = componentOccupiedCells(candidate);
+    const cells = candidateCells;
     for (const constraint of keepouts) {
       if (constraint.kind !== "region_keepout") continue;
       const region = constraint.region;

@@ -194,6 +194,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+.component-context-menu-scrim {
+  position: fixed;
+  z-index: 59;
+  inset: 0;
+}
+
 .user-package-new {
   width: auto;
   height: 30px;

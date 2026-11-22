@@ -1,6 +1,5 @@
-﻿import { useState } from "react";
 import type { AdapterSpec, PerfboardProject, PlacedComponent } from "../../types/project.ts";
-import { bendComponentPin } from "../layout/manualPlacement.ts";
+import { bendComponentPin, bendUserPackagePin } from "../layout/manualPlacement.ts";
 import { checkComponentPlacement } from "../layout/placementValidity.ts";
 import { adapterContainsPoint, componentBoardPinCount } from "./adapter.ts";
 import { clampSpacing, componentImportRef } from "./componentTraits.ts";
@@ -17,15 +16,13 @@ interface Options {
   commitProject: (updater: (current: PerfboardProject) => PerfboardProject) => void;
   selectedComponentId: string | undefined;
   setSelectedComponentId: (id: string | undefined) => void;
-  setSelectedPin: (pin: undefined) => void;
 }
 
 export function useComponentActions({
   projectRef,
   commitProject,
   selectedComponentId,
-  setSelectedComponentId,
-  setSelectedPin
+  setSelectedComponentId
 }: Options) {
   function updateComponent(
     componentId: string,
@@ -75,6 +72,10 @@ export function useComponentActions({
 
   function handleMovePin(componentId: string, pin: number, position: [number, number]) {
     updateComponent(componentId, (component) => bendComponentPin(component, pin, position));
+  }
+
+  function handleBendPin(componentId: string, pin: number, offset: number) {
+    updateComponent(componentId, (component) => bendUserPackagePin(component, pin, offset));
   }
 
   function handleRotateSelected() {
@@ -147,6 +148,7 @@ export function useComponentActions({
     updateComponent,
     handleMoveComponent,
     handleMovePin,
+    handleBendPin,
     handleRotateSelected,
     handleDeleteSelected,
     handleMountSelected,

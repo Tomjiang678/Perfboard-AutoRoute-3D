@@ -2,16 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   adapterFitsChip,
-  adapterOccupiedCells,
   adapterPinOffsets,
   centeredChipPinOffsets,
   componentBoardPinOffsets,
-  componentsOverlap,
   defaultAdapterForChip,
   normalizeAdapterSpec,
   requiredAdapterPins,
   normalizeAdapter
 } from "../src/features/project/adapter.ts";
+import { adapterOccupiedCells, componentsOverlap } from "../src/features/collision/footprint.ts";
 import { componentPinHoles, pinGridPosition } from "../src/features/board/placement.ts";
 import { componentLibrary } from "../src/features/project/componentLibrary.ts";
 import type { AdapterSpec, PlacedComponent } from "../src/types/project.ts";

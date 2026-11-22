@@ -15,13 +15,13 @@ function dip(name: string, position: [number, number], rotation = 0): PlacedComp
   };
 }
 
-function state(components: PlacedComponent[], nets: ImportState["nets"], pinInfo: ImportState["pinInfo"] = {}): ImportState {
+function state(nets: ImportState["nets"], pinInfo: ImportState["pinInfo"] = {}): ImportState {
   return { components: [], nets, warnings: [], pinInfo };
 }
 
 test("nodes map to physical pin grids", () => {
   const components = [dip("U1", [7, 10])];
-  const importState = state(components, [
+  const importState = state([
     { name: "SIG", nodes: [{ ref: "U1", pin: "1" }, { ref: "U1", pin: "8" }] }
   ], { U1: { "1": { name: "1OUT" }, "8": { name: "V+" } } });
   const endpoints = resolveNetEndpoints(importState, components);
@@ -36,32 +36,32 @@ test("nodes map to physical pin grids", () => {
 
 test("rotated components resolve rotated pin positions", () => {
   const components = [dip("U1", [7, 10], Math.PI)];
-  const importState = state(components, [{ name: "SIG", nodes: [{ ref: "U1", pin: "1" }] }]);
+  const importState = state([{ name: "SIG", nodes: [{ ref: "U1", pin: "1" }] }]);
   const endpoints = resolveNetEndpoints(importState, components);
   assert.deepEqual(endpoints[0].grid, [7, 10]);
 });
 
 test("non-numeric pins yield no endpoints", () => {
   const components = [dip("U1", [7, 10])];
-  const importState = state(components, [{ name: "SIG", nodes: [{ ref: "U1", pin: "B" }] }]);
+  const importState = state([{ name: "SIG", nodes: [{ ref: "U1", pin: "B" }] }]);
   assert.equal(resolveNetEndpoints(importState, components).length, 0);
 });
 
 test("unknown refs are skipped", () => {
   const components = [dip("U1", [7, 10])];
-  const importState = state(components, [{ name: "SIG", nodes: [{ ref: "U99", pin: "1" }] }]);
+  const importState = state([{ name: "SIG", nodes: [{ ref: "U99", pin: "1" }] }]);
   assert.equal(resolveNetEndpoints(importState, components).length, 0);
 });
 
 test("pins without a net do not produce endpoints", () => {
   const components = [dip("U1", [7, 10])];
-  const importState = state(components, []);
+  const importState = state([]);
   assert.equal(resolveNetEndpoints(importState, components).length, 0);
 });
 
 test("numeric pins resolve without pinInfo", () => {
   const components = [dip("U1", [7, 10])];
-  const importState = state(components, [{ name: "SIG", nodes: [{ ref: "U1", pin: "2" }] }]);
+  const importState = state([{ name: "SIG", nodes: [{ ref: "U1", pin: "2" }] }]);
   const endpoints = resolveNetEndpoints(importState, components);
   assert.equal(endpoints.length, 1);
   assert.deepEqual(endpoints[0].grid, [7, 11]);
@@ -70,7 +70,7 @@ test("numeric pins resolve without pinInfo", () => {
 
 test("a pin in two different nets produces two endpoints", () => {
   const components = [dip("U1", [7, 10])];
-  const importState = state(components, [
+  const importState = state([
     { name: "A", nodes: [{ ref: "U1", pin: "1" }] },
     { name: "B", nodes: [{ ref: "U1", pin: "1" }] }
   ]);

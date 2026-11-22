@@ -10,12 +10,12 @@ import { HelpDialog } from "./components/help/HelpDialog.tsx";
 import { Workspace } from "./components/Workspace.tsx";
 import { AutoPlacementDialog } from "./components/AutoPlacementDialog.tsx";
 import { SettingsDialog } from "./components/SettingsDialog.tsx";
-import {
-  type LibraryComponentDefinition
-} from "./features/project/componentLibrary.ts";
-import { componentImportRef } from "./features/project/componentTraits.ts";
+import { type LibraryComponentDefinition } from "./features/project/componentLibrary.ts";
 import { applyPinProfile } from "./features/project/applyPinProfile.ts";
 import { updateBoard } from "./features/project/updateBoard.ts";
+import { createUserPackageComponent } from "./features/userPackage/model/placement.ts";
+import type { UserPackageDraft } from "./features/userPackage/model/types.ts";
+import { checkComponentPlacement } from "./features/layout/placementValidity.ts";
 import { mergeImportState, parseImportFiles, removeFileData } from "./features/import/kicadNetlistParser.ts";
 import { pruneResolvedBundleWarnings, stripBundleWarnings } from "./features/import/importWarnings.ts";
 import { mergePowerRefs, stripPowerNodes } from "./features/import/multisim/normalizeImport.ts";
@@ -29,7 +29,6 @@ import type { ProfileConflict } from "./features/import/multisim/conflicts.ts";
 import { useAutoPlacement } from "./features/layout/useAutoPlacement.ts";
 import { useAiConstraintAssistant } from "./features/ai/useAiConstraintAssistant.ts";
 import { resolveNetEndpoints } from "./features/import/netEndpointResolver.ts";
-import { invalidateComponentRouting } from "./features/routing/invalidateComponentRouting.ts";
 import { usePackageAssignment } from "./features/project/usePackageAssignment.ts";
 import { useComponentActions } from "./features/project/useComponentActions.ts";
 import { useRoutingActions } from "./features/routing/useRoutingActions.ts";
@@ -95,13 +94,14 @@ export function App() {
   const [routeEditMode, setRouteEditMode] = useState<RouteEditMode>("select");
   const [routeDraftStart, setRouteDraftStart] = useState<[number, number] | undefined>();
   const [pendingComponent, setPendingComponent] = useState<LibraryComponentDefinition | undefined>();
+  const [pendingUserPackage, setPendingUserPackage] = useState<UserPackageDraft | undefined>();
   const [selectedPin, setSelectedPin] = useState<SelectedPin | undefined>();
   const [toolbarOpenMenu, setToolbarOpenMenu] = useState<string | undefined>();
   const [routingRunning, setRoutingRunning] = useState(false);
   const {
-    updateComponent,
     handleMoveComponent,
     handleMovePin,
+    handleBendPin,
     handleRotateSelected,
     handleDeleteSelected,
     handleMountSelected,
@@ -112,8 +112,7 @@ export function App() {
     projectRef,
     commitProject,
     selectedComponentId,
-    setSelectedComponentId,
-    setSelectedPin
+    setSelectedComponentId
   });
   const {
     handleAutoRoute,
@@ -313,11 +312,18 @@ export function App() {
   }
 
   function handleRouteEditPoint(point: [number, number]) {
+    if (pendingUserPackage) {
+      if (handlePlaceUserPackage(pendingUserPackage, point)) {
+        setPendingUserPackage(undefined);
+      }
+      return;
+    }
     if (pendingComponent) {
       // Keep the picked component pending when the spot is invalid so the
       // user can click another hole instead of the pick silently vanishing.
       if (handlePlaceComponent(pendingComponent, point)) {
         setPendingComponent(undefined);
+    setPendingUserPackage(undefined);
       }
       return;
     }
@@ -345,6 +351,7 @@ export function App() {
     setRouteEditMode("select");
     setRouteDraftStart(undefined);
     setPendingComponent(undefined);
+    setPendingUserPackage(undefined);
     setToolbarOpenMenu(undefined);
     setSelectedPin(undefined);
     setSelectedComponentId(undefined);
@@ -453,6 +460,7 @@ export function App() {
       setSelectedComponentId(undefined);
       setSelectedPin(undefined);
       setPendingComponent(undefined);
+    setPendingUserPackage(undefined);
       clearUndoHistory();
       window.localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(next));
     } catch {
@@ -465,6 +473,7 @@ export function App() {
     setSelectedComponentId(undefined);
     setSelectedPin(undefined);
     setPendingComponent(undefined);
+    setPendingUserPackage(undefined);
     clearUndoHistory();
     setIsCreatingProject(false);
   }
@@ -482,6 +491,7 @@ export function App() {
     setSelectedComponentId(undefined);
     setSelectedPin(undefined);
     setPendingComponent(undefined);
+    setPendingUserPackage(undefined);
     setRouteEditMode("select");
     setRouteDraftStart(undefined);
   }
@@ -686,15 +696,45 @@ export function App() {
       origin: "manual",
       placeholder: false
     };
-    // Manual placement is an editing action: keep the part visible even when
-    // its pins do not fit the board rules. DRC remains responsible for
-    // reporting invalid geometry and electrical conflicts.
+    const check = checkComponentPlacement(project, placedComponent);
+    if (!check.valid) {
+      return false;
+    }
     setSelectedComponentId(componentId);
     commitProject((current) => ({
       ...current,
       components: [...current.components, placedComponent]
     }));
     return true;
+  }
+
+  function handlePlaceUserPackage(draft: UserPackageDraft, position: [number, number]) {
+    const current = projectRef.current;
+    if (!current) return false;
+    const candidate = createUserPackageComponent(draft, position);
+    if (!candidate) {
+      notify("用户封装没有引脚，无法放到板上。");
+      return false;
+    }
+    candidate.name = makeDefaultComponentName(draft.name, current.components.length + 1);
+    const check = checkComponentPlacement(current, candidate);
+    if (!check.valid) {
+      return false;
+    }
+    setSelectedComponentId(candidate.id);
+    commitProject((projectState) => ({
+      ...projectState,
+      components: [...projectState.components, candidate]
+    }));
+    return true;
+  }
+
+  function handleStartUserPackagePlacement(draft: UserPackageDraft) {
+    setPendingComponent(undefined);
+    setPendingUserPackage(draft);
+    packageAssignment.close();
+    setRouteEditMode("select");
+    setRouteDraftStart(undefined);
   }
 
   function handleSelectComponent(componentId: string | undefined) {
@@ -761,6 +801,7 @@ export function App() {
           onSelectPin={setSelectedPin}
           onMoveComponent={handleMoveComponent}
           onMovePin={handleMovePin}
+          onBendPin={handleBendPin}
           onUpdateBoard={handleUpdateBoard}
           onRotateSelected={handleRotateSelected}
           onDeleteSelected={handleDeleteSelected}
@@ -772,7 +813,7 @@ export function App() {
           onDetachAdapter={handleDetachAdapter}
           highlightedEndpoints={highlightedEndpoints}
           routeEditMode={routeEditMode}
-          isPlacingComponent={Boolean(pendingComponent)}
+          isPlacingComponent={Boolean(pendingComponent || pendingUserPackage)}
           transparentBoard={isTransparentBoard}
           theme={settings.theme}
           onRouteEditPoint={handleRouteEditPoint}
@@ -814,6 +855,7 @@ export function App() {
           onPickComponent={handlePickComponent}
           pinCount={packageAssignment.targetPinCount}
           assigning={Boolean(packageAssignment.assignTargetId)}
+          onPlaceUserPackage={handleStartUserPackagePlacement}
           onClose={packageAssignment.close}
         />
       )}

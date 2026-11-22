@@ -1,4 +1,4 @@
-﻿import { Layers3 } from "lucide-react";
+import { Layers3 } from "lucide-react";
 import type { LibraryComponentDefinition } from "../features/project/componentLibrary.ts";
 import type { AdapterSpec, BoardSize, DragMoveModifier, PerfboardProject, RoutedNetEndpoint, ThemeMode } from "../types/project.ts";
 import { getBoardModel } from "../features/board/factory.ts";
@@ -6,6 +6,7 @@ import { normalizeAdapter } from "../features/project/adapter.ts";
 import { spacingLimits } from "../features/project/componentTraits.ts";
 import { PLACEHOLDER_NOTE } from "../features/import/componentMapping.ts";
 import { isPlaceholderComponent } from "../features/project/componentTraits.ts";
+import { directionLabel, pinBend, userPackagePinOffset, userPackagePins } from "../features/layout/manualPlacement.ts";
 import { Perfboard3DViewport, type SelectedPin } from "./Perfboard3DViewport.tsx";
 import type { RouteEditMode } from "./WorkspaceToolbar.tsx";
 
@@ -18,6 +19,7 @@ interface WorkspaceProps {
   onSelectPin: (pin: SelectedPin | undefined) => void;
   onMoveComponent: (componentId: string, position: [number, number]) => void;
   onMovePin: (componentId: string, pin: number, position: [number, number]) => void;
+  onBendPin: (componentId: string, pin: number, offset: number) => void;
   onUpdateBoard: (board: BoardSize) => void;
   onRotateSelected: () => void;
   onDeleteSelected: () => void;
@@ -52,6 +54,7 @@ export function Workspace({
   onSelectPin,
   onMoveComponent,
   onMovePin,
+  onBendPin,
   onUpdateBoard,
   onRotateSelected,
   onDeleteSelected,
@@ -117,7 +120,8 @@ export function Workspace({
           onRouteEditPoint={onRouteEditPoint}
         />
         {selectedComponent && (() => {
-          const limits = spacingLimits(selectedComponent.kind);
+          const isUserPackage = Boolean(selectedComponent.userPackage);
+          const limits = isUserPackage ? undefined : spacingLimits(selectedComponent.kind);
           return (
             <aside className="component-inspector">
               <h2>元件属性</h2>
@@ -136,7 +140,7 @@ export function Workspace({
                   onChange={(event) => onUpdateSelected({ value: event.target.value })}
                 />
               </label>
-              {limits.leadSpacing.min !== limits.leadSpacing.max && (
+              {limits && limits.leadSpacing.min !== limits.leadSpacing.max && (
                 <label>
                   <span>脚距（{limits.leadSpacing.min}–{limits.leadSpacing.max}）</span>
                   <input
@@ -148,7 +152,7 @@ export function Workspace({
                   />
                 </label>
               )}
-              {limits.rowSpacing.min !== limits.rowSpacing.max && (
+              {limits && limits.rowSpacing.min !== limits.rowSpacing.max && (
                 <label>
                   <span>异侧排距（{limits.rowSpacing.min}–{limits.rowSpacing.max}）</span>
                   <input
@@ -160,7 +164,7 @@ export function Workspace({
                   />
                 </label>
               )}
-              {limits.sameSidePitch.min !== limits.sameSidePitch.max && (
+              {limits && limits.sameSidePitch.min !== limits.sameSidePitch.max && (
                 <label>
                   <span>同侧脚距（{limits.sameSidePitch.min}–{limits.sameSidePitch.max}）</span>
                   <input
@@ -172,9 +176,41 @@ export function Workspace({
                   />
                 </label>
               )}
+              {isUserPackage && selectedComponent.userPackage && (
+                <div className="inspector-meta">
+                  <span>用户封装：{selectedComponent.userPackage.name}</span>
+                  <span>{selectedComponent.userPackage.shapes.filter((shape) => shape.kind === "pin").length} 个引脚由封装模型定义</span>
+                </div>
+              )}
+              {isUserPackage && (() => {
+                const movable = userPackagePins(selectedComponent)
+                  .map((pin, index) => ({ pin, index, bend: pinBend(pin) }))
+                  .filter((entry) => entry.bend.range > 0);
+                if (movable.length === 0) return null;
+                return (
+                  <section className="user-package-pin-activity">
+                    <h3>引脚活动</h3>
+                    {movable.map(({ pin, index, bend }) => (
+                      <label className="user-package-slider" key={pin.id}>
+                        <span>Pin {index + 1}（{directionLabel(bend.direction)}，0–{bend.range}）</span>
+                        <input
+                          type="range"
+                          min="0"
+                          max={bend.range}
+                          step="1"
+                          value={userPackagePinOffset(selectedComponent, index + 1)}
+                          disabled={selectedComponent.mounted}
+                          onChange={(event) => onBendPin(selectedComponent.id, index + 1, Number(event.target.value))}
+                        />
+                        <output>{userPackagePinOffset(selectedComponent, index + 1)}</output>
+                      </label>
+                    ))}
+                  </section>
+                );
+              })()}
             <div className="inspector-meta">
               <span>
-                坐标 {selectedComponent.position[0]}, {selectedComponent.position[1]}
+                坐标 X {selectedComponent.position[0] + 1}, Z {selectedComponent.position[1] + 1}
               </span>
               <span>
                 {selectedComponent.kind === "pin_header" && selectedComponent.pinHeaderRows && selectedComponent.pinHeaderColumns

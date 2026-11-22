@@ -25,9 +25,11 @@ interface PackageLibraryDialogProps {
   pinCount?: number;
   /** True only for "使用元件库封装" on an imported component. */
   assigning?: boolean;
+  /** Left-clicking a user package starts manual placement. */
+  onPlaceUserPackage?: (draft: UserPackageDraft) => void;
 }
 
-export function PackageLibraryDialog({ onPickComponent, onClose, pinCount, assigning = false }: PackageLibraryDialogProps) {
+export function PackageLibraryDialog({ onPickComponent, onClose, pinCount, assigning = false, onPlaceUserPackage }: PackageLibraryDialogProps) {
   const drag = useDialogDrag();
   const availableComponents = (pinCount === undefined
     ? componentLibrary
@@ -326,6 +328,14 @@ export function PackageLibraryDialog({ onPickComponent, onClose, pinCount, assig
               </button>
               <UserPackageLibraryList
                 packages={userPackages}
+                onPlace={(draft) => {
+                  if (onPlaceUserPackage) {
+                    onPlaceUserPackage(draft);
+                    return;
+                  }
+                  setEditorPackage(draft);
+                  setEditorOpen(true);
+                }}
                 onEdit={(draft) => {
                   setEditorPackage(draft);
                   setEditorOpen(true);

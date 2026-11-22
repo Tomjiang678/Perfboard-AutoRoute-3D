@@ -7,6 +7,7 @@ import {
   type UserPackageShape
 } from "../model/types.ts";
 import { BOARD_TOP_Y, SHAPE_ACCENT } from "./constants.ts";
+import { createUserBodyMesh, createUserPinMesh } from "./bodyMesh.ts";
 
 export function gridToWorld([x, z]: [number, number]): [number, number] {
   return [x - USER_PACKAGE_BOARD_WIDTH / 2 + 0.5, z - USER_PACKAGE_BOARD_HEIGHT / 2 + 0.5];
@@ -24,7 +25,7 @@ export function createShapeObject(
   stackBase?: number
 ) {
   const object = shape.kind === "pin"
-    ? createPinObject(shape, selected)
+    ? createPinObject(shape, selected, packageTopY(shapes, stackBase))
     : shape.kind === "cuboid"
       ? createCuboidObject(shape, shapeBaseY(shapes, index, stackBase), selected)
       : createCylinderObject(shape, shapeBaseY(shapes, index, stackBase), selected);
@@ -35,22 +36,18 @@ export function createShapeObject(
   return object;
 }
 
-function createPinObject(shape: Extract<UserPackageShape, { kind: "pin" }>, selected: boolean) {
+function createPinObject(
+  shape: Extract<UserPackageShape, { kind: "pin" }>,
+  selected: boolean,
+  selectionY: number
+) {
   const group = new THREE.Group();
   const [x, z] = gridToWorld(shape.hole);
-  const material = new THREE.MeshStandardMaterial({
-    color: 0xc7c7c7,
-    roughness: 0.28,
-    metalness: 0.72
-  });
-  const pin = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.12, 0.12, USER_PACKAGE_PIN_HEIGHT, 16),
-    material
-  );
+  const pin = createUserPinMesh();
   pin.position.set(x, BOARD_TOP_Y + USER_PACKAGE_PIN_HEIGHT / 2, z);
   group.add(pin);
   if (selected) {
-    group.add(createSelectionRing(x, z));
+    group.add(createSelectionRing(x, z, selectionY));
   }
   return group;
 }
@@ -62,17 +59,11 @@ function createCuboidObject(
 ) {
   const group = new THREE.Group();
   const [x, z] = gridToWorld(shape.center);
-  const geometry = new THREE.BoxGeometry(shape.length, shape.height, shape.width);
-  const mesh = new THREE.Mesh(
-    geometry,
-    new THREE.MeshStandardMaterial({ color: shape.color, roughness: 0.5, metalness: 0.08 })
-  );
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
+  const mesh = createUserBodyMesh(shape);
   group.add(mesh);
   if (selected) {
     group.add(new THREE.LineSegments(
-      new THREE.EdgesGeometry(geometry),
+      new THREE.EdgesGeometry(mesh.geometry),
       new THREE.LineBasicMaterial({ color: SHAPE_ACCENT })
     ));
   }
@@ -88,17 +79,11 @@ function createCylinderObject(
 ) {
   const group = new THREE.Group();
   const [x, z] = gridToWorld(shape.center);
-  const geometry = new THREE.CylinderGeometry(shape.radius, shape.radius, shape.height, 36);
-  const mesh = new THREE.Mesh(
-    geometry,
-    new THREE.MeshStandardMaterial({ color: shape.color, roughness: 0.46, metalness: 0.1 })
-  );
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
+  const mesh = createUserBodyMesh(shape);
   group.add(mesh);
   if (selected) {
     group.add(new THREE.LineSegments(
-      new THREE.EdgesGeometry(geometry, 25),
+      new THREE.EdgesGeometry(mesh.geometry, 25),
       new THREE.LineBasicMaterial({ color: SHAPE_ACCENT })
     ));
   }
@@ -106,12 +91,25 @@ function createCylinderObject(
   return group;
 }
 
-function createSelectionRing(x: number, z: number) {
+function createSelectionRing(x: number, z: number, y: number) {
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(0.18, 0.26, 24),
-    new THREE.MeshBasicMaterial({ color: SHAPE_ACCENT, side: THREE.DoubleSide })
+    new THREE.MeshBasicMaterial({
+      color: SHAPE_ACCENT,
+      side: THREE.DoubleSide,
+      depthTest: false,
+      depthWrite: false
+    })
   );
   ring.rotation.x = -Math.PI / 2;
-  ring.position.set(x, BOARD_TOP_Y + USER_PACKAGE_PIN_HEIGHT + 0.01, z);
+  ring.position.set(x, y + 0.06, z);
+  ring.renderOrder = 25;
   return ring;
+}
+
+function packageTopY(shapes: UserPackageShape[], stackBase?: number) {
+  return shapes.reduce((top, shape, index) => {
+    if (shape.kind === "pin") return top;
+    return Math.max(top, BOARD_TOP_Y + shapeBaseY(shapes, index, stackBase) + shape.height);
+  }, BOARD_TOP_Y);
 }
