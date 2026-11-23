@@ -49,7 +49,10 @@ export function createBreadboardModel(definition: BoardSize): BoardModel {
     if (!Number.isInteger(point[0]) || !Number.isInteger(point[1]) || point[0] < 0 || point[1] < 0 || point[0] >= board.width || point[1] >= board.height) return undefined;
     const [x, y] = point;
     const role = getBreadboardColumnRole(board, x);
-    if (role.kind === "rail") return `breadboard:rail:${role.id}`;
+    if (role.kind === "rail") {
+      if (isRailGapRow(y)) return undefined;
+      return railElectricalNode(role.id, y);
+    }
     if (role.kind === "terminal") return `breadboard:${role.moduleIndex}:row:${y}:${role.bank}-bank`;
     return undefined;
   };
@@ -227,4 +230,9 @@ function clampInteger(value: number, min: number, max: number, fallback: number)
 
 function isRailGapRow(y: number) {
   return y % 6 === 5;
+}
+
+/** Every 5 usable rail holes are one electrical group; the 6th row is the gap. */
+function railElectricalNode(railId: string, y: number) {
+  return `breadboard:rail:${railId}:group:${Math.floor(y / 6)}`;
 }

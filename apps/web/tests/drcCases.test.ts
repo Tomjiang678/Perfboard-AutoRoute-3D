@@ -84,7 +84,7 @@ test("two jumpers sharing one endpoint hole report JUMPER_ENDPOINT_OCCUPIED", ()
 for (const [from, to, label] of [
   [[3, 2], [5, 2], "same terminal node"],
   [[3, 2], [7, 2], "same bank row"],
-  [[0, 2], [0, 10], "same rail"]
+  [[0, 2], [0, 4], "same rail group"]
 ] as Array<[[number, number], [number, number], string]>) {
   test(`jumper with both ends on ${label} warns JUMPER_SAME_ELECTRICAL_NODE`, () => {
     const result = run(breadboard, routingWith([jumper("j1", "N1", from, to)]));

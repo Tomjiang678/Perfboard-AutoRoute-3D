@@ -18,11 +18,13 @@ test("breadboard terminal strip connects A-E but not F or the next row", () => {
   assert.equal(board.areInternallyConnected([3, 0], [3, 1]), false);
 });
 
-test("standalone breadboard has independent red and blue rails on both sides", () => {
+test("standalone breadboard power rails are split into 5-hole electrical groups", () => {
   const board = createBoardModel(createBreadboardDefinition(30, 1));
-  assert.equal(board.areInternallyConnected([0, 0], [0, 29]), true);
-  assert.equal(board.areInternallyConnected([0, 0], [1, 0]), false);
-  assert.equal(board.areInternallyConnected([16, 0], [16, 29]), true);
+  assert.equal(board.areInternallyConnected([0, 0], [0, 4]), true);
+  assert.equal(board.areInternallyConnected([0, 0], [0, 6]), false);
+  assert.equal(board.areInternallyConnected([1, 0], [0, 0]), false);
+  assert.equal(board.areInternallyConnected([16, 0], [16, 4]), true);
+  assert.equal(board.areInternallyConnected([16, 0], [16, 6]), false);
   assert.equal(board.areInternallyConnected([16, 0], [17, 0]), false);
 });
 
@@ -34,7 +36,8 @@ test("combined breadboard exposes one outer rail and a red-blue pair between mod
   assert.equal(board.isValidHole([15, 0]), true);
   assert.equal(board.isValidHole([16, 0]), true);
   assert.equal(board.isValidHole([31, 0]), true);
-  assert.equal(board.areInternallyConnected([15, 0], [15, 19]), true);
+  assert.equal(board.areInternallyConnected([15, 0], [15, 4]), true);
+  assert.equal(board.areInternallyConnected([15, 0], [15, 6]), false);
   assert.equal(board.areInternallyConnected([15, 0], [16, 0]), false);
 });
 

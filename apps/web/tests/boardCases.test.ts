@@ -76,15 +76,18 @@ test("terminal holes have no gaps", () => {
   }
 });
 
-test("rail is electrically continuous across gap rows", () => {
+test("rail groups are isolated across gap rows", () => {
   const board = createBoardModel(createBreadboardDefinition(30, 1));
-  assert.equal(board.areInternallyConnected([0, 4], [0, 6]), true);
-  assert.equal(board.areInternallyConnected([16, 10], [16, 12]), true);
+  assert.equal(board.areInternallyConnected([0, 0], [0, 4]), true);
+  assert.equal(board.areInternallyConnected([0, 4], [0, 6]), false);
+  assert.equal(board.areInternallyConnected([16, 6], [16, 10]), true);
+  assert.equal(board.areInternallyConnected([16, 10], [16, 12]), false);
 });
 
-test("rail gap row itself still reports the rail node", () => {
+test("rail gap row has no electrical node", () => {
   const board = createBoardModel(createBreadboardDefinition(30, 1));
-  assert.equal(board.getElectricalNode([0, 5]), "breadboard:rail:left-red");
+  assert.equal(board.isValidHole([0, 5]), false);
+  assert.equal(board.getElectricalNode([0, 5]), undefined);
 });
 
 /* ── terminal connectivity ────────────────────────────────────────────── */
