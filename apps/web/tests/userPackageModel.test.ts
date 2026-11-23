@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHistory, commitHistory, redoHistory, undoHistory } from "../src/features/userPackage/model/history.ts";
-import { modelHeight, shapeBaseY } from "../src/features/userPackage/model/stack.ts";
+import { modelHeight, nextStackBase, removeShape, shapeBaseY } from "../src/features/userPackage/model/stack.ts";
 import type { UserPackageDraft, UserPackageShape } from "../src/features/userPackage/model/types.ts";
 
 const pin: UserPackageShape = { id: "p1", kind: "pin", hole: [1, 1] };
@@ -28,6 +28,38 @@ test("pins added later do not lift already created solids", () => {
   ];
   assert.equal(shapeBaseY(laterPins, 0, 0), 0);
   assert.equal(shapeBaseY(laterPins, 2, 0), 2);
+});
+
+test("deleting the last solid releases a stale stack base", () => {
+  const draft: UserPackageDraft = {
+    id: "d",
+    name: "A",
+    stackBase: 0,
+    shapes: [cuboid, pin],
+    updatedAt: ""
+  };
+  const pinsOnly = removeShape(draft, cuboid.id);
+  assert.equal(pinsOnly.stackBase, undefined);
+  assert.equal(nextStackBase(pinsOnly), 0.8);
+
+  const withCylinder: UserPackageDraft = {
+    ...pinsOnly,
+    stackBase: nextStackBase(pinsOnly),
+    shapes: [...pinsOnly.shapes, cylinder]
+  };
+  assert.equal(shapeBaseY(withCylinder.shapes, 1, withCylinder.stackBase), 0.8);
+});
+
+test("deleting one of several solids keeps the existing stack base", () => {
+  const draft: UserPackageDraft = {
+    id: "d",
+    name: "A",
+    stackBase: 0,
+    shapes: [cuboid, { ...cuboid, id: "b2" }, pin],
+    updatedAt: ""
+  };
+  const next = removeShape(draft, cuboid.id);
+  assert.equal(next.stackBase, 0);
 });
 
 test("history supports undo and redo", () => {

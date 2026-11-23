@@ -41,7 +41,10 @@ export type UserPackageShape = UserPackagePin | UserPackageCuboid | UserPackageC
 export interface UserPackageDraft {
   id: string;
   name: string;
-  /** Base height of the first solid; pins added later must not move it. */
+  /**
+   * Base height of the first solid. It is reset when the last solid is
+   * removed, so pins added after that can lift the next solid normally.
+   */
   stackBase?: number;
   shapes: UserPackageShape[];
   updatedAt: string;

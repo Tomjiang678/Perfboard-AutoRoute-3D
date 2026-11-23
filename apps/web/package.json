@@ -14,7 +14,10 @@
     "preview": "vite preview --host 127.0.0.1",
     "electron": "npm run build && electron .",
     "predist:win": "node scripts/ensure-app-closed.mjs",
-    "dist:win": "npm run build && electron-builder --win dir"
+    "dist:win": "npm run build && electron-builder --win dir",
+    "dist:linux": "npm run build && electron-builder --linux",
+    "dist:linux:dir": "npm run build && electron-builder --linux dir",
+    "dist:linux:tar": "npm run build && electron-builder --linux tar.gz"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.0.0",
@@ -47,6 +50,18 @@
     "win": {
       "target": "dir",
       "icon": "assets/image1.ico"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "tar.gz",
+        "dir"
+      ],
+      "icon": "assets/icon.png",
+      "category": "Development",
+      "executableName": "protoroute-3d",
+      "synopsis": "3D perfboard placement, routing and DRC",
+      "description": "ProtoRoute 3D is a 3D perfboard and breadboard placement, routing, jumper planning and DRC tool."
     }
   }
 }

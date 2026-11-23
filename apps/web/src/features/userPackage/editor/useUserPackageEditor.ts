@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { commitHistory, createHistory, redoHistory, undoHistory, type HistoryState } from "../model/history.ts";
-import { nextStackBase } from "../model/stack.ts";
+import { nextStackBase, removeShape } from "../model/stack.ts";
 import { DEFAULT_SHAPE_COLOR, type UserPackageDraft, type UserPackageShape } from "../model/types.ts";
 
 export type UserPackageEditorTool = "select" | "cuboid" | "cylinder" | "pin";
@@ -64,7 +64,7 @@ export function useUserPackageEditor(initial?: UserPackageDraft) {
 
   function deleteSelected() {
     if (!selectedId) return;
-    commit({ ...draft, shapes: draft.shapes.filter((shape) => shape.id !== selectedId) });
+    commit(removeShape(draft, selectedId));
     setSelectedId(undefined);
   }
 
