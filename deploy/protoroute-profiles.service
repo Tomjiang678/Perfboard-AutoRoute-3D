@@ -1,0 +1,14 @@
+[Unit]
+Description=ProtoRoute pin profile receiver
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+ExecStart=/usr/bin/python3 /srv/protoroute/profile-server.py --port 8787 --file /srv/protoroute/profiles/submissions.jsonl
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

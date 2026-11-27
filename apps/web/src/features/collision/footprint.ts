@@ -35,6 +35,7 @@ export interface LocalFootprint {
 
 const localCache = new WeakMap<PlacedComponent, LocalFootprint>();
 const footprintCache = new WeakMap<PlacedComponent, ComponentFootprint>();
+const localPointCache = new WeakMap<PlacedComponent, GridPoint[]>();
 
 /** Geometry is cached once; position only translates the cached local cells. */
 export function localFootprint(component: PlacedComponent): LocalFootprint {
@@ -83,6 +84,19 @@ export function componentBodyCells(component: PlacedComponent): Set<string> {
 /** Cells for a candidate position without rebuilding its geometry. */
 export function cellsAt(component: PlacedComponent, position: [number, number]): Set<string> {
   return translateCells(localFootprint(component).cells, position);
+}
+
+/**
+ * Numeric version of cellsAt. Auto placement probes thousands of positions
+ * for the same component, so avoid re-splitting the local cell strings.
+ */
+export function occupiedPointsAt(component: PlacedComponent, position: [number, number]): GridPoint[] {
+  let points = localPointCache.get(component);
+  if (!points) {
+    points = [...localFootprint(component).cells].map(parseCell);
+    localPointCache.set(component, points);
+  }
+  return points.map(([x, y]) => [x + position[0], y + position[1]]);
 }
 
 export function bodyCellsAt(component: PlacedComponent, position: [number, number]): Set<string> {

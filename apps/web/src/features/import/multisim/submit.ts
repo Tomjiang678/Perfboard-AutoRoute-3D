@@ -6,10 +6,22 @@ import { STORAGE_KEYS } from "../../storage/storageKeys.ts";
 const OUTBOX_KEY = STORAGE_KEYS.profileOutbox;
 const MAX_OUTBOX = 50;
 const APP_VERSION = "2.0.0";
+/** 网页版默认提交到这里；桌面版不提交。 */
+const DEFAULT_ENDPOINT = "https://protoroute3d.icu/api/profile";
+
+function sharingEnabled(): boolean {
+  if (typeof window === "undefined") return false;
+  // 桌面版（Electron）不提交
+  if ((window as Window & { perfboardDesktop?: unknown }).perfboardDesktop) return false;
+  // 本地开发不提交，避免把测试数据打到线上
+  const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+  return !env?.DEV;
+}
 
 function endpoint(): string | undefined {
+  if (!sharingEnabled()) return undefined;
   const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
-  return env?.VITE_PROFILE_ENDPOINT?.trim() || undefined;
+  return env?.VITE_PROFILE_ENDPOINT?.trim() || DEFAULT_ENDPOINT;
 }
 
 /**
@@ -18,7 +30,7 @@ function endpoint(): string | undefined {
  * saving a part never blocks on the network and never interrupts the editor.
  */
 export function queueProfileSubmission(profile: PinProfile) {
-  if (typeof window === "undefined") return;
+  if (!sharingEnabled()) return;
 
   try {
     const payload: ProfileSubmission = {
@@ -55,7 +67,6 @@ function newSubmissionId() {
 
 export async function flushProfileSubmissions(url = endpoint()) {
   if (!url || typeof window === "undefined") return;
-
   const outbox = readOutbox();
   const remaining: ProfileSubmission[] = [];
   for (const item of outbox) {

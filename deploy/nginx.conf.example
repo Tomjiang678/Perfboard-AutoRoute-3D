@@ -42,6 +42,12 @@ server {
         try_files $uri $uri/ /admin/index.html;
     }
 
+    # 引脚定义提交（网页版保存映射时静默 POST），转给本机的小接收端
+    location = /api/profile {
+        client_max_body_size 64k;
+        proxy_pass http://127.0.0.1:8787;
+    }
+
     # 应用本体（单页，没有自己的路由）
     location /app/ {
         try_files $uri $uri/ /app/index.html;

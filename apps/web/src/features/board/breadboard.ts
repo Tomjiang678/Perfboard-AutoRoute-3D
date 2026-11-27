@@ -34,9 +34,19 @@ export function normalizeBreadboardDefinition(board: BoardSize): BoardSize {
 export function createBreadboardModel(definition: BoardSize): BoardModel {
   const board = normalizeBreadboardDefinition(definition);
   let holes: readonly BoardHole[] | undefined;
+  const roleCache = new Map<number, BreadboardColumnRole>();
+  const nodeCache = new Map<string, ElectricalNodeId | undefined>();
+  const roleAt = (x: number) => {
+    let role = roleCache.get(x);
+    if (!role) {
+      role = getBreadboardColumnRole(board, x);
+      roleCache.set(x, role);
+    }
+    return role;
+  };
   const isValidHole = ([x, y]: GridPoint) => {
     if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= board.width || y >= board.height) return false;
-    const role = getBreadboardColumnRole(board, x);
+    const role = roleAt(x);
     if (role.kind === "rail") {
       // Power rails come in groups of 5 holes; every 6th row is a gap with
       // no hole at all.
@@ -48,13 +58,17 @@ export function createBreadboardModel(definition: BoardSize): BoardModel {
   const electricalNode = (point: GridPoint): ElectricalNodeId | undefined => {
     if (!Number.isInteger(point[0]) || !Number.isInteger(point[1]) || point[0] < 0 || point[1] < 0 || point[0] >= board.width || point[1] >= board.height) return undefined;
     const [x, y] = point;
-    const role = getBreadboardColumnRole(board, x);
+    const cacheKey = `${x},${y}`;
+    if (nodeCache.has(cacheKey)) return nodeCache.get(cacheKey);
+    const role = roleAt(x);
+    let node: ElectricalNodeId | undefined;
     if (role.kind === "rail") {
-      if (isRailGapRow(y)) return undefined;
-      return railElectricalNode(role.id, y);
+      node = isRailGapRow(y) ? undefined : railElectricalNode(role.id, y);
+    } else if (role.kind === "terminal") {
+      node = `breadboard:${role.moduleIndex}:row:${y}:${role.bank}-bank`;
     }
-    if (role.kind === "terminal") return `breadboard:${role.moduleIndex}:row:${y}:${role.bank}-bank`;
-    return undefined;
+    nodeCache.set(cacheKey, node);
+    return node;
   };
 
   return {
@@ -73,7 +87,7 @@ export function createBreadboardModel(definition: BoardSize): BoardModel {
         for (let y = 0; y < board.height; y += 1) {
           for (let x = 0; x < board.width; x += 1) {
             if (!isValidHole([x, y])) continue;
-            const role = getBreadboardColumnRole(board, x);
+            const role = roleAt(x);
             next.push({
               id: gridHoleId([x, y]),
               grid: [x, y],
@@ -115,7 +129,7 @@ export function createBreadboardModel(definition: BoardSize): BoardModel {
     validatePlacement(component, pinNets = {}) {
       const validation = validateBasicPlacement(this, component, pinNets);
       validation.pinHoles.forEach((hole, index) => {
-        const role = getBreadboardColumnRole(board, hole[0]);
+        const role = roleAt(hole[0]);
         if (role.kind === "rail" && !isPowerNet(pinNets[index + 1])) {
           validation.issues.push({
             code: "power_rail_requires_power_net",
@@ -127,8 +141,8 @@ export function createBreadboardModel(definition: BoardSize): BoardModel {
       });
 
       if (validation.pinHoles.length === 2 && validation.pinHoles[0][1] === validation.pinHoles[1][1]) {
-        const firstRole = getBreadboardColumnRole(board, validation.pinHoles[0][0]);
-        const secondRole = getBreadboardColumnRole(board, validation.pinHoles[1][0]);
+        const firstRole = roleAt(validation.pinHoles[0][0]);
+        const secondRole = roleAt(validation.pinHoles[1][0]);
         const bridgesCenter = firstRole.kind === "terminal" &&
           secondRole.kind === "terminal" &&
           firstRole.moduleIndex === secondRole.moduleIndex &&
@@ -144,7 +158,7 @@ export function createBreadboardModel(definition: BoardSize): BoardModel {
       }
 
       if (isCenterBridgeComponent(component)) {
-        const terminalRoles = validation.pinHoles.map(([x]) => getBreadboardColumnRole(board, x));
+        const terminalRoles = validation.pinHoles.map(([x]) => roleAt(x));
         const validRoles = terminalRoles.filter((role): role is Extract<BreadboardColumnRole, { kind: "terminal" }> => role.kind === "terminal");
         const modules = new Set(validRoles.map((role) => role.moduleIndex));
         const banks = new Set(validRoles.map((role) => role.bank));

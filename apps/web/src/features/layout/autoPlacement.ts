@@ -4,7 +4,7 @@ import { autoRouteBoard } from "../routing/autoRouter.ts";
 import { getBoardModel } from "../board/factory.ts";
 import { componentPinHoles, layoutFromComponent, pinsConflict, placementHasPinConflicts, rotateGridOffset } from "../board/placement.ts";
 import { componentBoardPinOffsets } from "../project/adapter.ts";
-import { bodiesOverlap, bodyPinOverlap, componentOccupiedCells as collisionCells, footprintBox as collisionFootprintBox } from "../collision/footprint.ts";
+import { componentOccupiedCells as collisionCells, footprintBox as collisionFootprintBox, occupiedPointsAt } from "../collision/footprint.ts";
 import type { BoardModel, ElectricalNodeId, GridPoint } from "../board/types.ts";
 import { key, manhattan } from "../routing/routingGeometry.ts";
 import { isBendableTwoPin, preferredLeadSpan, spacingLimits } from "../project/componentTraits.ts";
@@ -953,7 +953,7 @@ function canPlaceAt(
   placedComponents: PlacedComponent[] = []
 ) {
   const placed = { ...component, position };
-  const cells = getComponentOccupiedCells(placed);
+  const cells = occupiedPointsAt(component, position);
   const boardModel = getBoardModel(board);
   const placementIsValid = boardModel.validatePlacement(placed, pinNetsForComponent(placed, endpointMap)).valid;
   if (pinsConflictWithPlaced(placed, placedComponents, endpointMap, board)) {
@@ -993,9 +993,9 @@ function pinsConflictWithPlaced(
   const candidateNets = pinNetsForComponent(candidate, endpointMap);
   const candidateHoles = componentPinHoles(candidate);
   return placedComponents.some((other) => {
-    if (bodiesOverlap(candidate, other) || bodyPinOverlap(candidate, other)) {
-      return true;
-    }
+    // Body/pin occupancy is already checked against the shared occupied set in
+    // canPlaceAt. Rechecking the whole footprint here was a hot path and did
+    // not add any new rejection.
     const otherNets = pinNetsForComponent(other, endpointMap);
     const otherHoles = componentPinHoles(other);
     return candidateHoles.some((hole, candidateIndex) => otherHoles.some((otherHole, otherIndex) => pinsConflict(
@@ -1486,8 +1486,19 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
+const endpointPinNetsCache = new WeakMap<EndpointMap, Map<string, Record<number, string>>>();
+
 function pinNetsForComponent(component: PlacedComponent, endpointMap: EndpointMap) {
-  return Object.fromEntries((endpointMap.get(component.name) ?? []).map((endpoint) => [endpoint.pin, endpoint.net]));
+  let cache = endpointPinNetsCache.get(endpointMap);
+  if (!cache) {
+    cache = new Map();
+    endpointPinNetsCache.set(endpointMap, cache);
+  }
+  const cached = cache.get(component.name);
+  if (cached) return cached;
+  const nets = Object.fromEntries((endpointMap.get(component.name) ?? []).map((endpoint) => [endpoint.pin, endpoint.net]));
+  cache.set(component.name, nets);
+  return nets;
 }
 
 function progressInRange(index: number, total: number, start: number, end: number) {

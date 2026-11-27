@@ -3,10 +3,16 @@ import { componentBoardPinCount, componentBoardPinOffsets } from "../project/ada
 import type { BoardModel, GridPoint, PinNetAssignments, PlacementIssue, PlacementValidation } from "./types.ts";
 export { isCenterBridgeComponent } from "../project/componentTraits.ts";
 
+const pinHolesCache = new WeakMap<PlacedComponent, GridPoint[]>();
+
 export function componentPinHoles(component: PlacedComponent): GridPoint[] {
+  const cached = pinHolesCache.get(component);
+  if (cached) return cached;
   // 插了转接板时要算上多出来的排针：它们同样占孔
   const count = componentBoardPinCount(component);
-  return Array.from({ length: count }, (_, index) => pinGridPosition(component, index + 1));
+  const holes = Array.from({ length: count }, (_, index) => pinGridPosition(component, index + 1));
+  pinHolesCache.set(component, holes);
+  return holes;
 }
 
 export function pinGridPosition(component: PlacedComponent, pin: number): GridPoint {
