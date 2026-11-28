@@ -103,6 +103,9 @@ const OPTIMIZATION_ROUTE_EVALUATION_BUDGET = 8;
 const OPTIMIZATION_ROUNDS = 2;
 const OPTIMIZATION_MOVE_CANDIDATES = 5;
 const MAX_OPTIMIZATION_COMPONENTS = 24;
+/** Candidate sampling stays bounded so a larger board does not turn into a
+ * linear increase in canPlaceAt/airwire work. */
+const MAX_SPREAD_CANDIDATES = 320;
 const DIAGONAL_SEARCH_RADIUS = 4;
 const DIAGONAL_LOCAL_CANDIDATES = 10;
 /**
@@ -1286,8 +1289,10 @@ function createSpreadCandidates(region: PlacementRegion, box: FootprintBox): Arr
   }
 
   const goldenRatio = 0.61803398875;
-  const count = Math.max(96, Math.min(1400, region.width * region.height));
-  for (let index = 0; index < count; index += 1) {
+  const area = region.width * region.height;
+  const candidateBudget = Math.max(96, Math.min(MAX_SPREAD_CANDIDATES, area));
+  const goldenCount = Math.max(48, Math.floor(candidateBudget * 0.68));
+  for (let index = 0; index < goldenCount; index += 1) {
     const u = (index * goldenRatio) % 1;
     const v = (index * 0.754877666) % 1;
     candidates.push([
@@ -1296,14 +1301,17 @@ function createSpreadCandidates(region: PlacementRegion, box: FootprintBox): Arr
     ]);
   }
 
-  const gridStep = Math.max(1, Math.floor(Math.sqrt((region.width * region.height) / 160)));
+  const gridBudget = Math.max(1, candidateBudget - goldenCount);
+  const gridStep = Math.max(1, Math.ceil(Math.sqrt(area / gridBudget)));
   for (let y = minAnchorY; y <= maxAnchorY; y += gridStep) {
     for (let x = minAnchorX; x <= maxAnchorX; x += gridStep) {
       candidates.push([x, y]);
     }
   }
 
-  return dedupePositions(candidates);
+  // The grid can overshoot its share after rounding; golden-ratio samples still
+  // cover the board, so keep the hard cap deterministic.
+  return dedupePositions(candidates).slice(0, candidateBudget);
 }
 
 function buildEndpointMap(endpoints: RoutedNetEndpoint[]): EndpointMap {

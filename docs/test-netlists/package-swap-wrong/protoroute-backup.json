@@ -1,36 +1,3763 @@
 {
   "version": 1,
-  "savedAt": "2026-11-23T14:00:28.143Z",
+  "savedAt": "2026-11-28T03:21:22.587Z",
   "project": {
-    "id": "0a07e926-eae8-4350-806d-7462ce937d80",
-    "name": "Untitled Breadboard",
+    "id": "3de1d3c8-8b59-41e1-9809-9f4a708f82b6",
+    "name": "Untitled Perfboard",
     "board": {
-      "kind": "breadboard",
-      "width": 18,
-      "height": 30,
-      "breadboard": {
-        "modules": 1,
-        "terminalRows": 30,
-        "powerRailsPerSide": 2
+      "kind": "perfboard",
+      "width": 50,
+      "height": 40
+    },
+    "files": [
+      {
+        "id": "784f46d3-4a31-4562-b2c1-5d0935c6ab60",
+        "name": "try.net",
+        "size": 18690,
+        "importedAt": "2026-11-28T03:20:54.165Z"
       }
-    },
-    "files": [],
+    ],
     "importState": {
-      "components": [],
-      "nets": [],
+      "components": [
+        {
+          "ref": "R1",
+          "value": "100k",
+          "category": "Device:R",
+          "packageName": "",
+          "sourceFile": "try.net"
+        },
+        {
+          "ref": "R2",
+          "value": "900k",
+          "category": "Device:R",
+          "packageName": "",
+          "sourceFile": "try.net"
+        },
+        {
+          "ref": "R3",
+          "value": "900k",
+          "category": "Device:R",
+          "packageName": "",
+          "sourceFile": "try.net"
+        },
+        {
+          "ref": "R4",
+          "value": "100k",
+          "category": "Device:R",
+          "packageName": "",
+          "sourceFile": "try.net"
+        },
+        {
+          "ref": "R5",
+          "value": "100k",
+          "category": "Device:R",
+          "packageName": "",
+          "sourceFile": "try.net"
+        },
+        {
+          "ref": "R6",
+          "value": "100k",
+          "category": "Device:R",
+          "packageName": "",
+          "sourceFile": "try.net"
+        },
+        {
+          "ref": "R7",
+          "value": "100k",
+          "category": "Device:R",
+          "packageName": "",
+          "sourceFile": "try.net"
+        },
+        {
+          "ref": "U1",
+          "value": "OP07",
+          "category": "Amplifier_Operational:OP07",
+          "packageName": "Package_TO_SOT_SMD:SOT-353_SC-70-5",
+          "sourceFile": "try.net"
+        },
+        {
+          "ref": "U2",
+          "value": "OP07",
+          "category": "Amplifier_Operational:OP07",
+          "packageName": "Package_TO_SOT_SMD:SOT-353_SC-70-5",
+          "sourceFile": "try.net"
+        },
+        {
+          "ref": "U3",
+          "value": "OP07",
+          "category": "Amplifier_Operational:OP07",
+          "packageName": "Package_TO_SOT_SMD:SOT-353_SC-70-5",
+          "sourceFile": "try.net"
+        }
+      ],
+      "nets": [
+        {
+          "name": "-12V",
+          "nodes": [
+            {
+              "ref": "U1",
+              "pin": "4",
+              "sourceFile": "try.net"
+            },
+            {
+              "ref": "U2",
+              "pin": "4",
+              "sourceFile": "try.net"
+            },
+            {
+              "ref": "U3",
+              "pin": "4",
+              "sourceFile": "try.net"
+            }
+          ]
+        },
+        {
+          "name": "+12V",
+          "nodes": [
+            {
+              "ref": "U1",
+              "pin": "7",
+              "sourceFile": "try.net"
+            },
+            {
+              "ref": "U2",
+              "pin": "7",
+              "sourceFile": "try.net"
+            },
+            {
+              "ref": "U3",
+              "pin": "7",
+              "sourceFile": "try.net"
+            }
+          ]
+        },
+        {
+          "name": "GND",
+          "nodes": [
+            {
+              "ref": "R6",
+              "pin": "2",
+              "sourceFile": "try.net"
+            }
+          ]
+        },
+        {
+          "name": "Net-(R2-Pad2)",
+          "nodes": [
+            {
+              "ref": "R2",
+              "pin": "2",
+              "sourceFile": "try.net"
+            },
+            {
+              "ref": "R4",
+              "pin": "1",
+              "sourceFile": "try.net"
+            },
+            {
+              "ref": "U1",
+              "pin": "6",
+              "sourceFile": "try.net"
+            }
+          ]
+        },
+        {
+          "name": "Net-(R3-Pad2)",
+          "nodes": [
+            {
+              "ref": "R3",
+              "pin": "2",
+              "sourceFile": "try.net"
+            },
+            {
+              "ref": "R5",
+              "pin": "1",
+              "sourceFile": "try.net"
+            },
+            {
+              "ref": "U2",
+              "pin": "6",
+              "sourceFile": "try.net"
+            }
+          ]
+        },
+        {
+          "name": "Net-(R7-Pad2)",
+          "nodes": [
+            {
+              "ref": "R7",
+              "pin": "2",
+              "sourceFile": "try.net"
+            },
+            {
+              "ref": "U3",
+              "pin": "6",
+              "sourceFile": "try.net"
+            }
+          ]
+        },
+        {
+          "name": "Net-(U1--)",
+          "nodes": [
+            {
+              "ref": "R1",
+              "pin": "1",
+              "sourceFile": "try.net"
+            },
+            {
+              "ref": "R2",
+              "pin": "1",
+              "sourceFile": "try.net"
+            },
+            {
+              "ref": "U1",
+              "pin": "2",
+              "sourceFile": "try.net"
+            }
+          ]
+        },
+        {
+          "name": "Net-(U2-+)",
+          "nodes": [
+            {
+              "ref": "R1",
+              "pin": "2",
+              "sourceFile": "try.net"
+            },
+            {
+              "ref": "R3",
+              "pin": "1",
+              "sourceFile": "try.net"
+            },
+            {
+              "ref": "U2",
+              "pin": "3",
+              "sourceFile": "try.net"
+            }
+          ]
+        },
+        {
+          "name": "Net-(U3--)",
+          "nodes": [
+            {
+              "ref": "R5",
+              "pin": "2",
+              "sourceFile": "try.net"
+            },
+            {
+              "ref": "R6",
+              "pin": "1",
+              "sourceFile": "try.net"
+            },
+            {
+              "ref": "U3",
+              "pin": "2",
+              "sourceFile": "try.net"
+            }
+          ]
+        },
+        {
+          "name": "Net-(U3-+)",
+          "nodes": [
+            {
+              "ref": "R4",
+              "pin": "2",
+              "sourceFile": "try.net"
+            },
+            {
+              "ref": "R7",
+              "pin": "1",
+              "sourceFile": "try.net"
+            },
+            {
+              "ref": "U3",
+              "pin": "3",
+              "sourceFile": "try.net"
+            }
+          ]
+        }
+      ],
+      "pinInfo": {
+        "R1": {
+          "1": {
+            "name": "",
+            "type": "passive"
+          },
+          "2": {
+            "name": "",
+            "type": "passive"
+          }
+        },
+        "R2": {
+          "1": {
+            "name": "",
+            "type": "passive"
+          },
+          "2": {
+            "name": "",
+            "type": "passive"
+          }
+        },
+        "R3": {
+          "1": {
+            "name": "",
+            "type": "passive"
+          },
+          "2": {
+            "name": "",
+            "type": "passive"
+          }
+        },
+        "R4": {
+          "1": {
+            "name": "",
+            "type": "passive"
+          },
+          "2": {
+            "name": "",
+            "type": "passive"
+          }
+        },
+        "R5": {
+          "1": {
+            "name": "",
+            "type": "passive"
+          },
+          "2": {
+            "name": "",
+            "type": "passive"
+          }
+        },
+        "R6": {
+          "1": {
+            "name": "",
+            "type": "passive"
+          },
+          "2": {
+            "name": "",
+            "type": "passive"
+          }
+        },
+        "R7": {
+          "1": {
+            "name": "",
+            "type": "passive"
+          },
+          "2": {
+            "name": "",
+            "type": "passive"
+          }
+        },
+        "U1": {
+          "1": {
+            "name": "VOS",
+            "type": "input"
+          },
+          "2": {
+            "name": "-",
+            "type": "input"
+          },
+          "3": {
+            "name": "+",
+            "type": "input"
+          },
+          "4": {
+            "name": "V-",
+            "type": "power"
+          },
+          "5": {
+            "name": "NC",
+            "type": "no_connect"
+          },
+          "6": {
+            "name": "",
+            "type": "output"
+          },
+          "7": {
+            "name": "V+",
+            "type": "power"
+          },
+          "8": {
+            "name": "VOS",
+            "type": "input"
+          }
+        },
+        "U2": {
+          "1": {
+            "name": "VOS",
+            "type": "input"
+          },
+          "2": {
+            "name": "-",
+            "type": "input"
+          },
+          "3": {
+            "name": "+",
+            "type": "input"
+          },
+          "4": {
+            "name": "V-",
+            "type": "power"
+          },
+          "5": {
+            "name": "NC",
+            "type": "no_connect"
+          },
+          "6": {
+            "name": "",
+            "type": "output"
+          },
+          "7": {
+            "name": "V+",
+            "type": "power"
+          },
+          "8": {
+            "name": "VOS",
+            "type": "input"
+          }
+        },
+        "U3": {
+          "1": {
+            "name": "VOS",
+            "type": "input"
+          },
+          "2": {
+            "name": "-",
+            "type": "input"
+          },
+          "3": {
+            "name": "+",
+            "type": "input"
+          },
+          "4": {
+            "name": "V-",
+            "type": "power"
+          },
+          "5": {
+            "name": "NC",
+            "type": "no_connect"
+          },
+          "6": {
+            "name": "",
+            "type": "output"
+          },
+          "7": {
+            "name": "V+",
+            "type": "power"
+          },
+          "8": {
+            "name": "VOS",
+            "type": "input"
+          }
+        }
+      },
       "warnings": []
     },
-    "components": [],
+    "components": [
+      {
+        "id": "0d1b3127-04ff-4b5e-b7a1-636971331ad7",
+        "kind": "resistor",
+        "label": "R",
+        "name": "R1",
+        "value": "100k",
+        "pinCount": 2,
+        "leadSpacing": 6,
+        "rowSpacing": 0,
+        "sameSidePitch": 1,
+        "pinOffsets": [
+          [
+            0,
+            0
+          ],
+          [
+            6,
+            0
+          ]
+        ],
+        "position": [
+          21,
+          16
+        ],
+        "rotation": 0,
+        "mounted": true,
+        "origin": "import",
+        "importRef": "R1",
+        "placeholder": false
+      },
+      {
+        "id": "98cc825f-52d7-4298-bf29-d00f36b3114e",
+        "kind": "resistor",
+        "label": "R",
+        "name": "R2",
+        "value": "900k",
+        "pinCount": 2,
+        "leadSpacing": 3,
+        "rowSpacing": 0,
+        "sameSidePitch": 1,
+        "pinOffsets": [
+          [
+            0,
+            0
+          ],
+          [
+            3,
+            0
+          ]
+        ],
+        "position": [
+          17,
+          20
+        ],
+        "rotation": 1.5707963267948966,
+        "mounted": true,
+        "origin": "import",
+        "importRef": "R2",
+        "placeholder": false
+      },
+      {
+        "id": "d8a88884-cb28-4c8d-8caf-299c2ebf42cc",
+        "kind": "resistor",
+        "label": "R",
+        "name": "R3",
+        "value": "900k",
+        "pinCount": 2,
+        "leadSpacing": 5.39,
+        "rowSpacing": 5,
+        "sameSidePitch": 1,
+        "pinOffsets": [
+          [
+            0,
+            0
+          ],
+          [
+            -2,
+            5
+          ]
+        ],
+        "position": [
+          33,
+          15
+        ],
+        "rotation": 0,
+        "mounted": true,
+        "origin": "import",
+        "importRef": "R3",
+        "placeholder": false
+      },
+      {
+        "id": "54de386f-8ffb-41cf-8ec5-2eafec202964",
+        "kind": "resistor",
+        "label": "R",
+        "name": "R4",
+        "value": "100k",
+        "pinCount": 2,
+        "leadSpacing": 4.24,
+        "rowSpacing": 3,
+        "sameSidePitch": 1,
+        "pinOffsets": [
+          [
+            0,
+            0
+          ],
+          [
+            3,
+            3
+          ]
+        ],
+        "position": [
+          22,
+          12
+        ],
+        "rotation": 0,
+        "mounted": true,
+        "origin": "import",
+        "importRef": "R4",
+        "placeholder": false
+      },
+      {
+        "id": "f8ce1237-7255-4241-8db2-9494c099b6df",
+        "kind": "resistor",
+        "label": "R",
+        "name": "R5",
+        "value": "100k",
+        "pinCount": 2,
+        "leadSpacing": 3,
+        "rowSpacing": 0,
+        "sameSidePitch": 1,
+        "pinOffsets": [
+          [
+            0,
+            0
+          ],
+          [
+            3,
+            0
+          ]
+        ],
+        "position": [
+          30,
+          20
+        ],
+        "rotation": 1.5707963267948966,
+        "mounted": true,
+        "origin": "import",
+        "importRef": "R5",
+        "placeholder": false
+      },
+      {
+        "id": "4897dd7a-61f7-4771-acfa-9cc6db42a0f8",
+        "kind": "resistor",
+        "label": "R",
+        "name": "R6",
+        "value": "100k",
+        "pinCount": 2,
+        "leadSpacing": 3,
+        "rowSpacing": 0,
+        "sameSidePitch": 1,
+        "pinOffsets": [
+          [
+            0,
+            0
+          ],
+          [
+            3,
+            0
+          ]
+        ],
+        "position": [
+          34,
+          19
+        ],
+        "rotation": 4.71238898038469,
+        "mounted": true,
+        "origin": "import",
+        "importRef": "R6",
+        "placeholder": false
+      },
+      {
+        "id": "d6745538-b6c6-49e5-908d-57441d5c4c64",
+        "kind": "resistor",
+        "label": "R",
+        "name": "R7",
+        "value": "100k",
+        "pinCount": 2,
+        "leadSpacing": 3.61,
+        "rowSpacing": -2,
+        "sameSidePitch": 1,
+        "pinOffsets": [
+          [
+            0,
+            0
+          ],
+          [
+            -3,
+            -2
+          ]
+        ],
+        "position": [
+          25,
+          24
+        ],
+        "rotation": 0,
+        "mounted": true,
+        "origin": "import",
+        "importRef": "R7",
+        "placeholder": false
+      },
+      {
+        "id": "cb69734b-4a2b-4ddf-bcb3-b10720a02cd3",
+        "kind": "dip",
+        "label": "DIP8",
+        "name": "U1",
+        "value": "OP07",
+        "pinCount": 8,
+        "leadSpacing": 1,
+        "rowSpacing": 3,
+        "sameSidePitch": 1,
+        "pinOffsets": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            3,
+            3
+          ],
+          [
+            3,
+            2
+          ],
+          [
+            3,
+            1
+          ],
+          [
+            3,
+            0
+          ]
+        ],
+        "position": [
+          21,
+          20
+        ],
+        "rotation": 3.141592653589793,
+        "mounted": true,
+        "origin": "import",
+        "importRef": "U1",
+        "placeholder": false
+      },
+      {
+        "id": "cdb2fe9c-02c9-4061-bc08-361b059fc042",
+        "kind": "dip",
+        "label": "DIP8",
+        "name": "U2",
+        "value": "OP07",
+        "pinCount": 8,
+        "leadSpacing": 1,
+        "rowSpacing": 3,
+        "sameSidePitch": 1,
+        "pinOffsets": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            3,
+            3
+          ],
+          [
+            3,
+            2
+          ],
+          [
+            3,
+            1
+          ],
+          [
+            3,
+            0
+          ]
+        ],
+        "position": [
+          29,
+          17
+        ],
+        "rotation": 4.71238898038469,
+        "mounted": true,
+        "origin": "import",
+        "importRef": "U2",
+        "placeholder": false
+      },
+      {
+        "id": "38af6a55-2f1b-4e5b-a0ed-c595b0ca2c1d",
+        "kind": "dip",
+        "label": "DIP8",
+        "name": "U3",
+        "value": "OP07",
+        "pinCount": 8,
+        "leadSpacing": 1,
+        "rowSpacing": 3,
+        "sameSidePitch": 1,
+        "pinOffsets": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            3,
+            3
+          ],
+          [
+            3,
+            2
+          ],
+          [
+            3,
+            1
+          ],
+          [
+            3,
+            0
+          ]
+        ],
+        "position": [
+          25,
+          17
+        ],
+        "rotation": 4.71238898038469,
+        "mounted": true,
+        "origin": "import",
+        "importRef": "U3",
+        "placeholder": false
+      }
+    ],
     "routing": {
-      "traces": [],
-      "jumpers": [],
-      "failedNets": [],
-      "warnings": []
+      "traces": [
+        {
+          "id": "434155fb-d698-4d51-b73f-5f725490922e",
+          "net": "Net-(U3--)",
+          "points": [
+            [
+              30,
+              17
+            ],
+            [
+              31,
+              17
+            ],
+            [
+              32,
+              17
+            ],
+            [
+              33,
+              17
+            ],
+            [
+              34,
+              17
+            ],
+            [
+              34,
+              18
+            ],
+            [
+              34,
+              19
+            ]
+          ],
+          "layer": "bottom",
+          "edges": [
+            [
+              [
+                30,
+                17
+              ],
+              [
+                31,
+                17
+              ]
+            ],
+            [
+              [
+                31,
+                17
+              ],
+              [
+                32,
+                17
+              ]
+            ],
+            [
+              [
+                32,
+                17
+              ],
+              [
+                33,
+                17
+              ]
+            ],
+            [
+              [
+                33,
+                17
+              ],
+              [
+                34,
+                17
+              ]
+            ],
+            [
+              [
+                34,
+                17
+              ],
+              [
+                34,
+                18
+              ]
+            ],
+            [
+              [
+                34,
+                18
+              ],
+              [
+                34,
+                19
+              ]
+            ]
+          ],
+          "locked": false
+        },
+        {
+          "id": "0de210ec-f870-44e8-a8c2-6582a7420dc3",
+          "net": "Net-(U3--)",
+          "points": [
+            [
+              30,
+              17
+            ],
+            [
+              30,
+              18
+            ],
+            [
+              29,
+              18
+            ],
+            [
+              28,
+              18
+            ],
+            [
+              27,
+              18
+            ],
+            [
+              26,
+              18
+            ],
+            [
+              25,
+              18
+            ],
+            [
+              24,
+              18
+            ],
+            [
+              24,
+              17
+            ]
+          ],
+          "layer": "bottom",
+          "edges": [
+            [
+              [
+                30,
+                17
+              ],
+              [
+                30,
+                18
+              ]
+            ],
+            [
+              [
+                30,
+                18
+              ],
+              [
+                29,
+                18
+              ]
+            ],
+            [
+              [
+                29,
+                18
+              ],
+              [
+                28,
+                18
+              ]
+            ],
+            [
+              [
+                28,
+                18
+              ],
+              [
+                27,
+                18
+              ]
+            ],
+            [
+              [
+                27,
+                18
+              ],
+              [
+                26,
+                18
+              ]
+            ],
+            [
+              [
+                26,
+                18
+              ],
+              [
+                25,
+                18
+              ]
+            ],
+            [
+              [
+                25,
+                18
+              ],
+              [
+                24,
+                18
+              ]
+            ],
+            [
+              [
+                24,
+                18
+              ],
+              [
+                24,
+                17
+              ]
+            ]
+          ],
+          "locked": false
+        },
+        {
+          "id": "52ccbf2f-3903-423e-b371-87b5eedfcf0b",
+          "net": "+12V",
+          "points": [
+            [
+              24,
+              20
+            ],
+            [
+              24,
+              21
+            ],
+            [
+              24,
+              22
+            ],
+            [
+              25,
+              22
+            ],
+            [
+              26,
+              22
+            ],
+            [
+              27,
+              22
+            ],
+            [
+              28,
+              22
+            ],
+            [
+              28,
+              21
+            ],
+            [
+              28,
+              20
+            ]
+          ],
+          "layer": "bottom",
+          "edges": [
+            [
+              [
+                24,
+                20
+              ],
+              [
+                24,
+                21
+              ]
+            ],
+            [
+              [
+                24,
+                21
+              ],
+              [
+                24,
+                22
+              ]
+            ],
+            [
+              [
+                24,
+                22
+              ],
+              [
+                25,
+                22
+              ]
+            ],
+            [
+              [
+                25,
+                22
+              ],
+              [
+                26,
+                22
+              ]
+            ],
+            [
+              [
+                26,
+                22
+              ],
+              [
+                27,
+                22
+              ]
+            ],
+            [
+              [
+                27,
+                22
+              ],
+              [
+                28,
+                22
+              ]
+            ],
+            [
+              [
+                28,
+                22
+              ],
+              [
+                28,
+                21
+              ]
+            ],
+            [
+              [
+                28,
+                21
+              ],
+              [
+                28,
+                20
+              ]
+            ]
+          ],
+          "locked": false
+        },
+        {
+          "id": "5cc10bf9-e3eb-4e5c-be89-e681e410004a",
+          "net": "+12V",
+          "points": [
+            [
+              24,
+              20
+            ],
+            [
+              24,
+              21
+            ],
+            [
+              24,
+              22
+            ],
+            [
+              24,
+              23
+            ],
+            [
+              23,
+              23
+            ],
+            [
+              23,
+              24
+            ],
+            [
+              22,
+              24
+            ],
+            [
+              21,
+              24
+            ],
+            [
+              20,
+              24
+            ],
+            [
+              19,
+              24
+            ],
+            [
+              19,
+              23
+            ],
+            [
+              19,
+              22
+            ],
+            [
+              19,
+              21
+            ],
+            [
+              19,
+              20
+            ],
+            [
+              19,
+              19
+            ],
+            [
+              18,
+              19
+            ]
+          ],
+          "layer": "bottom",
+          "edges": [
+            [
+              [
+                24,
+                20
+              ],
+              [
+                24,
+                21
+              ]
+            ],
+            [
+              [
+                24,
+                21
+              ],
+              [
+                24,
+                22
+              ]
+            ],
+            [
+              [
+                24,
+                22
+              ],
+              [
+                24,
+                23
+              ]
+            ],
+            [
+              [
+                24,
+                23
+              ],
+              [
+                23,
+                23
+              ]
+            ],
+            [
+              [
+                23,
+                23
+              ],
+              [
+                23,
+                24
+              ]
+            ],
+            [
+              [
+                23,
+                24
+              ],
+              [
+                22,
+                24
+              ]
+            ],
+            [
+              [
+                22,
+                24
+              ],
+              [
+                21,
+                24
+              ]
+            ],
+            [
+              [
+                21,
+                24
+              ],
+              [
+                20,
+                24
+              ]
+            ],
+            [
+              [
+                20,
+                24
+              ],
+              [
+                19,
+                24
+              ]
+            ],
+            [
+              [
+                19,
+                24
+              ],
+              [
+                19,
+                23
+              ]
+            ],
+            [
+              [
+                19,
+                23
+              ],
+              [
+                19,
+                22
+              ]
+            ],
+            [
+              [
+                19,
+                22
+              ],
+              [
+                19,
+                21
+              ]
+            ],
+            [
+              [
+                19,
+                21
+              ],
+              [
+                19,
+                20
+              ]
+            ],
+            [
+              [
+                19,
+                20
+              ],
+              [
+                19,
+                19
+              ]
+            ],
+            [
+              [
+                19,
+                19
+              ],
+              [
+                18,
+                19
+              ]
+            ]
+          ],
+          "locked": false
+        },
+        {
+          "id": "c372995c-1d5b-4444-8347-2820ed9a518d",
+          "net": "Net-(R2-Pad2)",
+          "points": [
+            [
+              17,
+              17
+            ],
+            [
+              17,
+              18
+            ],
+            [
+              18,
+              18
+            ]
+          ],
+          "layer": "bottom",
+          "edges": [
+            [
+              [
+                17,
+                17
+              ],
+              [
+                17,
+                18
+              ]
+            ],
+            [
+              [
+                17,
+                18
+              ],
+              [
+                18,
+                18
+              ]
+            ]
+          ],
+          "locked": false
+        },
+        {
+          "id": "c0a6816b-7e19-4b4e-84e8-c766d5ce175a",
+          "net": "Net-(R2-Pad2)",
+          "points": [
+            [
+              17,
+              17
+            ],
+            [
+              17,
+              16
+            ],
+            [
+              17,
+              15
+            ],
+            [
+              17,
+              14
+            ],
+            [
+              17,
+              13
+            ],
+            [
+              17,
+              12
+            ],
+            [
+              18,
+              12
+            ],
+            [
+              19,
+              12
+            ],
+            [
+              20,
+              12
+            ],
+            [
+              21,
+              12
+            ],
+            [
+              22,
+              12
+            ]
+          ],
+          "layer": "bottom",
+          "edges": [
+            [
+              [
+                17,
+                17
+              ],
+              [
+                17,
+                16
+              ]
+            ],
+            [
+              [
+                17,
+                16
+              ],
+              [
+                17,
+                15
+              ]
+            ],
+            [
+              [
+                17,
+                15
+              ],
+              [
+                17,
+                14
+              ]
+            ],
+            [
+              [
+                17,
+                14
+              ],
+              [
+                17,
+                13
+              ]
+            ],
+            [
+              [
+                17,
+                13
+              ],
+              [
+                17,
+                12
+              ]
+            ],
+            [
+              [
+                17,
+                12
+              ],
+              [
+                18,
+                12
+              ]
+            ],
+            [
+              [
+                18,
+                12
+              ],
+              [
+                19,
+                12
+              ]
+            ],
+            [
+              [
+                19,
+                12
+              ],
+              [
+                20,
+                12
+              ]
+            ],
+            [
+              [
+                20,
+                12
+              ],
+              [
+                21,
+                12
+              ]
+            ],
+            [
+              [
+                21,
+                12
+              ],
+              [
+                22,
+                12
+              ]
+            ]
+          ],
+          "locked": false
+        },
+        {
+          "id": "d80307af-51b7-4ef7-8a8b-dd453b00a0e4",
+          "net": "Net-(U3-+)",
+          "points": [
+            [
+              23,
+              17
+            ],
+            [
+              23,
+              16
+            ],
+            [
+              23,
+              15
+            ],
+            [
+              24,
+              15
+            ],
+            [
+              25,
+              15
+            ]
+          ],
+          "layer": "bottom",
+          "edges": [
+            [
+              [
+                23,
+                17
+              ],
+              [
+                23,
+                16
+              ]
+            ],
+            [
+              [
+                23,
+                16
+              ],
+              [
+                23,
+                15
+              ]
+            ],
+            [
+              [
+                23,
+                15
+              ],
+              [
+                24,
+                15
+              ]
+            ],
+            [
+              [
+                24,
+                15
+              ],
+              [
+                25,
+                15
+              ]
+            ]
+          ],
+          "locked": false
+        },
+        {
+          "id": "bcc21f84-af82-480d-91b2-93656805b010",
+          "net": "Net-(U3-+)",
+          "points": [
+            [
+              23,
+              17
+            ],
+            [
+              23,
+              16
+            ],
+            [
+              23,
+              15
+            ],
+            [
+              23,
+              14
+            ],
+            [
+              23,
+              13
+            ],
+            [
+              24,
+              13
+            ],
+            [
+              25,
+              13
+            ],
+            [
+              26,
+              13
+            ],
+            [
+              27,
+              13
+            ],
+            [
+              28,
+              13
+            ],
+            [
+              29,
+              13
+            ],
+            [
+              30,
+              13
+            ],
+            [
+              31,
+              13
+            ],
+            [
+              32,
+              13
+            ],
+            [
+              33,
+              13
+            ],
+            [
+              34,
+              13
+            ],
+            [
+              35,
+              13
+            ],
+            [
+              36,
+              13
+            ],
+            [
+              36,
+              14
+            ],
+            [
+              36,
+              15
+            ],
+            [
+              36,
+              16
+            ],
+            [
+              36,
+              17
+            ],
+            [
+              36,
+              18
+            ],
+            [
+              36,
+              19
+            ],
+            [
+              36,
+              20
+            ],
+            [
+              36,
+              21
+            ],
+            [
+              36,
+              22
+            ],
+            [
+              36,
+              23
+            ],
+            [
+              36,
+              24
+            ],
+            [
+              35,
+              24
+            ],
+            [
+              34,
+              24
+            ],
+            [
+              33,
+              24
+            ],
+            [
+              32,
+              24
+            ],
+            [
+              31,
+              24
+            ],
+            [
+              30,
+              24
+            ],
+            [
+              29,
+              24
+            ],
+            [
+              28,
+              24
+            ],
+            [
+              27,
+              24
+            ],
+            [
+              26,
+              24
+            ],
+            [
+              25,
+              24
+            ]
+          ],
+          "layer": "bottom",
+          "edges": [
+            [
+              [
+                23,
+                17
+              ],
+              [
+                23,
+                16
+              ]
+            ],
+            [
+              [
+                23,
+                16
+              ],
+              [
+                23,
+                15
+              ]
+            ],
+            [
+              [
+                23,
+                15
+              ],
+              [
+                23,
+                14
+              ]
+            ],
+            [
+              [
+                23,
+                14
+              ],
+              [
+                23,
+                13
+              ]
+            ],
+            [
+              [
+                23,
+                13
+              ],
+              [
+                24,
+                13
+              ]
+            ],
+            [
+              [
+                24,
+                13
+              ],
+              [
+                25,
+                13
+              ]
+            ],
+            [
+              [
+                25,
+                13
+              ],
+              [
+                26,
+                13
+              ]
+            ],
+            [
+              [
+                26,
+                13
+              ],
+              [
+                27,
+                13
+              ]
+            ],
+            [
+              [
+                27,
+                13
+              ],
+              [
+                28,
+                13
+              ]
+            ],
+            [
+              [
+                28,
+                13
+              ],
+              [
+                29,
+                13
+              ]
+            ],
+            [
+              [
+                29,
+                13
+              ],
+              [
+                30,
+                13
+              ]
+            ],
+            [
+              [
+                30,
+                13
+              ],
+              [
+                31,
+                13
+              ]
+            ],
+            [
+              [
+                31,
+                13
+              ],
+              [
+                32,
+                13
+              ]
+            ],
+            [
+              [
+                32,
+                13
+              ],
+              [
+                33,
+                13
+              ]
+            ],
+            [
+              [
+                33,
+                13
+              ],
+              [
+                34,
+                13
+              ]
+            ],
+            [
+              [
+                34,
+                13
+              ],
+              [
+                35,
+                13
+              ]
+            ],
+            [
+              [
+                35,
+                13
+              ],
+              [
+                36,
+                13
+              ]
+            ],
+            [
+              [
+                36,
+                13
+              ],
+              [
+                36,
+                14
+              ]
+            ],
+            [
+              [
+                36,
+                14
+              ],
+              [
+                36,
+                15
+              ]
+            ],
+            [
+              [
+                36,
+                15
+              ],
+              [
+                36,
+                16
+              ]
+            ],
+            [
+              [
+                36,
+                16
+              ],
+              [
+                36,
+                17
+              ]
+            ],
+            [
+              [
+                36,
+                17
+              ],
+              [
+                36,
+                18
+              ]
+            ],
+            [
+              [
+                36,
+                18
+              ],
+              [
+                36,
+                19
+              ]
+            ],
+            [
+              [
+                36,
+                19
+              ],
+              [
+                36,
+                20
+              ]
+            ],
+            [
+              [
+                36,
+                20
+              ],
+              [
+                36,
+                21
+              ]
+            ],
+            [
+              [
+                36,
+                21
+              ],
+              [
+                36,
+                22
+              ]
+            ],
+            [
+              [
+                36,
+                22
+              ],
+              [
+                36,
+                23
+              ]
+            ],
+            [
+              [
+                36,
+                23
+              ],
+              [
+                36,
+                24
+              ]
+            ],
+            [
+              [
+                36,
+                24
+              ],
+              [
+                35,
+                24
+              ]
+            ],
+            [
+              [
+                35,
+                24
+              ],
+              [
+                34,
+                24
+              ]
+            ],
+            [
+              [
+                34,
+                24
+              ],
+              [
+                33,
+                24
+              ]
+            ],
+            [
+              [
+                33,
+                24
+              ],
+              [
+                32,
+                24
+              ]
+            ],
+            [
+              [
+                32,
+                24
+              ],
+              [
+                31,
+                24
+              ]
+            ],
+            [
+              [
+                31,
+                24
+              ],
+              [
+                30,
+                24
+              ]
+            ],
+            [
+              [
+                30,
+                24
+              ],
+              [
+                29,
+                24
+              ]
+            ],
+            [
+              [
+                29,
+                24
+              ],
+              [
+                28,
+                24
+              ]
+            ],
+            [
+              [
+                28,
+                24
+              ],
+              [
+                27,
+                24
+              ]
+            ],
+            [
+              [
+                27,
+                24
+              ],
+              [
+                26,
+                24
+              ]
+            ],
+            [
+              [
+                26,
+                24
+              ],
+              [
+                25,
+                24
+              ]
+            ]
+          ],
+          "locked": false
+        },
+        {
+          "id": "8e1e8217-4188-455a-b556-4cfd6e7d0326",
+          "net": "Net-(U1--)",
+          "points": [
+            [
+              21,
+              19
+            ],
+            [
+              20,
+              19
+            ],
+            [
+              20,
+              18
+            ],
+            [
+              20,
+              17
+            ],
+            [
+              20,
+              16
+            ],
+            [
+              21,
+              16
+            ]
+          ],
+          "layer": "bottom",
+          "edges": [
+            [
+              [
+                21,
+                19
+              ],
+              [
+                20,
+                19
+              ]
+            ],
+            [
+              [
+                20,
+                19
+              ],
+              [
+                20,
+                18
+              ]
+            ],
+            [
+              [
+                20,
+                18
+              ],
+              [
+                20,
+                17
+              ]
+            ],
+            [
+              [
+                20,
+                17
+              ],
+              [
+                20,
+                16
+              ]
+            ],
+            [
+              [
+                20,
+                16
+              ],
+              [
+                21,
+                16
+              ]
+            ]
+          ],
+          "locked": false
+        },
+        {
+          "id": "0e66c913-d93e-4379-838b-3e613c5dccc0",
+          "net": "Net-(U2-+)",
+          "points": [
+            [
+              27,
+              16
+            ],
+            [
+              28,
+              16
+            ],
+            [
+              29,
+              16
+            ],
+            [
+              29,
+              15
+            ],
+            [
+              30,
+              15
+            ],
+            [
+              31,
+              15
+            ],
+            [
+              32,
+              15
+            ],
+            [
+              33,
+              15
+            ]
+          ],
+          "layer": "bottom",
+          "edges": [
+            [
+              [
+                27,
+                16
+              ],
+              [
+                28,
+                16
+              ]
+            ],
+            [
+              [
+                28,
+                16
+              ],
+              [
+                29,
+                16
+              ]
+            ],
+            [
+              [
+                29,
+                16
+              ],
+              [
+                29,
+                15
+              ]
+            ],
+            [
+              [
+                29,
+                15
+              ],
+              [
+                30,
+                15
+              ]
+            ],
+            [
+              [
+                30,
+                15
+              ],
+              [
+                31,
+                15
+              ]
+            ],
+            [
+              [
+                31,
+                15
+              ],
+              [
+                32,
+                15
+              ]
+            ],
+            [
+              [
+                32,
+                15
+              ],
+              [
+                33,
+                15
+              ]
+            ]
+          ],
+          "locked": false
+        },
+        {
+          "id": "252f806e-39b3-470d-aea0-0e207da6dbca",
+          "net": "Net-(U2-+)",
+          "points": [
+            [
+              27,
+              16
+            ],
+            [
+              27,
+              17
+            ]
+          ],
+          "layer": "bottom",
+          "edges": [
+            [
+              [
+                27,
+                16
+              ],
+              [
+                27,
+                17
+              ]
+            ]
+          ],
+          "locked": false
+        },
+        {
+          "id": "2aeedfe2-7525-4443-a65a-5bb0ddd795dc",
+          "net": "-12V",
+          "points": [
+            [
+              26,
+              17
+            ],
+            [
+              26,
+              16
+            ],
+            [
+              26,
+              15
+            ],
+            [
+              26,
+              14
+            ],
+            [
+              27,
+              14
+            ],
+            [
+              28,
+              14
+            ],
+            [
+              29,
+              14
+            ],
+            [
+              30,
+              14
+            ],
+            [
+              31,
+              14
+            ],
+            [
+              32,
+              14
+            ],
+            [
+              33,
+              14
+            ],
+            [
+              34,
+              14
+            ],
+            [
+              35,
+              14
+            ],
+            [
+              35,
+              15
+            ],
+            [
+              35,
+              16
+            ],
+            [
+              35,
+              17
+            ],
+            [
+              35,
+              18
+            ],
+            [
+              35,
+              19
+            ],
+            [
+              35,
+              20
+            ],
+            [
+              34,
+              20
+            ],
+            [
+              33,
+              20
+            ],
+            [
+              32,
+              20
+            ],
+            [
+              32,
+              19
+            ],
+            [
+              31,
+              19
+            ],
+            [
+              30,
+              19
+            ],
+            [
+              29,
+              19
+            ],
+            [
+              28,
+              19
+            ],
+            [
+              27,
+              19
+            ],
+            [
+              26,
+              19
+            ],
+            [
+              25,
+              19
+            ],
+            [
+              24,
+              19
+            ],
+            [
+              23,
+              19
+            ],
+            [
+              22,
+              19
+            ],
+            [
+              22,
+              18
+            ],
+            [
+              22,
+              17
+            ]
+          ],
+          "layer": "bottom",
+          "edges": [
+            [
+              [
+                26,
+                17
+              ],
+              [
+                26,
+                16
+              ]
+            ],
+            [
+              [
+                26,
+                16
+              ],
+              [
+                26,
+                15
+              ]
+            ],
+            [
+              [
+                26,
+                15
+              ],
+              [
+                26,
+                14
+              ]
+            ],
+            [
+              [
+                26,
+                14
+              ],
+              [
+                27,
+                14
+              ]
+            ],
+            [
+              [
+                27,
+                14
+              ],
+              [
+                28,
+                14
+              ]
+            ],
+            [
+              [
+                28,
+                14
+              ],
+              [
+                29,
+                14
+              ]
+            ],
+            [
+              [
+                29,
+                14
+              ],
+              [
+                30,
+                14
+              ]
+            ],
+            [
+              [
+                30,
+                14
+              ],
+              [
+                31,
+                14
+              ]
+            ],
+            [
+              [
+                31,
+                14
+              ],
+              [
+                32,
+                14
+              ]
+            ],
+            [
+              [
+                32,
+                14
+              ],
+              [
+                33,
+                14
+              ]
+            ],
+            [
+              [
+                33,
+                14
+              ],
+              [
+                34,
+                14
+              ]
+            ],
+            [
+              [
+                34,
+                14
+              ],
+              [
+                35,
+                14
+              ]
+            ],
+            [
+              [
+                35,
+                14
+              ],
+              [
+                35,
+                15
+              ]
+            ],
+            [
+              [
+                35,
+                15
+              ],
+              [
+                35,
+                16
+              ]
+            ],
+            [
+              [
+                35,
+                16
+              ],
+              [
+                35,
+                17
+              ]
+            ],
+            [
+              [
+                35,
+                17
+              ],
+              [
+                35,
+                18
+              ]
+            ],
+            [
+              [
+                35,
+                18
+              ],
+              [
+                35,
+                19
+              ]
+            ],
+            [
+              [
+                35,
+                19
+              ],
+              [
+                35,
+                20
+              ]
+            ],
+            [
+              [
+                35,
+                20
+              ],
+              [
+                34,
+                20
+              ]
+            ],
+            [
+              [
+                34,
+                20
+              ],
+              [
+                33,
+                20
+              ]
+            ],
+            [
+              [
+                33,
+                20
+              ],
+              [
+                32,
+                20
+              ]
+            ],
+            [
+              [
+                32,
+                20
+              ],
+              [
+                32,
+                19
+              ]
+            ],
+            [
+              [
+                32,
+                19
+              ],
+              [
+                31,
+                19
+              ]
+            ],
+            [
+              [
+                31,
+                19
+              ],
+              [
+                30,
+                19
+              ]
+            ],
+            [
+              [
+                30,
+                19
+              ],
+              [
+                29,
+                19
+              ]
+            ],
+            [
+              [
+                29,
+                19
+              ],
+              [
+                28,
+                19
+              ]
+            ],
+            [
+              [
+                28,
+                19
+              ],
+              [
+                27,
+                19
+              ]
+            ],
+            [
+              [
+                27,
+                19
+              ],
+              [
+                26,
+                19
+              ]
+            ],
+            [
+              [
+                26,
+                19
+              ],
+              [
+                25,
+                19
+              ]
+            ],
+            [
+              [
+                25,
+                19
+              ],
+              [
+                24,
+                19
+              ]
+            ],
+            [
+              [
+                24,
+                19
+              ],
+              [
+                23,
+                19
+              ]
+            ],
+            [
+              [
+                23,
+                19
+              ],
+              [
+                22,
+                19
+              ]
+            ],
+            [
+              [
+                22,
+                19
+              ],
+              [
+                22,
+                18
+              ]
+            ],
+            [
+              [
+                22,
+                18
+              ],
+              [
+                22,
+                17
+              ]
+            ]
+          ],
+          "locked": false
+        },
+        {
+          "id": "68fd7458-7ec1-4948-8dec-1108f86720a8",
+          "net": "-12V",
+          "points": [
+            [
+              22,
+              17
+            ],
+            [
+              21,
+              17
+            ]
+          ],
+          "layer": "bottom",
+          "edges": [
+            [
+              [
+                22,
+                17
+              ],
+              [
+                21,
+                17
+              ]
+            ]
+          ],
+          "locked": false
+        },
+        {
+          "id": "4c155417-a7fb-49b5-a1f8-96229f068566",
+          "net": "Net-(R3-Pad2)",
+          "points": [
+            [
+              30,
+              20
+            ],
+            [
+              31,
+              20
+            ]
+          ],
+          "layer": "bottom",
+          "edges": [
+            [
+              [
+                30,
+                20
+              ],
+              [
+                31,
+                20
+              ]
+            ]
+          ],
+          "locked": false
+        },
+        {
+          "id": "13f3523d-8608-488f-ad2d-62b190445c47",
+          "net": "Net-(R7-Pad2)",
+          "points": [
+            [
+              23,
+              20
+            ],
+            [
+              23,
+              21
+            ],
+            [
+              23,
+              22
+            ],
+            [
+              22,
+              22
+            ]
+          ],
+          "layer": "bottom",
+          "edges": [
+            [
+              [
+                23,
+                20
+              ],
+              [
+                23,
+                21
+              ]
+            ],
+            [
+              [
+                23,
+                21
+              ],
+              [
+                23,
+                22
+              ]
+            ],
+            [
+              [
+                23,
+                22
+              ],
+              [
+                22,
+                22
+              ]
+            ]
+          ],
+          "locked": false
+        }
+      ],
+      "jumpers": [
+        {
+          "id": "5937f1a2-d75e-4f76-b180-356b0753d700",
+          "net": "Net-(U1--)",
+          "from": [
+            21,
+            19
+          ],
+          "to": [
+            17,
+            20
+          ],
+          "layer": "jumper",
+          "locked": false
+        },
+        {
+          "id": "10b386bb-b43d-4e55-bfa3-8c3fb89bc814",
+          "net": "Net-(R3-Pad2)",
+          "from": [
+            30,
+            20
+          ],
+          "to": [
+            27,
+            20
+          ],
+          "layer": "jumper",
+          "locked": false
+        }
+      ],
+      "failedNets": [
+        "GND"
+      ],
+      "warnings": [
+        "Bottom routing used 2 jumper(s), total jumper length 8.0 grid units."
+      ],
+      "drc": {
+        "passed": false,
+        "errors": [
+          {
+            "code": "NET_PIN_UNROUTED",
+            "severity": "error",
+            "message": "NET_PIN_UNROUTED: R6.2 expected GND, actual none at 34,22",
+            "ref": "R6",
+            "pin": 2,
+            "pinName": "2",
+            "expectedNet": "GND",
+            "actualNets": [],
+            "grid": [
+              34,
+              22
+            ],
+            "net": "GND"
+          }
+        ],
+        "warnings": [
+          {
+            "code": "NO_NET_UNUSED",
+            "severity": "warning",
+            "message": "NO_NET_UNUSED: U1.1 expected no net, actual none at 21,20",
+            "ref": "U1",
+            "pin": 1,
+            "actualNets": [],
+            "grid": [
+              21,
+              20
+            ]
+          },
+          {
+            "code": "NO_NET_UNUSED",
+            "severity": "warning",
+            "message": "NO_NET_UNUSED: U1.3 expected no net, actual none at 21,18",
+            "ref": "U1",
+            "pin": 3,
+            "actualNets": [],
+            "grid": [
+              21,
+              18
+            ]
+          },
+          {
+            "code": "NO_NET_UNUSED",
+            "severity": "warning",
+            "message": "NO_NET_UNUSED: U1.5 expected no net, actual none at 18,17",
+            "ref": "U1",
+            "pin": 5,
+            "actualNets": [],
+            "grid": [
+              18,
+              17
+            ]
+          },
+          {
+            "code": "NO_NET_UNUSED",
+            "severity": "warning",
+            "message": "NO_NET_UNUSED: U1.8 expected no net, actual none at 18,20",
+            "ref": "U1",
+            "pin": 8,
+            "actualNets": [],
+            "grid": [
+              18,
+              20
+            ]
+          },
+          {
+            "code": "NO_NET_UNUSED",
+            "severity": "warning",
+            "message": "NO_NET_UNUSED: U2.1 expected no net, actual none at 29,17",
+            "ref": "U2",
+            "pin": 1,
+            "actualNets": [],
+            "grid": [
+              29,
+              17
+            ]
+          },
+          {
+            "code": "NO_NET_UNUSED",
+            "severity": "warning",
+            "message": "NO_NET_UNUSED: U2.2 expected no net, actual none at 28,17",
+            "ref": "U2",
+            "pin": 2,
+            "actualNets": [],
+            "grid": [
+              28,
+              17
+            ]
+          },
+          {
+            "code": "NO_NET_UNUSED",
+            "severity": "warning",
+            "message": "NO_NET_UNUSED: U2.5 expected no net, actual none at 26,20",
+            "ref": "U2",
+            "pin": 5,
+            "actualNets": [],
+            "grid": [
+              26,
+              20
+            ]
+          },
+          {
+            "code": "NO_NET_UNUSED",
+            "severity": "warning",
+            "message": "NO_NET_UNUSED: U2.8 expected no net, actual none at 29,20",
+            "ref": "U2",
+            "pin": 8,
+            "actualNets": [],
+            "grid": [
+              29,
+              20
+            ]
+          },
+          {
+            "code": "NO_NET_UNUSED",
+            "severity": "warning",
+            "message": "NO_NET_UNUSED: U3.1 expected no net, actual none at 25,17",
+            "ref": "U3",
+            "pin": 1,
+            "actualNets": [],
+            "grid": [
+              25,
+              17
+            ]
+          },
+          {
+            "code": "NO_NET_UNUSED",
+            "severity": "warning",
+            "message": "NO_NET_UNUSED: U3.5 expected no net, actual none at 22,20",
+            "ref": "U3",
+            "pin": 5,
+            "actualNets": [],
+            "grid": [
+              22,
+              20
+            ]
+          },
+          {
+            "code": "NO_NET_UNUSED",
+            "severity": "warning",
+            "message": "NO_NET_UNUSED: U3.8 expected no net, actual none at 25,20",
+            "ref": "U3",
+            "pin": 8,
+            "actualNets": [],
+            "grid": [
+              25,
+              20
+            ]
+          }
+        ],
+        "pinStatuses": [
+          {
+            "ref": "R1",
+            "pin": 1,
+            "pinName": "1",
+            "grid": [
+              21,
+              16
+            ],
+            "expectedNet": "Net-(U1--)",
+            "actualNets": [
+              "Net-(U1--)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "R1",
+            "pin": 2,
+            "pinName": "2",
+            "grid": [
+              27,
+              16
+            ],
+            "expectedNet": "Net-(U2-+)",
+            "actualNets": [
+              "Net-(U2-+)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "R2",
+            "pin": 1,
+            "pinName": "1",
+            "grid": [
+              17,
+              20
+            ],
+            "expectedNet": "Net-(U1--)",
+            "actualNets": [
+              "Net-(U1--)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "R2",
+            "pin": 2,
+            "pinName": "2",
+            "grid": [
+              17,
+              17
+            ],
+            "expectedNet": "Net-(R2-Pad2)",
+            "actualNets": [
+              "Net-(R2-Pad2)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "R3",
+            "pin": 1,
+            "pinName": "1",
+            "grid": [
+              33,
+              15
+            ],
+            "expectedNet": "Net-(U2-+)",
+            "actualNets": [
+              "Net-(U2-+)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "R3",
+            "pin": 2,
+            "pinName": "2",
+            "grid": [
+              31,
+              20
+            ],
+            "expectedNet": "Net-(R3-Pad2)",
+            "actualNets": [
+              "Net-(R3-Pad2)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "R4",
+            "pin": 1,
+            "pinName": "1",
+            "grid": [
+              22,
+              12
+            ],
+            "expectedNet": "Net-(R2-Pad2)",
+            "actualNets": [
+              "Net-(R2-Pad2)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "R4",
+            "pin": 2,
+            "pinName": "2",
+            "grid": [
+              25,
+              15
+            ],
+            "expectedNet": "Net-(U3-+)",
+            "actualNets": [
+              "Net-(U3-+)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "R5",
+            "pin": 1,
+            "pinName": "1",
+            "grid": [
+              30,
+              20
+            ],
+            "expectedNet": "Net-(R3-Pad2)",
+            "actualNets": [
+              "Net-(R3-Pad2)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "R5",
+            "pin": 2,
+            "pinName": "2",
+            "grid": [
+              30,
+              17
+            ],
+            "expectedNet": "Net-(U3--)",
+            "actualNets": [
+              "Net-(U3--)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "R6",
+            "pin": 1,
+            "pinName": "1",
+            "grid": [
+              34,
+              19
+            ],
+            "expectedNet": "Net-(U3--)",
+            "actualNets": [
+              "Net-(U3--)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "R6",
+            "pin": 2,
+            "pinName": "2",
+            "grid": [
+              34,
+              22
+            ],
+            "expectedNet": "GND",
+            "actualNets": [],
+            "status": "NET_PIN_UNROUTED"
+          },
+          {
+            "ref": "R7",
+            "pin": 1,
+            "pinName": "1",
+            "grid": [
+              25,
+              24
+            ],
+            "expectedNet": "Net-(U3-+)",
+            "actualNets": [
+              "Net-(U3-+)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "R7",
+            "pin": 2,
+            "pinName": "2",
+            "grid": [
+              22,
+              22
+            ],
+            "expectedNet": "Net-(R7-Pad2)",
+            "actualNets": [
+              "Net-(R7-Pad2)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "U1",
+            "pin": 1,
+            "grid": [
+              21,
+              20
+            ],
+            "actualNets": [],
+            "status": "NO_NET_UNUSED"
+          },
+          {
+            "ref": "U1",
+            "pin": 2,
+            "pinName": "-",
+            "grid": [
+              21,
+              19
+            ],
+            "expectedNet": "Net-(U1--)",
+            "actualNets": [
+              "Net-(U1--)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "U1",
+            "pin": 3,
+            "grid": [
+              21,
+              18
+            ],
+            "actualNets": [],
+            "status": "NO_NET_UNUSED"
+          },
+          {
+            "ref": "U1",
+            "pin": 4,
+            "pinName": "V-",
+            "grid": [
+              21,
+              17
+            ],
+            "expectedNet": "-12V",
+            "actualNets": [
+              "-12V"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "U1",
+            "pin": 5,
+            "grid": [
+              18,
+              17
+            ],
+            "actualNets": [],
+            "status": "NO_NET_UNUSED"
+          },
+          {
+            "ref": "U1",
+            "pin": 6,
+            "pinName": "6",
+            "grid": [
+              18,
+              18
+            ],
+            "expectedNet": "Net-(R2-Pad2)",
+            "actualNets": [
+              "Net-(R2-Pad2)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "U1",
+            "pin": 7,
+            "pinName": "V+",
+            "grid": [
+              18,
+              19
+            ],
+            "expectedNet": "+12V",
+            "actualNets": [
+              "+12V"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "U1",
+            "pin": 8,
+            "grid": [
+              18,
+              20
+            ],
+            "actualNets": [],
+            "status": "NO_NET_UNUSED"
+          },
+          {
+            "ref": "U2",
+            "pin": 1,
+            "grid": [
+              29,
+              17
+            ],
+            "actualNets": [],
+            "status": "NO_NET_UNUSED"
+          },
+          {
+            "ref": "U2",
+            "pin": 2,
+            "grid": [
+              28,
+              17
+            ],
+            "actualNets": [],
+            "status": "NO_NET_UNUSED"
+          },
+          {
+            "ref": "U2",
+            "pin": 3,
+            "pinName": "+",
+            "grid": [
+              27,
+              17
+            ],
+            "expectedNet": "Net-(U2-+)",
+            "actualNets": [
+              "Net-(U2-+)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "U2",
+            "pin": 4,
+            "pinName": "V-",
+            "grid": [
+              26,
+              17
+            ],
+            "expectedNet": "-12V",
+            "actualNets": [
+              "-12V"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "U2",
+            "pin": 5,
+            "grid": [
+              26,
+              20
+            ],
+            "actualNets": [],
+            "status": "NO_NET_UNUSED"
+          },
+          {
+            "ref": "U2",
+            "pin": 6,
+            "pinName": "6",
+            "grid": [
+              27,
+              20
+            ],
+            "expectedNet": "Net-(R3-Pad2)",
+            "actualNets": [
+              "Net-(R3-Pad2)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "U2",
+            "pin": 7,
+            "pinName": "V+",
+            "grid": [
+              28,
+              20
+            ],
+            "expectedNet": "+12V",
+            "actualNets": [
+              "+12V"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "U2",
+            "pin": 8,
+            "grid": [
+              29,
+              20
+            ],
+            "actualNets": [],
+            "status": "NO_NET_UNUSED"
+          },
+          {
+            "ref": "U3",
+            "pin": 1,
+            "grid": [
+              25,
+              17
+            ],
+            "actualNets": [],
+            "status": "NO_NET_UNUSED"
+          },
+          {
+            "ref": "U3",
+            "pin": 2,
+            "pinName": "-",
+            "grid": [
+              24,
+              17
+            ],
+            "expectedNet": "Net-(U3--)",
+            "actualNets": [
+              "Net-(U3--)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "U3",
+            "pin": 3,
+            "pinName": "+",
+            "grid": [
+              23,
+              17
+            ],
+            "expectedNet": "Net-(U3-+)",
+            "actualNets": [
+              "Net-(U3-+)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "U3",
+            "pin": 4,
+            "pinName": "V-",
+            "grid": [
+              22,
+              17
+            ],
+            "expectedNet": "-12V",
+            "actualNets": [
+              "-12V"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "U3",
+            "pin": 5,
+            "grid": [
+              22,
+              20
+            ],
+            "actualNets": [],
+            "status": "NO_NET_UNUSED"
+          },
+          {
+            "ref": "U3",
+            "pin": 6,
+            "pinName": "6",
+            "grid": [
+              23,
+              20
+            ],
+            "expectedNet": "Net-(R7-Pad2)",
+            "actualNets": [
+              "Net-(R7-Pad2)"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "U3",
+            "pin": 7,
+            "pinName": "V+",
+            "grid": [
+              24,
+              20
+            ],
+            "expectedNet": "+12V",
+            "actualNets": [
+              "+12V"
+            ],
+            "status": "CONNECTED"
+          },
+          {
+            "ref": "U3",
+            "pin": 8,
+            "grid": [
+              25,
+              20
+            ],
+            "actualNets": [],
+            "status": "NO_NET_UNUSED"
+          }
+        ]
+      },
+      "diagnostics": {
+        "failedNetDetails": []
+      },
+      "score": {
+        "routedNetCount": 9,
+        "failedNetCount": 1,
+        "totalBottomLength": 144,
+        "bendCount": 27,
+        "jumperCount": 2,
+        "totalJumperLength": 8,
+        "viaOrLayerSwitchCount": 4,
+        "congestionPenalty": 263,
+        "pinAccessPenalty": 32,
+        "score": 15717
+      },
+      "jumperStats": {
+        "count": 2,
+        "totalLength": 8
+      }
     },
     "constraints": [],
     "constraintSchemaVersion": 1,
     "schemaVersion": 3,
-    "createdAt": "2026-11-23T11:37:46.624Z"
+    "createdAt": "2026-11-28T03:20:48.222Z"
   },
   "pinProfiles": [
     {
